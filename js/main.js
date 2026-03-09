@@ -69,140 +69,154 @@ Version:	1.1
 		/*====================================
 			Mobile Menu
 		======================================*/ 	
-		$('.menu').slicknav({
-			prependTo:".mobile-nav",
-			duration: 300,
-			closeOnClick:true,
-		});
+		if ($.fn.slicknav) {
+			$('.menu').slicknav({
+				prependTo:".mobile-nav",
+				duration: 300,
+				closeOnClick:true,
+			});
+		}
 		
 		/*===============================
 			Hero Slider JS
 		=================================*/ 
-		$(".hero-slider").owlCarousel({
-			loop:true,
-			autoplay:true,
-			smartSpeed: 500,
-			autoplayTimeout:3500,
-			singleItem: true,
-			autoplayHoverPause:true,
-			items:1,
-			nav:true,
-			navText: ['<i class="fa fa-angle-left" aria-hidden="true"></i>', '<i class="fa fa-angle-right" aria-hidden="true"></i>'],
-			dots:false,
-		});
+		if ($.fn.owlCarousel) {
+			$(".hero-slider").owlCarousel({
+				loop:true,
+				autoplay:true,
+				smartSpeed: 500,
+				autoplayTimeout:3500,
+				singleItem: true,
+				autoplayHoverPause:true,
+				items:1,
+				nav:true,
+				navText: ['<i class="fa fa-angle-left" aria-hidden="true"></i>', '<i class="fa fa-angle-right" aria-hidden="true"></i>'],
+				dots:false,
+			});
+		}
 
 		/*===============================
 			Testimonial Slider JS
 		=================================*/ 
-		$('.testimonial-slider').owlCarousel({
-			items:3,
-			autoplay:true,
-			autoplayTimeout:4500,
-			smartSpeed:300,
-			autoplayHoverPause:true,
-			loop:true,
-			merge:true,
-			nav:false,
-			dots:true,
-			responsive:{
-				1: {
-					items:1,
-				},
-				300: {
-					items:1,
-				},
-				480: {
-					items:1,
-				},
-				768: {
-					items:2,
-				},
-				1170: {
-					items:3,
-				},
-			}
-		});
+		if ($.fn.owlCarousel) {
+			$('.testimonial-slider').owlCarousel({
+				items:3,
+				autoplay:true,
+				autoplayTimeout:4500,
+				smartSpeed:300,
+				autoplayHoverPause:true,
+				loop:true,
+				merge:true,
+				nav:false,
+				dots:true,
+				responsive:{
+					1: {
+						items:1,
+					},
+					300: {
+						items:1,
+					},
+					480: {
+						items:1,
+					},
+					768: {
+						items:2,
+					},
+					1170: {
+						items:3,
+					},
+				}
+			});
+		}
 		
 		/*===============================
 			Portfolio Slider JS
 		=================================*/ 
-		$('.portfolio-slider').owlCarousel({
-			autoplay:true,
-			autoplayTimeout:4000,
-			margin:15,
-			smartSpeed:300,
-			autoplayHoverPause:true,
-			loop:true,
-			nav:true,
-			dots:false,
-			responsive:{
-				300: {
-					items:1,
-				},
-				480: {
-					items:2,
-				},
-				768: {
-					items:2,
-				},
-				1170: {
-					items:4,
-				},
-			}
-		});
+		if ($.fn.owlCarousel) {
+			$('.portfolio-slider').owlCarousel({
+				autoplay:true,
+				autoplayTimeout:4000,
+				margin:15,
+				smartSpeed:300,
+				autoplayHoverPause:true,
+				loop:true,
+				nav:true,
+				dots:false,
+				responsive:{
+					300: {
+						items:1,
+					},
+					480: {
+						items:2,
+					},
+					768: {
+						items:2,
+					},
+					1170: {
+						items:4,
+					},
+				}
+			});
+		}
 		
 		/*=====================================
 			Counter Up JS
 		======================================*/
-		$('.counter').counterUp({
-			delay:20,
-			time:2000
-		});
+		if ($.fn.counterUp && $('.counter').length) {
+			$('.counter').counterUp({
+				delay:20,
+				time:2000
+			});
+		}
 		
 		/*===============================
 			Clients Slider JS
 		=================================*/ 
-		$('.clients-slider').owlCarousel({
-			items:5,
-			autoplay:true,
-			autoplayTimeout:3500,
-			margin:15,
-			smartSpeed: 400,
-			autoplayHoverPause:true,
-			loop:true,
-			nav:false,
-			dots:false,
-			responsive:{
-				300: {
-					items:1,
-				},
-				480: {
-					items:2,
-				},
-				768: {
-					items:3,
-				},
-				1170: {
-					items:5,
-				},
-			}
-		});
+		if ($.fn.owlCarousel) {
+			$('.clients-slider').owlCarousel({
+				items:5,
+				autoplay:true,
+				autoplayTimeout:3500,
+				margin:15,
+				smartSpeed: 400,
+				autoplayHoverPause:true,
+				loop:true,
+				nav:false,
+				dots:false,
+				responsive:{
+					300: {
+						items:1,
+					},
+					480: {
+						items:2,
+					},
+					768: {
+						items:3,
+					},
+					1170: {
+						items:5,
+					},
+				}
+			});
+		}
 		
 		/*====================================
 			Single Portfolio Slider JS
 		======================================*/ 
-		$('.pf-details-slider').owlCarousel({
-			items:1,
-			autoplay:false,
-			autoplayTimeout:5000,
-			smartSpeed: 400,
-			autoplayHoverPause:true,
-			loop:true,
-			merge:true,
-			nav:true,
-			dots:false,
-			navText: ['<i class="icofont-rounded-left"></i>', '<i class="icofont-rounded-right"></i>'],
-		});
+		if ($.fn.owlCarousel) {
+			$('.pf-details-slider').owlCarousel({
+				items:1,
+				autoplay:false,
+				autoplayTimeout:5000,
+				smartSpeed: 400,
+				autoplayHoverPause:true,
+				loop:true,
+				merge:true,
+				nav:true,
+				dots:false,
+				navText: ['<i class="icofont-rounded-left"></i>', '<i class="icofont-rounded-right"></i>'],
+			});
+		}
 		
 		/*===================
 			Accordion JS
@@ -224,14 +238,18 @@ Version:	1.1
 		/*====================================
 			Nice Select JS
 		======================================*/ 	
-		$('select').niceSelect();
+		if ($.fn.niceSelect) {
+			$('select').niceSelect();
+		}
 		
 		/*=====================================
 			Date Picker JS
 		======================================*/ 
-		$( function() {
-			$( "#datepicker" ).datepicker();
-		} );
+		if ($.fn.datepicker && $('#datepicker').length) {
+			$( function() {
+				$( "#datepicker" ).datepicker();
+			} );
+		}
 		
 		
 		
@@ -259,27 +277,31 @@ Version:	1.1
 		/*=====================
 			Video Popup JS
 		=======================*/ 
-		$('.video-popup').magnificPopup({
-			type: 'video',	
-		});
+		if ($.fn.magnificPopup) {
+			$('.video-popup').magnificPopup({
+				type: 'video',	
+			});
+		}
 		
 		/*================
 			Wow JS
 		==================*/		
 		var window_width = $(window).width();   
-			if(window_width > 767){
+			if(window_width > 767 && typeof WOW !== 'undefined'){
             new WOW().init();
 		}
 	
 		/*===================
 			Scroll Up JS
 		=====================*/
-		$.scrollUp({
-			scrollText: '<span><i class="fa fa-angle-up"></i></span>',
-			easingType: 'easeInOutExpo',
-			scrollSpeed: 900,
-			animation: 'fade'
-		}); 
+		if ($.scrollUp) {
+			$.scrollUp({
+				scrollText: '<span><i class="fa fa-angle-up"></i></span>',
+				easingType: 'easeInOutExpo',
+				scrollSpeed: 900,
+				animation: 'fade'
+			}); 
+		}
 
 		/*=======================
 			Animate Scroll JS
@@ -295,29 +317,33 @@ Version:	1.1
 		/*=======================
 			Stellar JS
 		=========================*/
-		$.stellar({
-		  horizontalOffset: 0,
-		  verticalOffset: 0
-		});
+		if ($.stellar) {
+			$.stellar({
+			  horizontalOffset: 0,
+			  verticalOffset: 0
+			});
+		}
 
 		/*====================
 			Google Maps JS
 		======================*/
-		var map = new GMaps({
-				el: '#map',
-				lat: 23.011245,
-				lng: 90.884780,
-				scrollwheel: false,
+		if (typeof GMaps !== 'undefined' && $('#map').length) {
+			var map = new GMaps({
+					el: '#map',
+					lat: 23.011245,
+					lng: 90.884780,
+					scrollwheel: false,
+				});
+				map.addMarker({
+					lat: 23.011245,
+					lng: 90.884780,
+					title: 'Marker with InfoWindow',
+					infoWindow: {
+					content: '<p>welcome to Medipro</p>'
+				}
+			
 			});
-			map.addMarker({
-				lat: 23.011245,
-				lng: 90.884780,
-				title: 'Marker with InfoWindow',
-				infoWindow: {
-				content: '<p>welcome to Medipro</p>'
-			}
-		
-		});
+		}
 	});
 	
 	/*====================
