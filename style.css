@@ -4224,3 +4224,55 @@ html {
     scroll-behavior: auto;
   }
 }
+
+/* Modern typography and button system using existing orange brand color */
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.btn,
+button,
+input,
+select,
+textarea {
+  font-family: Arial, sans-serif;
+}
+
+.btn {
+  background: #F05023;
+  border: 1px solid #F05023;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 8px 20px rgba(240, 80, 35, 0.2);
+  transition: all 0.2s ease;
+}
+
+.btn:hover,
+.btn:focus {
+  background: #d7451c;
+  border-color: #d7451c;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.btn.primary {
+  background: #fff;
+  color: #F05023;
+  border: 1px solid #F05023;
+}
+
+.btn.primary:hover,
+.btn.primary:focus {
+  background: #F05023;
+  color: #fff;
+}
+
+.btn:before {
+  display: none !important;
+}
