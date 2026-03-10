@@ -4276,3 +4276,45 @@ textarea {
 .btn:before {
   display: none !important;
 }
+
+/* Header/nav typography refresh to match modern button system */
+.header .top-link li a,
+.header .top-contact li,
+.header .top-contact li a {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.header .nav li {
+  margin-right: 10px;
+}
+
+.header .nav li a {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 24px 10px;
+}
+
+.header .logo {
+  margin-top: 14px;
+}
+
+.get-quote {
+  margin-top: 8px;
+}
+
+.get-quote .btn {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 991px) {
+  .header .top-link li a,
+  .header .top-contact li,
+  .header .top-contact li a {
+    font-size: 12px;
+  }
+}
