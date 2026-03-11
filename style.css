@@ -4327,6 +4327,17 @@ textarea {
     font-size: 13px;
     border-radius: 8px;
   }
+
+  .project-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .project-actions .btn {
+    width: 100%;
+    text-align: center;
+    margin: 0;
+  }
 }
 
 .project-price {
