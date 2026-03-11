@@ -4318,3 +4318,17 @@ textarea {
     font-size: 12px;
   }
 }
+
+.project-price {
+  margin: 12px 0 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #F05023;
+}
+
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 14px;
+}
