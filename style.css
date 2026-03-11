@@ -4337,6 +4337,9 @@ textarea {
     width: 100%;
     text-align: center;
     margin: 0;
+    padding: 7px 10px;
+    font-size: 12px;
+    line-height: 1.15;
   }
 }
 
