@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice View</title>
+  <link rel="stylesheet" href="/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/font-awesome.min.css">
+  <style>
+    body {
+      background-color: #f5f5f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 2rem 1rem;
+    }
+
+    .invoice-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .invoice-header {
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .invoice-header h1 {
+      color: #0066cc;
+      margin: 0;
+    }
+
+    .invoice-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .detail-section h3 {
+      font-size: 0.875rem;
+      color: #999;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .detail-section p {
+      margin: 0.25rem 0;
+      color: #666;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      border-top: 1px solid #ddd;
+      padding-top: 1rem;
+    }
+
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+    }
+
+    .detail-item label {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .detail-item .value {
+      color: #666;
+    }
+
+    table {
+      width: 100%;
+      margin-bottom: 2rem;
+      border-collapse: collapse;
+    }
+
+    table thead {
+      background-color: #f8f9fa;
+      border-bottom: 2px solid #ddd;
+    }
+
+    table th {
+      padding: 0.75rem;
+      text-align: left;
+      font-weight: 600;
+      color: #333;
+    }
+
+    table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .summary {
+      margin-left: auto;
+      width: 300px;
+      margin-bottom: 2rem;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+    }
+
+    .summary-row.total {
+      border-top: 2px solid #ddd;
+      border-bottom: 2px solid #ddd;
+      padding: 1rem 0;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .summary-row.total .label {
+      color: #0066cc;
+    }
+
+    .summary-row.total .value {
+      color: #0066cc;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid #ddd;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background-color: #0066cc;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: #0052a3;
+    }
+
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background-color: #5a6268;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.35rem 0.65rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-draft {
+      background-color: #e2e3e5;
+      color: #383d41;
+    }
+
+    .status-sent {
+      background-color: #cfe2ff;
+      color: #084298;
+    }
+
+    .status-viewed {
+      background-color: #cff4fc;
+      color: #055160;
+    }
+
+    .status-paid {
+      background-color: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .error {
+      background-color: #f8d7da;
+      color: #842029;
+      padding: 1rem;
+      border-radius: 0.25rem;
+      border: 1px solid #f5c2c7;
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .invoice-container {
+        box-shadow: none;
+        padding: 0;
+      }
+
+      .action-buttons {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .invoice-details {
+        grid-template-columns: 1fr;
+      }
+
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary {
+        width: 100%;
+      }
+
+      .action-buttons {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-container" id="invoice-container">
+    <div class="loading">
+      <p>Loading invoice...</p>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const invoiceId = window.location.pathname.split('/')[3];
+      await loadInvoice(invoiceId);
+    });
+
+    async function loadInvoice(invoiceId) {
+      try {
+        const response = await fetch(`${API_BASE}/invoice/${invoiceId}`);
+        const invoice = await response.json();
+
+        if (response.ok && invoice.id) {
+          displayInvoice(invoice);
+        } else {
+          displayError('Invoice not found');
+        }
+      } catch (error) {
+        displayError('Error loading invoice: ' + error.message);
+      }
+    }
+
+    function displayInvoice(invoice) {
+      const items = JSON.parse(invoice.items || '[]');
+      let itemsHtml = '';
+      let itemsTotal = 0;
+
+      if (items.length > 0) {
+        itemsHtml = items.map(item => {
+          const amount = (item.quantity || 1) * (item.rate || 0);
+          itemsTotal += amount;
+          return `
+            <tr>
+              <td>${item.description || 'Item'}</td>
+              <td style="text-align: center;">${item.quantity || 1}</td>
+              <td style="text-align: right;">$${(item.rate || 0).toFixed(2)}</td>
+              <td style="text-align: right;">$${amount.toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        itemsTotal = invoice.amount;
+        itemsHtml = `
+          <tr>
+            <td colspan="3">Services Rendered</td>
+            <td style="text-align: right;">$${invoice.amount.toFixed(2)}</td>
+          </tr>
+        `;
+      }
+
+      const total = invoice.amount + invoice.tax;
+
+      const html = `
+        <div class="invoice-header">
+          <h1>INVOICE</h1>
+          <p>Invoice #: <strong>${invoice.invoice_number}</strong></p>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+          <div>
+            <p style="margin: 0;"><strong>Status:</strong> <span class="status-badge status-${invoice.status}">${invoice.status}</span></p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0;"><strong>Invoice Date:</strong> ${new Date(invoice.created_at).toLocaleDateString()}</p>
+            ${invoice.due_date ? `<p style="margin: 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ''}
+          </div>
+        </div>
+
+        <div class="invoice-details">
+          <div class="detail-section">
+            <h3>Bill To</h3>
+            <p><strong>${invoice.client_name}</strong></p>
+            <p>${invoice.client_email}</p>
+            ${invoice.client_address ? `<p>${invoice.client_address}</p>` : ''}
+          </div>
+          <div class="detail-section">
+            <h3>Payment Terms</h3>
+            <p>${invoice.payment_terms || 'Net 30'}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th style="text-align: center;">Quantity</th>
+              <th style="text-align: right;">Rate</th>
+              <th style="text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <div class="summary">
+          <div class="summary-row">
+            <span>Subtotal:</span>
+            <span class="value">$${invoice.amount.toFixed(2)}</span>
+          </div>
+          <div class="summary-row">
+            <span>Tax:</span>
+            <span class="value">$${invoice.tax.toFixed(2)}</span>
+          </div>
+          <div class="summary-row total">
+            <span class="label">Total Due:</span>
+            <span class="value">$${total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        ${invoice.notes ? `
+          <div style="margin-bottom: 2rem; padding: 1rem; background-color: #f8f9fa; border-radius: 0.25rem;">
+            <strong>Notes:</strong>
+            <p style="margin: 0.5rem 0 0 0; color: #666;">${invoice.notes}</p>
+          </div>
+        ` : ''}
+
+        <div class="action-buttons">
+          <button class="btn btn-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+          </button>
+          <button class="btn btn-primary" onclick="downloadPDF()">
+            <i class="fas fa-download"></i> Download PDF
+          </button>
+        </div>
+      `;
+
+      document.getElementById('invoice-container').innerHTML = html;
+    }
+
+    function displayError(message) {
+      document.getElementById('invoice-container').innerHTML = `
+        <div class="error">
+          <p>${message}</p>
+        </div>
+      `;
+    }
+
+    function downloadPDF() {
+      alert('PDF download feature coming soon! You can use your browser\'s Print to PDF feature for now.');
+    }
+  </script>
+</body>
+</html>

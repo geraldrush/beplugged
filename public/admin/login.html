@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - Invoicing System</title>
+  <link rel="stylesheet" href="/css/bootstrap.min.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .login-container {
+      background: white;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .login-container h2 {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: #333;
+    }
+
+    .login-container .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .login-container label {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+
+    .login-container input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 0.25rem;
+      font-size: 1rem;
+    }
+
+    .login-container input:focus {
+      outline: none;
+      border-color: #0066cc;
+      box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 0.25rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .login-btn:hover {
+      background-color: #0052a3;
+    }
+
+    .alert {
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      border-radius: 0.25rem;
+      display: none;
+    }
+
+    .alert-danger {
+      background-color: #f8d7da;
+      color: #842029;
+      border: 1px solid #f5c2c7;
+    }
+
+    .alert.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h2>
+      <i class="fas fa-file-invoice-dollar"></i> Admin Login
+    </h2>
+    
+    <div id="alert" class="alert alert-danger"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required autofocus>
+      </div>
+      <button type="submit" class="login-btn">Login</button>
+    </form>
+  </div>
+
+  <link rel="stylesheet" href="/css/font-awesome.min.css">
+  <script>
+    const API_BASE = '/api';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      
+      try {
+        const response = await fetch(API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.token) {
+          localStorage.setItem('authToken', data.token);
+          window.location.href = '/admin/';
+        } else {
+          showError('Invalid password');
+        }
+      } catch (error) {
+        showError('Login failed: ' + error.message);
+      }
+    });
+
+    function showError(message) {
+      const alert = document.getElementById('alert');
+      alert.textContent = message;
+      alert.classList.add('show');
+      setTimeout(() => alert.classList.remove('show'), 5000);
+    }
+  </script>
+</body>
+</html>

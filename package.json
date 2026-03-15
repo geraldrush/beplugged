@@ -1,0 +1,28 @@
+{
+  "name": "beplugged-invoicing",
+  "version": "1.0.0",
+  "description": "Complete invoicing system with QR codes on Cloudflare Workers + D1",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create invoicing",
+    "db:init": "wrangler d1 execute invoicing --file src/schema.sql",
+    "db:migrate": "wrangler d1 execute invoicing --file src/schema.sql --remote"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geraldrush/beplugged.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/geraldrush/beplugged/issues"
+  },
+  "homepage": "https://github.com/geraldrush/beplugged#readme",
+  "devDependencies": {
+    "qrcode": "^1.5.4",
+    "wrangler": "^4.73.0"
+  }
+}

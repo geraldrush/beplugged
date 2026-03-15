@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invoicing System - Admin</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/font-awesome.min.css" />
+    <style>
+      :root {
+        --primary: #0066cc;
+        --success: #28a745;
+        --danger: #dc3545;
+        --warning: #ffc107;
+        --dark: #343a40;
+        --light: #f8f9fa;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+
+      .navbar {
+        background: linear-gradient(135deg, var(--primary) 0%, #004a99 100%);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 1rem 2rem;
+      }
+
+      .navbar-brand {
+        font-weight: 700;
+        font-size: 1.5rem;
+        color: white !important;
+      }
+
+      .navbar .nav-link {
+        color: rgba(255, 255, 255, 0.8) !important;
+        transition: color 0.3s;
+      }
+
+      .navbar .nav-link:hover,
+      .navbar .nav-link.active {
+        color: white !important;
+      }
+
+      .sidebar {
+        background: #fff;
+        border-right: 1px solid #e0e0e0;
+        padding: 2rem 1rem;
+        min-height: 100vh;
+      }
+
+      .sidebar .nav-link {
+        color: #666;
+        margin-bottom: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.25rem;
+        transition: all 0.3s;
+      }
+
+      .sidebar .nav-link:hover,
+      .sidebar .nav-link.active {
+        background-color: var(--primary);
+        color: white;
+      }
+
+      .main-content {
+        padding: 2rem;
+      }
+
+      .stat-card {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid var(--primary);
+      }
+
+      .stat-card h3 {
+        font-size: 0.875rem;
+        color: #999;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+      }
+
+      .stat-card .value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+      }
+
+      .card {
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        margin-bottom: 2rem;
+      }
+
+      .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 1.25rem;
+      }
+
+      .btn-primary {
+        background-color: var(--primary);
+        border-color: var(--primary);
+      }
+
+      .btn-primary:hover {
+        background-color: #0052a3;
+        border-color: #0052a3;
+      }
+
+      .table-responsive {
+        background: white;
+        border-radius: 0.5rem;
+        overflow: hidden;
+      }
+
+      .table {
+        margin: 0;
+      }
+
+      .badge {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .status-draft {
+        background-color: #e2e3e5;
+        color: #383d41;
+      }
+
+      .status-sent {
+        background-color: #cfe2ff;
+        color: #084298;
+      }
+
+      .status-viewed {
+        background-color: #cff4fc;
+        color: #055160;
+      }
+
+      .status-paid {
+        background-color: #d1e7dd;
+        color: #0f5132;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+      }
+
+      .modal.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-content {
+        background: white;
+        border-radius: 0.5rem;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        background-color: var(--primary);
+        color: white;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .modal-body {
+        padding: 1.5rem;
+      }
+
+      .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      .form-label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #333;
+      }
+
+      .form-control {
+        border: 1px solid #ddd;
+        border-radius: 0.25rem;
+        padding: 0.5rem 0.75rem;
+      }
+
+      .form-control:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+      }
+
+      .qr-code-display {
+        text-align: center;
+        margin: 1rem 0;
+      }
+
+      .qr-code-display img {
+        max-width: 200px;
+        border: 1px solid #ddd;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+      }
+
+      .alert {
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1rem;
+      }
+
+      .alert-success {
+        background-color: #d1e7dd;
+        color: #0f5132;
+        border: 1px solid #badbcc;
+      }
+
+      .alert-danger {
+        background-color: #f8d7da;
+        color: #842029;
+        border: 1px solid #f5c2c7;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .tabs {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        gap: 2rem;
+        margin-bottom: 2rem;
+      }
+
+      .tab-btn {
+        background: none;
+        border: none;
+        padding: 0.75rem 0;
+        font-size: 1rem;
+        color: #666;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.3s;
+      }
+
+      .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+
+      .search-box {
+        flex: 1;
+        max-width: 300px;
+      }
+
+      @media (max-width: 768px) {
+        .sidebar {
+          display: none;
+        }
+
+        .main-content {
+          padding: 1rem;
+        }
+
+        .stat-card {
+          margin-bottom: 1rem;
+        }
+
+        .tabs {
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <div class="navbar-brand">
+        <i class="fas fa-file-invoice-dollar"></i> Invoicing System
+      </div>
+      <div class="navbar-nav">
+        <a class="nav-link" href="#" onclick="logout()">Logout</a>
+      </div>
+    </nav>
+
+    <div style="display: flex">
+      <!-- Sidebar -->
+      <div class="sidebar" style="width: 250px">
+        <nav class="nav flex-column">
+          <button class="nav-link active" onclick="showTab('dashboard')">
+            <i class="fas fa-th-large"></i> Dashboard
+          </button>
+          <button class="nav-link" onclick="showTab('invoices')">
+            <i class="fas fa-file-invoice"></i> Invoices
+          </button>
+          <button class="nav-link" onclick="showTab('quotes')">
+            <i class="fas fa-quote-left"></i> Quotes
+          </button>
+          <button class="nav-link" onclick="showTab('clients')">
+            <i class="fas fa-users"></i> Clients
+          </button>
+        </nav>
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-content" style="flex: 1">
+        <div id="alert-container"></div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content">
+          <h2>Dashboard</h2>
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 1rem;
+            "
+          >
+            <div class="stat-card">
+              <h3>Total Invoices</h3>
+              <div class="value" id="total-invoices">0</div>
+            </div>
+            <div class="stat-card">
+              <h3>Total Quotes</h3>
+              <div class="value" id="total-quotes">0</div>
+            </div>
+            <div class="stat-card" style="border-left-color: var(--success)">
+              <h3>Total Revenue</h3>
+              <div
+                class="value"
+                id="total-revenue"
+                style="color: var(--success)"
+              >
+                $0.00
+              </div>
+            </div>
+            <div class="stat-card" style="border-left-color: var(--warning)">
+              <h3>Pending Invoices</h3>
+              <div
+                class="value"
+                id="pending-invoices"
+                style="color: var(--warning)"
+              >
+                0
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 2rem">
+            <div class="card-header">
+              <h4>Recent Invoices</h4>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-invoices-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoices Tab -->
+        <div id="invoices-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Invoices</h2>
+            <button class="btn btn-primary" onclick="openInvoiceModal()">
+              <i class="fas fa-plus"></i> New Invoice
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="invoices-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quotes Tab -->
+        <div id="quotes-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Quotes</h2>
+            <button class="btn btn-primary" onclick="openQuoteModal()">
+              <i class="fas fa-plus"></i> New Quote
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Quote #</th>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Expiry Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="quotes-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clients Tab -->
+        <div id="clients-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Clients</h2>
+            <button class="btn btn-primary" onclick="openClientModal()">
+              <i class="fas fa-plus"></i> New Client
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="clients-list">
+                  <tr>
+                    <td colspan="5" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoiceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>Create Invoice</h5>
+          <button
+            type="button"
+            onclick="closeInvoiceModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="invoiceForm">
+            <div class="form-group">
+              <label class="form-label">Client Name *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="invoice_client_name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Email *</label>
+              <input
+                type="email"
+                class="form-control"
+                id="invoice_client_email"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Address</label>
+              <input
+                type="text"
+                class="form-control"
+                id="invoice_client_address"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Amount *</label>
+              <input
+                type="number"
+                class="form-control"
+                id="invoice_amount"
+                step="0.01"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tax</label>
+              <input
+                type="number"
+                class="form-control"
+                id="invoice_tax"
+                step="0.01"
+                value="0"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Due Date</label>
+              <input type="date" class="form-control" id="invoice_due_date" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Payment Terms</label>
+              <input
+                type="text"
+                class="form-control"
+                id="invoice_payment_terms"
+                placeholder="e.g., Net 30"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea
+                class="form-control"
+                id="invoice_notes"
+                rows="3"
+              ></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closeInvoiceModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" onclick="saveInvoice()">
+            Save Invoice
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quote Modal -->
+    <div id="quoteModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>Create Quote</h5>
+          <button
+            type="button"
+            onclick="closeQuoteModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="quoteForm">
+            <div class="form-group">
+              <label class="form-label">Client Name *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="quote_client_name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Email *</label>
+              <input
+                type="email"
+                class="form-control"
+                id="quote_client_email"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client Address</label>
+              <input
+                type="text"
+                class="form-control"
+                id="quote_client_address"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Amount *</label>
+              <input
+                type="number"
+                class="form-control"
+                id="quote_amount"
+                step="0.01"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tax</label>
+              <input
+                type="number"
+                class="form-control"
+                id="quote_tax"
+                step="0.01"
+                value="0"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Expiry Date</label>
+              <input type="date" class="form-control" id="quote_expiry_date" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea
+                class="form-control"
+                id="quote_notes"
+                rows="3"
+              ></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closeQuoteModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" onclick="saveQuote()">
+            Save Quote
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client Modal -->
+    <div id="clientModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>Add Client</h5>
+          <button
+            type="button"
+            onclick="closeClientModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="clientForm">
+            <div class="form-group">
+              <label class="form-label">Name *</label>
+              <input
+                type="text"
+                class="form-control"
+                id="client_name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email *</label>
+              <input
+                type="email"
+                class="form-control"
+                id="client_email"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input type="tel" class="form-control" id="client_phone" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address</label>
+              <input type="text" class="form-control" id="client_address" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">City</label>
+              <input type="text" class="form-control" id="client_city" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">State</label>
+              <input type="text" class="form-control" id="client_state" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Postal Code</label>
+              <input type="text" class="form-control" id="client_postal_code" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Country</label>
+              <input type="text" class="form-control" id="client_country" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closeClientModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" onclick="saveClient()">
+            Save Client
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- View Invoice Modal -->
+    <div id="viewInvoiceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="view-invoice-title">Invoice</h5>
+          <button
+            type="button"
+            onclick="closeViewInvoiceModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body" id="view-invoice-body">
+          <!-- Invoice details will be inserted here -->
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closeViewInvoiceModal()"
+          >
+            Close
+          </button>
+          <button type="button" class="btn btn-info" onclick="printInvoice()">
+            Print
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            onclick="sendInvoiceEmail()"
+          >
+            Send Email
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/jquery.min.js"></script>
+    <script>
+      const API_BASE = "/api";
+      let authToken = "";
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", function () {
+        authToken = localStorage.getItem("authToken");
+        if (!authToken) {
+          redirectToLogin();
+          return;
+        }
+        loadDashboard();
+      });
+
+      // Tab Management
+      function showTab(tabName) {
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((tab) => tab.classList.add("hidden"));
+        document.getElementById(tabName + "-tab").classList.remove("hidden");
+
+        if (tabName === "dashboard") {
+          loadDashboard();
+        } else if (tabName === "invoices") {
+          loadInvoices();
+        } else if (tabName === "quotes") {
+          loadQuotes();
+        } else if (tabName === "clients") {
+          loadClients();
+        }
+      }
+
+      // API Calls
+      async function apiCall(endpoint, method = "GET", data = null) {
+        const options = {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: authToken,
+          },
+        };
+
+        if (data) {
+          options.body = JSON.stringify(data);
+        }
+
+        try {
+          const response = await fetch(API_BASE + endpoint, options);
+          if (response.status === 401) {
+            logout();
+            return null;
+          }
+          const result = await response.json();
+          return result;
+        } catch (error) {
+          showAlert("Error: " + error.message, "danger");
+          return null;
+        }
+      }
+
+      // Dashboard
+      async function loadDashboard() {
+        const stats = await apiCall("/admin/dashboard");
+        if (stats) {
+          document.getElementById("total-invoices").textContent =
+            stats.total_invoices;
+          document.getElementById("total-quotes").textContent =
+            stats.total_quotes;
+          document.getElementById("total-revenue").textContent =
+            "$" + stats.total_revenue.toFixed(2);
+          document.getElementById("pending-invoices").textContent =
+            stats.pending_invoices;
+        }
+
+        const invoices = await apiCall("/admin/invoices");
+        if (invoices) {
+          const list = document.getElementById("recent-invoices-list");
+          list.innerHTML = invoices
+            .slice(0, 5)
+            .map(
+              (inv) => `
+          <tr>
+            <td>${inv.invoice_number}</td>
+            <td>${inv.client_name}</td>
+            <td>$${inv.amount.toFixed(2)}</td>
+            <td><span class="badge status-${inv.status}">${inv.status}</span></td>
+            <td>${new Date(inv.created_at).toLocaleDateString()}</td>
+            <td>
+              <button class="btn btn-sm btn-info" onclick="viewInvoice('${inv.id}')">View</button>
+            </td>
+          </tr>
+        `,
+            )
+            .join("");
+        }
+      }
+
+      // Invoices
+      async function loadInvoices() {
+        const invoices = await apiCall("/admin/invoices");
+        if (invoices) {
+          const list = document.getElementById("invoices-list");
+          list.innerHTML = invoices
+            .map(
+              (inv) => `
+          <tr>
+            <td>${inv.invoice_number}</td>
+            <td>${inv.client_name}</td>
+            <td>$${inv.amount.toFixed(2)}</td>
+            <td><span class="badge status-${inv.status}">${inv.status}</span></td>
+            <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "N/A"}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="viewInvoice('${inv.id}')">View</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `,
+            )
+            .join("");
+        }
+      }
+
+      async function saveInvoice() {
+        if (!document.getElementById("invoiceForm").checkValidity()) {
+          showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+
+        const data = {
+          client_name: document.getElementById("invoice_client_name").value,
+          client_email: document.getElementById("invoice_client_email").value,
+          client_address: document.getElementById("invoice_client_address")
+            .value,
+          amount: parseFloat(document.getElementById("invoice_amount").value),
+          tax: parseFloat(document.getElementById("invoice_tax").value),
+          due_date: document.getElementById("invoice_due_date").value,
+          payment_terms: document.getElementById("invoice_payment_terms").value,
+          notes: document.getElementById("invoice_notes").value,
+          items: [],
+          status: "draft",
+        };
+
+        const result = await apiCall("/admin/invoices", "POST", data);
+        if (result && result.id) {
+          showAlert("Invoice created successfully!", "success");
+          closeInvoiceModal();
+          loadInvoices();
+          loadDashboard();
+        }
+      }
+
+      async function viewInvoice(id) {
+        const invoice = await apiCall("/admin/invoices/" + id);
+        if (invoice) {
+          const body = document.getElementById("view-invoice-body");
+          body.innerHTML = `
+          <div>
+            <h5>${invoice.invoice_number}</h5>
+            <p><strong>Client:</strong> ${invoice.client_name}<br>
+            <strong>Email:</strong> ${invoice.client_email}<br>
+            <strong>Address:</strong> ${invoice.client_address}<br>
+            <strong>Amount:</strong> $${invoice.amount.toFixed(2)}<br>
+            <strong>Tax:</strong> $${invoice.tax.toFixed(2)}<br>
+            <strong>Total:</strong> $${(invoice.amount + invoice.tax).toFixed(2)}<br>
+            <strong>Status:</strong> ${invoice.status}<br>
+            <strong>Due Date:</strong> ${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</p>
+            ${
+              invoice.qr_code_url
+                ? `
+              <div class="qr-code-display">
+                <p><strong>QR Code (links to public view):</strong></p>
+                <img src="${invoice.qr_code_url}" alt="QR Code">
+              </div>
+            `
+                : ""
+            }
+          </div>
+        `;
+          document.getElementById("view-invoice-title").textContent =
+            invoice.invoice_number;
+          document.getElementById("viewInvoiceModal").classList.add("show");
+        }
+      }
+
+      async function deleteInvoice(id) {
+        if (confirm("Are you sure? You can only delete draft invoices.")) {
+          const result = await apiCall("/admin/invoices/" + id, "DELETE");
+          if (result && result.success) {
+            showAlert("Invoice deleted", "success");
+            loadInvoices();
+            loadDashboard();
+          }
+        }
+      }
+
+      // Quotes
+      async function loadQuotes() {
+        const quotes = await apiCall("/admin/quotes");
+        if (quotes) {
+          const list = document.getElementById("quotes-list");
+          list.innerHTML = quotes
+            .map(
+              (q) => `
+          <tr>
+            <td>${q.quote_number}</td>
+            <td>${q.client_name}</td>
+            <td>$${q.amount.toFixed(2)}</td>
+            <td><span class="badge status-${q.status}">${q.status}</span></td>
+            <td>${q.expiry_date ? new Date(q.expiry_date).toLocaleDateString() : "N/A"}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="viewQuote('${q.id}')">View</button>
+              </div>
+            </td>
+          </tr>
+        `,
+            )
+            .join("");
+        }
+      }
+
+      async function saveQuote() {
+        if (!document.getElementById("quoteForm").checkValidity()) {
+          showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+
+        const data = {
+          client_name: document.getElementById("quote_client_name").value,
+          client_email: document.getElementById("quote_client_email").value,
+          client_address: document.getElementById("quote_client_address").value,
+          amount: parseFloat(document.getElementById("quote_amount").value),
+          tax: parseFloat(document.getElementById("quote_tax").value),
+          expiry_date: document.getElementById("quote_expiry_date").value,
+          notes: document.getElementById("quote_notes").value,
+          items: [],
+        };
+
+        const result = await apiCall("/admin/quotes", "POST", data);
+        if (result && result.id) {
+          showAlert("Quote created successfully!", "success");
+          closeQuoteModal();
+          loadQuotes();
+          loadDashboard();
+        }
+      }
+
+      async function viewQuote(id) {
+        const quote = await apiCall("/admin/quotes/" + id);
+        if (quote) {
+          const body = document.getElementById("view-invoice-body");
+          body.innerHTML = `
+          <div>
+            <h5>${quote.quote_number}</h5>
+            <p><strong>Client:</strong> ${quote.client_name}<br>
+            <strong>Email:</strong> ${quote.client_email}<br>
+            <strong>Address:</strong> ${quote.client_address}<br>
+            <strong>Amount:</strong> $${quote.amount.toFixed(2)}<br>
+            <strong>Tax:</strong> $${quote.tax.toFixed(2)}<br>
+            <strong>Total:</strong> $${(quote.amount + quote.tax).toFixed(2)}<br>
+            <strong>Status:</strong> ${quote.status}<br>
+            <strong>Expiry Date:</strong> ${quote.expiry_date ? new Date(quote.expiry_date).toLocaleDateString() : "N/A"}</p>
+            ${
+              quote.qr_code_url
+                ? `
+              <div class="qr-code-display">
+                <p><strong>QR Code (links to public view):</strong></p>
+                <img src="${quote.qr_code_url}" alt="QR Code">
+              </div>
+            `
+                : ""
+            }
+          </div>
+        `;
+          document.getElementById("view-invoice-title").textContent =
+            quote.quote_number;
+          document.getElementById("viewInvoiceModal").classList.add("show");
+        }
+      }
+
+      // Clients
+      async function loadClients() {
+        const clients = await apiCall("/admin/clients");
+        if (clients) {
+          const list = document.getElementById("clients-list");
+          list.innerHTML = clients
+            .map(
+              (c) => `
+          <tr>
+            <td>${c.name}</td>
+            <td>${c.email}</td>
+            <td>${c.phone || "N/A"}</td>
+            <td>${c.city || "N/A"}</td>
+            <td>
+              <button class="btn btn-sm btn-info">Edit</button>
+            </td>
+          </tr>
+        `,
+            )
+            .join("");
+        }
+      }
+
+      async function saveClient() {
+        if (!document.getElementById("clientForm").checkValidity()) {
+          showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+
+        const data = {
+          name: document.getElementById("client_name").value,
+          email: document.getElementById("client_email").value,
+          phone: document.getElementById("client_phone").value,
+          address: document.getElementById("client_address").value,
+          city: document.getElementById("client_city").value,
+          state: document.getElementById("client_state").value,
+          postal_code: document.getElementById("client_postal_code").value,
+          country: document.getElementById("client_country").value,
+        };
+
+        const result = await apiCall("/admin/clients", "POST", data);
+        if (result && result.id) {
+          showAlert("Client added successfully!", "success");
+          closeClientModal();
+          loadClients();
+        }
+      }
+
+      // Modals
+      function openInvoiceModal() {
+        document.getElementById("invoiceForm").reset();
+        document.getElementById("invoiceModal").classList.add("show");
+      }
+
+      function closeInvoiceModal() {
+        document.getElementById("invoiceModal").classList.remove("show");
+      }
+
+      function openQuoteModal() {
+        document.getElementById("quoteForm").reset();
+        document.getElementById("quoteModal").classList.add("show");
+      }
+
+      function closeQuoteModal() {
+        document.getElementById("quoteModal").classList.remove("show");
+      }
+
+      function openClientModal() {
+        document.getElementById("clientForm").reset();
+        document.getElementById("clientModal").classList.add("show");
+      }
+
+      function closeClientModal() {
+        document.getElementById("clientModal").classList.remove("show");
+      }
+
+      function closeViewInvoiceModal() {
+        document.getElementById("viewInvoiceModal").classList.remove("show");
+      }
+
+      // Utility
+      function showAlert(message, type) {
+        const container = document.getElementById("alert-container");
+        const alert = document.createElement("div");
+        alert.className = "alert alert-" + type;
+        alert.textContent = message;
+        container.appendChild(alert);
+        setTimeout(() => alert.remove(), 5000);
+      }
+
+      function printInvoice() {
+        window.print();
+      }
+
+      function sendInvoiceEmail() {
+        showAlert("Email feature coming soon!", "warning");
+      }
+
+      function logout() {
+        localStorage.removeItem("authToken");
+        redirectToLogin();
+      }
+
+      function redirectToLogin() {
+        window.location.href = "/admin/login.html";
+      }
+    </script>
+  </body>
+</html>
