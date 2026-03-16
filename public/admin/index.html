@@ -8,12 +8,13 @@
     <link rel="stylesheet" href="/css/font-awesome.min.css" />
     <style>
       :root {
-        --primary: #0066cc;
-        --success: #28a745;
-        --danger: #dc3545;
-        --warning: #ffc107;
-        --dark: #343a40;
-        --light: #f8f9fa;
+        --primary: #f05023;
+        --primary-dark: #d94119;
+        --success: #2c2d3f;
+        --danger: #f05023;
+        --warning: #f05023;
+        --dark: #2c2d3f;
+        --light: #ffffff;
       }
 
       * {
@@ -24,12 +25,12 @@
 
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f5f5f5;
-        color: #333;
+        background-color: var(--light);
+        color: var(--dark);
       }
 
       .navbar {
-        background: linear-gradient(135deg, var(--primary) 0%, #004a99 100%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--dark) 100%);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         padding: 1rem 2rem;
       }
@@ -52,13 +53,13 @@
 
       .sidebar {
         background: #fff;
-        border-right: 1px solid #e0e0e0;
+        border-right: 1px solid rgba(44, 45, 63, 0.15);
         padding: 2rem 1rem;
         min-height: 100vh;
       }
 
       .sidebar .nav-link {
-        color: #666;
+        color: rgba(44, 45, 63, 0.75);
         margin-bottom: 0.5rem;
         padding: 0.75rem 1rem;
         border-radius: 0.25rem;
@@ -86,7 +87,7 @@
 
       .stat-card h3 {
         font-size: 0.875rem;
-        color: #999;
+        color: rgba(44, 45, 63, 0.65);
         text-transform: uppercase;
         margin-bottom: 0.5rem;
       }
@@ -104,8 +105,8 @@
       }
 
       .card-header {
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #e0e0e0;
+        background-color: #fff5f1;
+        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
         padding: 1.25rem;
       }
 
@@ -115,8 +116,32 @@
       }
 
       .btn-primary:hover {
-        background-color: #0052a3;
-        border-color: #0052a3;
+        background-color: var(--primary-dark);
+        border-color: var(--primary-dark);
+      }
+
+      .btn-secondary,
+      .btn-info {
+        background-color: var(--dark);
+        border-color: var(--dark);
+        color: #fff;
+      }
+
+      .btn-secondary:hover,
+      .btn-info:hover {
+        background-color: #1f2030;
+        border-color: #1f2030;
+        color: #fff;
+      }
+
+      .btn-danger {
+        background-color: var(--primary);
+        border-color: var(--primary);
+      }
+
+      .btn-danger:hover {
+        background-color: var(--primary-dark);
+        border-color: var(--primary-dark);
       }
 
       .table-responsive {
@@ -136,23 +161,23 @@
       }
 
       .status-draft {
-        background-color: #e2e3e5;
-        color: #383d41;
+        background-color: rgba(44, 45, 63, 0.12);
+        color: var(--dark);
       }
 
       .status-sent {
-        background-color: #cfe2ff;
-        color: #084298;
+        background-color: rgba(240, 80, 35, 0.18);
+        color: var(--primary);
       }
 
       .status-viewed {
-        background-color: #cff4fc;
-        color: #055160;
+        background-color: rgba(240, 80, 35, 0.28);
+        color: var(--dark);
       }
 
       .status-paid {
-        background-color: #d1e7dd;
-        color: #0f5132;
+        background-color: rgba(44, 45, 63, 0.15);
+        color: var(--dark);
       }
 
       .modal {
@@ -185,7 +210,7 @@
         background-color: var(--primary);
         color: white;
         padding: 1.5rem;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -197,7 +222,7 @@
 
       .modal-footer {
         padding: 1rem 1.5rem;
-        border-top: 1px solid #e0e0e0;
+        border-top: 1px solid rgba(44, 45, 63, 0.15);
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
@@ -210,23 +235,38 @@
       .form-label {
         font-weight: 600;
         margin-bottom: 0.5rem;
-        color: #333;
+        color: var(--dark);
       }
 
       .form-control {
-        border: 1px solid #ddd;
+        border: 1px solid rgba(44, 45, 63, 0.2);
         border-radius: 0.25rem;
         padding: 0.5rem 0.75rem;
       }
 
       .form-control:focus {
         border-color: var(--primary);
-        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+        box-shadow: 0 0 0 0.2rem rgba(240, 80, 35, 0.25);
       }
 
       .action-buttons {
         display: flex;
         gap: 0.5rem;
+      }
+
+      .items-table th,
+      .items-table td {
+        vertical-align: middle;
+      }
+
+      .items-table input {
+        width: 100%;
+      }
+
+      .items-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 0.5rem;
       }
 
       .btn-sm {
@@ -241,7 +281,7 @@
 
       .qr-code-display img {
         max-width: 200px;
-        border: 1px solid #ddd;
+        border: 1px solid rgba(44, 45, 63, 0.2);
         padding: 0.5rem;
         border-radius: 0.25rem;
       }
@@ -253,15 +293,15 @@
       }
 
       .alert-success {
-        background-color: #d1e7dd;
-        color: #0f5132;
-        border: 1px solid #badbcc;
+        background-color: rgba(240, 80, 35, 0.12);
+        color: var(--dark);
+        border: 1px solid rgba(240, 80, 35, 0.35);
       }
 
       .alert-danger {
-        background-color: #f8d7da;
-        color: #842029;
-        border: 1px solid #f5c2c7;
+        background-color: rgba(240, 80, 35, 0.2);
+        color: var(--dark);
+        border: 1px solid rgba(240, 80, 35, 0.45);
       }
 
       .hidden {
@@ -270,7 +310,7 @@
 
       .tabs {
         display: flex;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid rgba(44, 45, 63, 0.15);
         gap: 2rem;
         margin-bottom: 2rem;
       }
@@ -280,7 +320,7 @@
         border: none;
         padding: 0.75rem 0;
         font-size: 1rem;
-        color: #666;
+        color: rgba(44, 45, 63, 0.75);
         cursor: pointer;
         border-bottom: 2px solid transparent;
         transition: all 0.3s;
@@ -351,6 +391,9 @@
           <button class="nav-link" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
           </button>
+          <button class="nav-link" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+          </button>
         </nav>
       </div>
 
@@ -383,7 +426,7 @@
                 id="total-revenue"
                 style="color: var(--success)"
               >
-                $0.00
+                R0.00
               </div>
             </div>
             <div class="stat-card" style="border-left-color: var(--warning)">
@@ -525,7 +568,7 @@
     <div id="invoiceModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h5>Create Invoice</h5>
+          <h5 id="invoice-modal-title">Create Invoice</h5>
           <button
             type="button"
             onclick="closeInvoiceModal()"
@@ -569,13 +612,40 @@
               />
             </div>
             <div class="form-group">
-              <label class="form-label">Amount *</label>
+              <label class="form-label">Invoice Items *</label>
+              <div class="table-responsive">
+                <table class="table table-sm items-table">
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th style="width: 80px">Qty</th>
+                      <th style="width: 120px">Rate</th>
+                      <th style="width: 120px">Discount</th>
+                      <th style="width: 40px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="invoice-items-body"></tbody>
+                </table>
+              </div>
+              <div class="items-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  onclick="addInvoiceItem()"
+                >
+                  <i class="fas fa-plus"></i> Add Item
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subtotal (auto-calculated) *</label>
               <input
                 type="number"
                 class="form-control"
                 id="invoice_amount"
                 step="0.01"
                 required
+                readonly
               />
             </div>
             <div class="form-group">
@@ -837,6 +907,13 @@
           </button>
           <button
             type="button"
+            class="btn btn-secondary"
+            onclick="downloadInvoice(currentViewInvoiceId)"
+          >
+            Download PDF
+          </button>
+          <button
+            type="button"
             class="btn btn-primary"
             onclick="sendInvoiceEmail()"
           >
@@ -850,6 +927,9 @@
     <script>
       const API_BASE = "/api";
       let authToken = "";
+      let currentViewInvoiceId = null;
+      let currentEditInvoiceId = null;
+      let currentEditInvoiceStatus = "draft";
 
       // Initialize
       document.addEventListener("DOMContentLoaded", function () {
@@ -916,7 +996,7 @@
           document.getElementById("total-quotes").textContent =
             stats.total_quotes;
           document.getElementById("total-revenue").textContent =
-            "$" + stats.total_revenue.toFixed(2);
+            "R" + stats.total_revenue.toFixed(2);
           document.getElementById("pending-invoices").textContent =
             stats.pending_invoices;
         }
@@ -931,7 +1011,7 @@
           <tr>
             <td>${inv.invoice_number}</td>
             <td>${inv.client_name}</td>
-            <td>$${inv.amount.toFixed(2)}</td>
+            <td>R${inv.amount.toFixed(2)}</td>
             <td><span class="badge status-${inv.status}">${inv.status}</span></td>
             <td>${new Date(inv.created_at).toLocaleDateString()}</td>
             <td>
@@ -955,12 +1035,14 @@
           <tr>
             <td>${inv.invoice_number}</td>
             <td>${inv.client_name}</td>
-            <td>$${inv.amount.toFixed(2)}</td>
+            <td>R${inv.amount.toFixed(2)}</td>
             <td><span class="badge status-${inv.status}">${inv.status}</span></td>
             <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "N/A"}</td>
             <td>
               <div class="action-buttons">
                 <button class="btn btn-sm btn-info" onclick="viewInvoice('${inv.id}')">View</button>
+                <button class="btn btn-sm btn-secondary" onclick="editInvoice('${inv.id}')">Edit</button>
+                <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${inv.id}')">Download</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
               </div>
             </td>
@@ -971,9 +1053,92 @@
         }
       }
 
+      function addInvoiceItem(item = {}) {
+        const tbody = document.getElementById("invoice-items-body");
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>
+            <input type="text" class="form-control item-desc" value="${item.description || ""}" required />
+          </td>
+          <td>
+            <input type="number" class="form-control item-qty" min="1" step="1" value="${item.quantity || 1}" required />
+          </td>
+          <td>
+            <input type="number" class="form-control item-rate" min="0" step="0.01" value="${item.rate || 0}" required />
+          </td>
+          <td>
+            <input type="number" class="form-control item-discount" min="0" step="0.01" value="${item.discount || 0}" />
+          </td>
+          <td>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeInvoiceItem(this)">
+              <i class="fas fa-times"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(row);
+        row.querySelectorAll("input").forEach((input) =>
+          input.addEventListener("input", recalcInvoiceSubtotal),
+        );
+        recalcInvoiceSubtotal();
+      }
+
+      function removeInvoiceItem(button) {
+        const row = button.closest("tr");
+        if (row) {
+          row.remove();
+        }
+        if (!document.querySelector("#invoice-items-body tr")) {
+          addInvoiceItem();
+        } else {
+          recalcInvoiceSubtotal();
+        }
+      }
+
+      function collectInvoiceItems() {
+        const items = [];
+        document.querySelectorAll("#invoice-items-body tr").forEach((row) => {
+          const description = row.querySelector(".item-desc").value.trim();
+          const quantity = parseFloat(row.querySelector(".item-qty").value) || 0;
+          const rate = parseFloat(row.querySelector(".item-rate").value) || 0;
+          const discount =
+            parseFloat(row.querySelector(".item-discount").value) || 0;
+
+          if (!description) {
+            return;
+          }
+
+          items.push({
+            description,
+            quantity,
+            rate,
+            discount,
+          });
+        });
+        return items;
+      }
+
+      function recalcInvoiceSubtotal() {
+        let subtotal = 0;
+        document.querySelectorAll("#invoice-items-body tr").forEach((row) => {
+          const quantity = parseFloat(row.querySelector(".item-qty").value) || 0;
+          const rate = parseFloat(row.querySelector(".item-rate").value) || 0;
+          const discount =
+            parseFloat(row.querySelector(".item-discount").value) || 0;
+          const lineTotal = Math.max(quantity * rate - discount, 0);
+          subtotal += lineTotal;
+        });
+        document.getElementById("invoice_amount").value = subtotal.toFixed(2);
+      }
+
       async function saveInvoice() {
         if (!document.getElementById("invoiceForm").checkValidity()) {
           showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+
+        const items = collectInvoiceItems();
+        if (!items.length) {
+          showAlert("Please add at least one invoice item", "danger");
           return;
         }
 
@@ -987,22 +1152,103 @@
           due_date: document.getElementById("invoice_due_date").value,
           payment_terms: document.getElementById("invoice_payment_terms").value,
           notes: document.getElementById("invoice_notes").value,
-          items: [],
-          status: "draft",
+          items,
+          status: currentEditInvoiceId ? currentEditInvoiceStatus : "draft",
         };
 
-        const result = await apiCall("/admin/invoices", "POST", data);
-        if (result && result.id) {
-          showAlert("Invoice created successfully!", "success");
+        const isEditing = !!currentEditInvoiceId;
+        const endpoint = isEditing
+          ? "/admin/invoices/" + currentEditInvoiceId
+          : "/admin/invoices";
+        const method = isEditing ? "PUT" : "POST";
+
+        const result = await apiCall(endpoint, method, data);
+        if (result && (result.id || result.success)) {
+          showAlert(
+            isEditing ? "Invoice updated successfully!" : "Invoice created successfully!",
+            "success",
+          );
+          if (!isEditing && result.id) {
+            downloadInvoice(result.id);
+          }
           closeInvoiceModal();
           loadInvoices();
           loadDashboard();
         }
       }
 
+      async function editInvoice(id) {
+        const invoice = await apiCall("/admin/invoices/" + id);
+        if (!invoice) {
+          return;
+        }
+
+        currentEditInvoiceId = id;
+        currentEditInvoiceStatus = invoice.status || "draft";
+
+        document.getElementById("invoiceForm").reset();
+        document.getElementById("invoice-items-body").innerHTML = "";
+        document.getElementById("invoice-modal-title").textContent =
+          "Edit Invoice";
+
+        document.getElementById("invoice_client_name").value =
+          invoice.client_name || "";
+        document.getElementById("invoice_client_email").value =
+          invoice.client_email || "";
+        document.getElementById("invoice_client_address").value =
+          invoice.client_address || "";
+        document.getElementById("invoice_tax").value =
+          invoice.tax != null ? invoice.tax : 0;
+        document.getElementById("invoice_due_date").value =
+          invoice.due_date ? invoice.due_date.split("T")[0] : "";
+        document.getElementById("invoice_payment_terms").value =
+          invoice.payment_terms || "";
+        document.getElementById("invoice_notes").value = invoice.notes || "";
+
+        const items = JSON.parse(invoice.items || "[]");
+        if (items.length) {
+          items.forEach((item) => addInvoiceItem(item));
+        } else {
+          addInvoiceItem({
+            description: "Services Rendered",
+            quantity: 1,
+            rate: invoice.amount || 0,
+            discount: 0,
+          });
+        }
+
+        recalcInvoiceSubtotal();
+        document.getElementById("invoiceModal").classList.add("show");
+      }
+
       async function viewInvoice(id) {
         const invoice = await apiCall("/admin/invoices/" + id);
         if (invoice) {
+          currentViewInvoiceId = id;
+          const items = JSON.parse(invoice.items || "[]");
+          const itemsHtml = items.length
+            ? items
+                .map((item) => {
+                  const quantity = item.quantity || 0;
+                  const rate = item.rate || 0;
+                  const discount = item.discount || 0;
+                  const lineTotal = Math.max(quantity * rate - discount, 0);
+                  return `
+                  <tr>
+                    <td>${item.description || "Item"}</td>
+                    <td>${quantity}</td>
+                    <td>R${rate.toFixed(2)}</td>
+                    <td>R${discount.toFixed(2)}</td>
+                    <td>R${lineTotal.toFixed(2)}</td>
+                  </tr>
+                `;
+                })
+                .join("")
+            : `
+              <tr>
+                <td colspan="5" class="text-center">No items</td>
+              </tr>
+            `;
           const body = document.getElementById("view-invoice-body");
           body.innerHTML = `
           <div>
@@ -1010,11 +1256,27 @@
             <p><strong>Client:</strong> ${invoice.client_name}<br>
             <strong>Email:</strong> ${invoice.client_email}<br>
             <strong>Address:</strong> ${invoice.client_address}<br>
-            <strong>Amount:</strong> $${invoice.amount.toFixed(2)}<br>
-            <strong>Tax:</strong> $${invoice.tax.toFixed(2)}<br>
-            <strong>Total:</strong> $${(invoice.amount + invoice.tax).toFixed(2)}<br>
+            <strong>Amount:</strong> R${invoice.amount.toFixed(2)}<br>
+            <strong>Tax:</strong> R${invoice.tax.toFixed(2)}<br>
+            <strong>Total:</strong> R${(invoice.amount + invoice.tax).toFixed(2)}<br>
             <strong>Status:</strong> ${invoice.status}<br>
             <strong>Due Date:</strong> ${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</p>
+            <div class="table-responsive" style="margin: 1rem 0;">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Discount</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsHtml}
+                </tbody>
+              </table>
+            </div>
             ${
               invoice.qr_code_url
                 ? `
@@ -1031,6 +1293,10 @@
             invoice.invoice_number;
           document.getElementById("viewInvoiceModal").classList.add("show");
         }
+      }
+
+      function downloadInvoice(id) {
+        window.open(`/invoices/index.html?id=${id}&download=1`, "_blank");
       }
 
       async function deleteInvoice(id) {
@@ -1055,7 +1321,7 @@
           <tr>
             <td>${q.quote_number}</td>
             <td>${q.client_name}</td>
-            <td>$${q.amount.toFixed(2)}</td>
+            <td>R${q.amount.toFixed(2)}</td>
             <td><span class="badge status-${q.status}">${q.status}</span></td>
             <td>${q.expiry_date ? new Date(q.expiry_date).toLocaleDateString() : "N/A"}</td>
             <td>
@@ -1106,9 +1372,9 @@
             <p><strong>Client:</strong> ${quote.client_name}<br>
             <strong>Email:</strong> ${quote.client_email}<br>
             <strong>Address:</strong> ${quote.client_address}<br>
-            <strong>Amount:</strong> $${quote.amount.toFixed(2)}<br>
-            <strong>Tax:</strong> $${quote.tax.toFixed(2)}<br>
-            <strong>Total:</strong> $${(quote.amount + quote.tax).toFixed(2)}<br>
+            <strong>Amount:</strong> R${quote.amount.toFixed(2)}<br>
+            <strong>Tax:</strong> R${quote.tax.toFixed(2)}<br>
+            <strong>Total:</strong> R${(quote.amount + quote.tax).toFixed(2)}<br>
             <strong>Status:</strong> ${quote.status}<br>
             <strong>Expiry Date:</strong> ${quote.expiry_date ? new Date(quote.expiry_date).toLocaleDateString() : "N/A"}</p>
             ${
@@ -1180,11 +1446,20 @@
       // Modals
       function openInvoiceModal() {
         document.getElementById("invoiceForm").reset();
+        document.getElementById("invoice-items-body").innerHTML = "";
+        document.getElementById("invoice-modal-title").textContent =
+          "Create Invoice";
+        currentEditInvoiceId = null;
+        currentEditInvoiceStatus = "draft";
+        addInvoiceItem();
+        recalcInvoiceSubtotal();
         document.getElementById("invoiceModal").classList.add("show");
       }
 
       function closeInvoiceModal() {
         document.getElementById("invoiceModal").classList.remove("show");
+        currentEditInvoiceId = null;
+        currentEditInvoiceStatus = "draft";
       }
 
       function openQuoteModal() {

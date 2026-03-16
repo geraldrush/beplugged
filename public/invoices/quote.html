@@ -7,10 +7,19 @@
   <link rel="stylesheet" href="/css/bootstrap.min.css">
   <link rel="stylesheet" href="/css/font-awesome.min.css">
   <style>
+    :root {
+      --brand-primary: #F05023;
+      --brand-primary-dark: #D94119;
+      --brand-dark: #2C2D3F;
+      --brand-muted: #ffffff;
+      --text-muted: rgba(44, 45, 63, 0.7);
+    }
+
     body {
-      background-color: #f5f5f5;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--brand-muted);
+      font-family: 'Poppins', sans-serif;
       padding: 2rem 1rem;
+      color: var(--brand-dark);
     }
 
     .quote-container {
@@ -23,14 +32,38 @@
     }
 
     .quote-header {
-      border-bottom: 2px solid #ff6b35;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--brand-primary);
       padding-bottom: 1rem;
       margin-bottom: 2rem;
+      gap: 1rem;
     }
 
-    .quote-header h1 {
-      color: #ff6b35;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 120px;
+      height: auto;
+    }
+
+    .quote-title h1 {
+      color: var(--brand-primary);
       margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 1.5rem;
+    }
+
+    .quote-title p {
+      margin: 0.25rem 0 0 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
     }
 
     .quote-details {
@@ -42,14 +75,14 @@
 
     .detail-section h3 {
       font-size: 0.875rem;
-      color: #999;
+      color: var(--text-muted);
       text-transform: uppercase;
       margin-bottom: 0.5rem;
     }
 
     .detail-section p {
       margin: 0.25rem 0;
-      color: #666;
+      color: var(--text-muted);
     }
 
     .details-grid {
@@ -57,7 +90,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 2rem;
       margin-bottom: 2rem;
-      border-top: 1px solid #ddd;
+      border-top: 1px solid rgba(44, 45, 63, 0.15);
       padding-top: 1rem;
     }
 
@@ -69,11 +102,11 @@
 
     .detail-item label {
       font-weight: 600;
-      color: #333;
+      color: var(--brand-dark);
     }
 
     .detail-item .value {
-      color: #666;
+      color: var(--text-muted);
     }
 
     table {
@@ -83,20 +116,20 @@
     }
 
     table thead {
-      background-color: #f8f9fa;
-      border-bottom: 2px solid #ddd;
+      background-color: #fff5f1;
+      border-bottom: 2px solid rgba(240, 80, 35, 0.25);
     }
 
     table th {
       padding: 0.75rem;
       text-align: left;
       font-weight: 600;
-      color: #333;
+      color: var(--brand-dark);
     }
 
     table td {
       padding: 0.75rem;
-      border-bottom: 1px solid #ddd;
+      border-bottom: 1px solid rgba(44, 45, 63, 0.12);
     }
 
     .summary {
@@ -112,19 +145,19 @@
     }
 
     .summary-row.total {
-      border-top: 2px solid #ddd;
-      border-bottom: 2px solid #ddd;
+      border-top: 2px solid rgba(44, 45, 63, 0.2);
+      border-bottom: 2px solid rgba(44, 45, 63, 0.2);
       padding: 1rem 0;
       font-weight: 700;
       font-size: 1.1rem;
     }
 
     .summary-row.total .label {
-      color: #ff6b35;
+      color: var(--brand-primary);
     }
 
     .summary-row.total .value {
-      color: #ff6b35;
+      color: var(--brand-primary);
     }
 
     .action-buttons {
@@ -133,7 +166,7 @@
       justify-content: center;
       margin-top: 2rem;
       padding-top: 2rem;
-      border-top: 1px solid #ddd;
+      border-top: 1px solid rgba(44, 45, 63, 0.15);
     }
 
     .btn {
@@ -146,21 +179,21 @@
     }
 
     .btn-primary {
-      background-color: #ff6b35;
+      background-color: var(--brand-primary);
       color: white;
     }
 
     .btn-primary:hover {
-      background-color: #e55a24;
+      background-color: var(--brand-primary-dark);
     }
 
     .btn-secondary {
-      background-color: #6c757d;
+      background-color: var(--brand-dark);
       color: white;
     }
 
     .btn-secondary:hover {
-      background-color: #5a6268;
+      background-color: #1f2030;
     }
 
     .status-badge {
@@ -173,28 +206,28 @@
     }
 
     .status-draft {
-      background-color: #e2e3e5;
-      color: #383d41;
+      background-color: rgba(44, 45, 63, 0.12);
+      color: var(--brand-dark);
     }
 
     .status-sent {
-      background-color: #cfe2ff;
-      color: #084298;
+      background-color: rgba(240, 80, 35, 0.18);
+      color: var(--brand-primary);
     }
 
     .status-viewed {
-      background-color: #cff4fc;
-      color: #055160;
+      background-color: rgba(240, 80, 35, 0.28);
+      color: var(--brand-dark);
     }
 
     .status-accepted {
-      background-color: #d1e7dd;
-      color: #0f5132;
+      background-color: rgba(44, 45, 63, 0.15);
+      color: var(--brand-dark);
     }
 
     .status-rejected {
-      background-color: #f8d7da;
-      color: #842029;
+      background-color: rgba(240, 80, 35, 0.2);
+      color: var(--brand-dark);
     }
 
     .loading {
@@ -203,11 +236,11 @@
     }
 
     .error {
-      background-color: #f8d7da;
-      color: #842029;
+      background-color: rgba(240, 80, 35, 0.18);
+      color: var(--brand-dark);
       padding: 1rem;
       border-radius: 0.25rem;
-      border: 1px solid #f5c2c7;
+      border: 1px solid rgba(240, 80, 35, 0.35);
     }
 
     @media print {
@@ -256,8 +289,10 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script>
     const API_BASE = '/api';
+    let currentQuote = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       const quoteId = window.location.pathname.split('/')[3];
@@ -280,6 +315,7 @@
     }
 
     function displayQuote(quote) {
+      currentQuote = quote;
       const items = JSON.parse(quote.items || '[]');
       let itemsHtml = '';
       let itemsTotal = 0;
@@ -292,8 +328,8 @@
             <tr>
               <td>${item.description || 'Item'}</td>
               <td style="text-align: center;">${item.quantity || 1}</td>
-              <td style="text-align: right;">$${(item.rate || 0).toFixed(2)}</td>
-              <td style="text-align: right;">$${amount.toFixed(2)}</td>
+              <td style="text-align: right;">R${(item.rate || 0).toFixed(2)}</td>
+              <td style="text-align: right;">R${amount.toFixed(2)}</td>
             </tr>
           `;
         }).join('');
@@ -302,7 +338,7 @@
         itemsHtml = `
           <tr>
             <td colspan="3">Services Rendered</td>
-            <td style="text-align: right;">$${quote.amount.toFixed(2)}</td>
+            <td style="text-align: right;">R${quote.amount.toFixed(2)}</td>
           </tr>
         `;
       }
@@ -311,8 +347,13 @@
 
       const html = `
         <div class="quote-header">
-          <h1>QUOTE</h1>
-          <p>Quote #: <strong>${quote.quote_number}</strong></p>
+          <div class="brand">
+            <img src="/img/logo.png" alt="BePlugged" class="brand-logo">
+          </div>
+          <div class="quote-title">
+            <h1>Quote</h1>
+            <p>Quote #: <strong>${quote.quote_number}</strong></p>
+          </div>
         </div>
 
         <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
@@ -355,26 +396,26 @@
         <div class="summary">
           <div class="summary-row">
             <span>Subtotal:</span>
-            <span class="value">$${quote.amount.toFixed(2)}</span>
+            <span class="value">R${quote.amount.toFixed(2)}</span>
           </div>
           <div class="summary-row">
             <span>Tax:</span>
-            <span class="value">$${quote.tax.toFixed(2)}</span>
+            <span class="value">R${quote.tax.toFixed(2)}</span>
           </div>
           <div class="summary-row total">
             <span class="label">Total:</span>
-            <span class="value">$${total.toFixed(2)}</span>
+            <span class="value">R${total.toFixed(2)}</span>
           </div>
         </div>
 
         ${quote.notes ? `
-          <div style="margin-bottom: 2rem; padding: 1rem; background-color: #f8f9fa; border-radius: 0.25rem;">
+          <div style="margin-bottom: 2rem; padding: 1rem; background-color: #fff5f1; border-radius: 0.25rem;">
             <strong>Notes:</strong>
-            <p style="margin: 0.5rem 0 0 0; color: #666;">${quote.notes}</p>
+            <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${quote.notes}</p>
           </div>
         ` : ''}
 
-        <div class="action-buttons">
+        <div class="action-buttons" data-html2canvas-ignore="true">
           <button class="btn btn-secondary" onclick="window.print()">
             <i class="fas fa-print"></i> Print
           </button>
@@ -396,7 +437,26 @@
     }
 
     function downloadPDF() {
-      alert('PDF download feature coming soon! You can use your browser\'s Print to PDF feature for now.');
+      if (!window.html2pdf) {
+        window.print();
+        return;
+      }
+
+      const target = document.getElementById('quote-container');
+      const filename = currentQuote?.quote_number
+        ? `quote-${currentQuote.quote_number}.pdf`
+        : 'quote.pdf';
+
+      html2pdf()
+        .set({
+          margin: 0.4,
+          filename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+        })
+        .from(target)
+        .save();
     }
   </script>
 </body>

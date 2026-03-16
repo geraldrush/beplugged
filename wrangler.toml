@@ -2,9 +2,7 @@ name = "beplugged-invoicing"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
-
-[site]
-bucket = "public"
+assets = { directory = "public", binding = "ASSETS" }
 
 [[d1_databases]]
 binding = "DB"

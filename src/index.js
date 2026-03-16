@@ -86,6 +86,11 @@ export default {
   },
 };
 
+async function generateQrCodeDataUrl(text) {
+  const svg = await QRCode.toString(text, { type: "svg" });
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 // Authentication
 function isValidToken(token, env) {
   if (!token) return false;
@@ -145,7 +150,7 @@ async function handleInvoices(request, env, path, method) {
 
     // Generate QR code
     const qrUrl = `${new URL(request.url).origin}/api/invoice/${id}`;
-    const qrCode = await QRCode.toDataURL(qrUrl);
+    const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     const stmt = env.DB.prepare(
       `INSERT INTO invoices (id, invoice_number, client_name, client_email, client_address, amount, tax, status, due_date, payment_terms, items, notes, qr_code_url)
@@ -183,19 +188,21 @@ async function handleInvoices(request, env, path, method) {
     // Update invoice
     const data = await request.json();
     const stmt = env.DB.prepare(
-      `UPDATE invoices SET client_name = ?, client_email = ?, amount = ?, tax = ?, status = ?, items = ?, notes = ?, due_date = ? WHERE id = ?`,
+      `UPDATE invoices SET client_name = ?, client_email = ?, client_address = ?, amount = ?, tax = ?, status = ?, items = ?, notes = ?, due_date = ?, payment_terms = ? WHERE id = ?`,
     );
 
     await stmt
       .bind(
         data.client_name,
         data.client_email,
+        data.client_address || "",
         data.amount,
         data.tax || 0,
         data.status,
         JSON.stringify(data.items || []),
         data.notes || "",
         data.due_date || null,
+        data.payment_terms || "",
         invoiceId,
       )
       .run();
@@ -266,7 +273,7 @@ async function handleQuotes(request, env, path, method) {
       "QUOTE-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-6);
 
     const qrUrl = `${new URL(request.url).origin}/api/quote/${id}`;
-    const qrCode = await QRCode.toDataURL(qrUrl);
+    const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     const stmt = env.DB.prepare(
       `INSERT INTO quotes (id, quote_number, client_name, client_email, client_address, amount, tax, status, expiry_date, items, notes, qr_code_url)
