@@ -91,6 +91,23 @@ async function generateQrCodeDataUrl(text) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+function formatMoney(value) {
+  const number = Number(value || 0);
+  const parts = number.toFixed(2).split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `R ${parts[0]}.${parts[1]}`;
+}
+
+function getDefaultBankingInfo(invoiceNumber) {
+  return [
+    "Bank: FNB",
+    "Account Name: Gerald Rushwaya",
+    "Account No: 63125701268",
+    "Branch Code: 250655",
+    `Reference: Invoice #${invoiceNumber}`,
+  ].join("<br>");
+}
+
 // Authentication
 function isValidToken(token, env) {
   if (!token) return false;
@@ -120,6 +137,7 @@ async function handleLogin(request, env) {
 async function handleInvoices(request, env, path, method) {
   const segments = path.split("/");
   const invoiceId = segments[4];
+  const action = segments[5];
 
   if (method === "GET" && !invoiceId) {
     // List invoices
@@ -139,6 +157,10 @@ async function handleInvoices(request, env, path, method) {
     return new Response(JSON.stringify(result || { error: "Not found" }), {
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  if (method === "POST" && invoiceId && action === "send") {
+    return handleSendInvoice(request, env, invoiceId);
   }
 
   if (method === "POST") {
@@ -239,6 +261,140 @@ async function handleInvoices(request, env, path, method) {
 
   return new Response(JSON.stringify({ error: "Method not allowed" }), {
     status: 405,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function handleSendInvoice(request, env, invoiceId) {
+  if (!env.BREVO_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Missing BREVO_API_KEY secret" }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (!env.BREVO_SENDER_EMAIL) {
+    return new Response(
+      JSON.stringify({ error: "Missing BREVO_SENDER_EMAIL variable" }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
+    .bind(invoiceId)
+    .first();
+  if (!invoice) {
+    return new Response(JSON.stringify({ error: "Invoice not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const customMessage = body?.message ? String(body.message).trim() : "";
+  const origin = new URL(request.url).origin;
+  const invoiceUrl = `${origin}/invoices/index.html?id=${invoice.id}`;
+
+  const items = JSON.parse(invoice.items || "[]");
+  const itemsRows = items.length
+    ? items
+        .map((item) => {
+          const quantity = item.quantity || 1;
+          const rate = item.rate || 0;
+          const discount = item.discount || 0;
+          const lineTotal = Math.max(quantity * rate - discount, 0);
+          return `<tr>
+            <td>${item.description || "Item"}</td>
+            <td style="text-align:center;">${quantity}</td>
+            <td style="text-align:right;">${formatMoney(rate)}</td>
+            <td style="text-align:right;">${formatMoney(discount)}</td>
+            <td style="text-align:right;">${formatMoney(lineTotal)}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="5">Services Rendered</td></tr>`;
+
+  const bankingInfo = invoice.payment_terms
+    ? invoice.payment_terms
+        .replace(/\#\[invoice_number\]/g, invoice.invoice_number)
+        .replace(/\n/g, "<br>")
+    : getDefaultBankingInfo(invoice.invoice_number);
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; color: #2C2D3F;">
+      <h2 style="color:#F05023; margin-bottom: 0;">Invoice ${invoice.invoice_number}</h2>
+      <p>Hi ${invoice.client_name || "there"},</p>
+      <p>Your invoice is ready. You can view and download it here:</p>
+      <p><a href="${invoiceUrl}">${invoiceUrl}</a></p>
+      ${customMessage ? `<p>${customMessage}</p>` : ""}
+      <h3 style="margin-top: 20px;">Invoice Summary</h3>
+      <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
+        <thead style="background:#FFF5F1;">
+          <tr>
+            <th align="left">Description</th>
+            <th align="center">Qty</th>
+            <th align="right">Rate</th>
+            <th align="right">Discount</th>
+            <th align="right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRows}
+        </tbody>
+      </table>
+      <p style="margin-top: 12px;"><strong>Total Due:</strong> ${formatMoney(
+        Number(invoice.amount || 0) + Number(invoice.tax || 0),
+      )}</p>
+      <h3 style="margin-top: 20px;">Banking Details</h3>
+      <p>${bankingInfo}</p>
+    </div>
+  `;
+
+  const payload = {
+    sender: {
+      name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+      email: env.BREVO_SENDER_EMAIL,
+    },
+    to: [
+      {
+        email: invoice.client_email,
+        name: invoice.client_name || "",
+      },
+    ],
+    subject: `Invoice ${invoice.invoice_number} from Beplugged Tech`,
+    htmlContent,
+  };
+
+  if (env.BREVO_REPLY_TO) {
+    payload.replyTo = {
+      email: env.BREVO_REPLY_TO,
+      name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    };
+  }
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return new Response(
+      JSON.stringify({ error: "Brevo send failed", details: errorText }),
+      { status: 502, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  await env.DB.prepare("UPDATE invoices SET status = ? WHERE id = ?")
+    .bind("sent", invoiceId)
+    .run();
+
+  const result = await response.json().catch(() => ({}));
+  return new Response(JSON.stringify({ success: true, result }), {
     headers: { "Content-Type": "application/json" },
   });
 }

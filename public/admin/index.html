@@ -1499,7 +1499,28 @@
       }
 
       function sendInvoiceEmail() {
-        showAlert("Email feature coming soon!", "warning");
+        if (!currentViewInvoiceId) {
+          showAlert("Select an invoice first", "danger");
+          return;
+        }
+
+        if (
+          !confirm(
+            "Send this invoice to the client email address on file?",
+          )
+        ) {
+          return;
+        }
+
+        apiCall(`/admin/invoices/${currentViewInvoiceId}/send`, "POST").then(
+          (result) => {
+            if (result && result.success) {
+              showAlert("Invoice sent successfully!", "success");
+              loadInvoices();
+              loadDashboard();
+            }
+          },
+        );
       }
 
       function logout() {
