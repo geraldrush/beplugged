@@ -149,7 +149,7 @@ async function handleInvoices(request, env, path, method) {
       "INV-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-6);
 
     // Generate QR code
-    const qrUrl = `${new URL(request.url).origin}/api/invoice/${id}`;
+    const qrUrl = `${new URL(request.url).origin}/invoices/index.html?id=${id}`;
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     const stmt = env.DB.prepare(
@@ -272,7 +272,7 @@ async function handleQuotes(request, env, path, method) {
     const quoteNumber =
       "QUOTE-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-6);
 
-    const qrUrl = `${new URL(request.url).origin}/api/quote/${id}`;
+    const qrUrl = `${new URL(request.url).origin}/invoices/quote.html?id=${id}`;
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     const stmt = env.DB.prepare(

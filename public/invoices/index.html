@@ -28,7 +28,7 @@
       min-height: 297mm;
       margin: 0 auto;
       background: white;
-      padding: 2rem 2rem 5rem;
+      padding: 2rem;
       border-radius: 0.5rem;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       position: relative;
@@ -89,24 +89,43 @@
       border-radius: 0.25rem;
     }
 
-    .invoice-footer {
-      position: absolute;
-      left: 2rem;
-      bottom: 2rem;
-      max-width: 60%;
+    .qr-corner svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
-    .invoice-footer h3 {
+    .totals-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 2rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    .totals-footer .summary {
+      margin-bottom: 0;
+    }
+
+    .banking-info {
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .banking-info h3 {
       font-size: 0.875rem;
       color: var(--text-muted);
       text-transform: uppercase;
       margin-bottom: 0.5rem;
     }
 
-    .invoice-footer p {
+    .banking-info p {
       margin: 0;
       color: var(--brand-dark);
       font-weight: 600;
+      line-height: 1.4;
+      white-space: pre-line;
     }
 
     .invoice-details {
@@ -176,7 +195,6 @@
     }
 
     .summary {
-      margin-left: auto;
       width: 300px;
       margin-bottom: 2rem;
     }
@@ -301,7 +319,7 @@
 
       .invoice-container {
         box-shadow: none;
-        padding: 0;
+        padding: 12mm;
         width: 210mm;
         min-height: 297mm;
       }
@@ -316,15 +334,13 @@
         min-height: auto;
       }
 
-      .invoice-footer {
-        position: static;
-        margin-top: 1.5rem;
-        max-width: 100%;
-      }
-
       .qr-corner {
         position: static;
         margin-top: 1rem;
+      }
+
+      .totals-footer {
+        flex-direction: column;
       }
 
       .invoice-details {
@@ -394,6 +410,38 @@
       }
     }
 
+    function formatMoney(value) {
+      const number = Number(value || 0);
+      const parts = number.toFixed(2).split(".");
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      return `R ${parts[0]}.${parts[1]}`;
+    }
+
+    function getBankingInfo(invoice) {
+      const defaultInfo = [
+        "Bank: FNB",
+        "Account Name: Gerald Rushwaya",
+        "Account No: 63125701268",
+        "Branch Code: 250655",
+        "Reference: Invoice #[invoice_number]",
+      ].join("\n");
+
+      const raw = invoice.payment_terms || defaultInfo;
+      return raw.replace(/\#\[invoice_number\]/g, invoice.invoice_number);
+    }
+
+    function getQrMarkup(invoice) {
+      if (!invoice.qr_code_url) {
+        return "";
+      }
+      const prefix = "data:image/svg+xml;utf8,";
+      if (invoice.qr_code_url.startsWith(prefix)) {
+        const svg = decodeURIComponent(invoice.qr_code_url.slice(prefix.length));
+        return svg;
+      }
+      return `<img src="${invoice.qr_code_url}" alt="QR Code">`;
+    }
+
     function displayInvoice(invoice) {
       currentInvoice = invoice;
       const url = new URL(window.location.href);
@@ -403,6 +451,8 @@
       let itemsTotal = 0;
       let grossSubtotal = 0;
       let totalDiscount = 0;
+      const bankingInfo = getBankingInfo(invoice);
+      const qrMarkup = getQrMarkup(invoice);
 
       if (items.length > 0) {
         itemsHtml = items.map(item => {
@@ -416,9 +466,9 @@
             <tr>
               <td>${item.description || 'Item'}</td>
               <td style="text-align: center;">${item.quantity || 1}</td>
-              <td style="text-align: right;">R${(item.rate || 0).toFixed(2)}</td>
-              <td style="text-align: right;">R${discount.toFixed(2)}</td>
-              <td style="text-align: right;">R${lineTotal.toFixed(2)}</td>
+              <td style="text-align: right;">${formatMoney(item.rate || 0)}</td>
+              <td style="text-align: right;">${formatMoney(discount)}</td>
+              <td style="text-align: right;">${formatMoney(lineTotal)}</td>
             </tr>
           `;
         }).join('');
@@ -428,7 +478,7 @@
         itemsHtml = `
           <tr>
             <td colspan="4">Services Rendered</td>
-            <td style="text-align: right;">R${invoice.amount.toFixed(2)}</td>
+            <td style="text-align: right;">${formatMoney(invoice.amount)}</td>
           </tr>
         `;
       }
@@ -447,7 +497,7 @@
           <img src="/img/logo.png" alt="Beplugged Tech" class="brand-logo">
         </div>
 
-        ${invoice.qr_code_url ? `<img class="qr-corner" src="${invoice.qr_code_url}" alt="QR Code">` : ""}
+        ${qrMarkup ? `<div class="qr-corner" aria-label="QR Code">${qrMarkup}</div>` : ""}
 
         <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
           <div>
@@ -483,24 +533,30 @@
           </tbody>
         </table>
 
-        <div class="summary">
-          <div class="summary-row">
-            <span>Subtotal:</span>
-            <span class="value">R${subtotal.toFixed(2)}</span>
+        <div class="totals-footer">
+          <div class="banking-info">
+            <h3>Banking Details</h3>
+            <p>${bankingInfo}</p>
           </div>
-          ${totalDiscount > 0 ? `
-          <div class="summary-row">
-            <span>Discount:</span>
-            <span class="value">-R${totalDiscount.toFixed(2)}</span>
-          </div>
-          ` : ''}
-          <div class="summary-row">
-            <span>Tax:</span>
-            <span class="value">R${invoice.tax.toFixed(2)}</span>
-          </div>
-          <div class="summary-row total">
-            <span class="label">Total Due:</span>
-            <span class="value">R${total.toFixed(2)}</span>
+          <div class="summary">
+            <div class="summary-row">
+              <span>Subtotal:</span>
+              <span class="value">${formatMoney(subtotal)}</span>
+            </div>
+            ${totalDiscount > 0 ? `
+            <div class="summary-row">
+              <span>Discount:</span>
+              <span class="value">-${formatMoney(totalDiscount)}</span>
+            </div>
+            ` : ''}
+            <div class="summary-row">
+              <span>Tax:</span>
+              <span class="value">${formatMoney(invoice.tax)}</span>
+            </div>
+            <div class="summary-row total">
+              <span class="label">Total Due:</span>
+              <span class="value">${formatMoney(total)}</span>
+            </div>
           </div>
         </div>
 
@@ -510,11 +566,6 @@
             <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${invoice.notes}</p>
           </div>
         ` : ''}
-
-        <div class="invoice-footer">
-          <h3>Payment Terms</h3>
-          <p>${invoice.payment_terms || 'Net 30'}</p>
-        </div>
 
       `;
 
@@ -546,11 +597,11 @@
 
       html2pdf()
         .set({
-          margin: 0.4,
+          margin: 8,
           filename,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         })
         .from(target)
         .save();
