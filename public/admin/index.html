@@ -980,6 +980,10 @@
             return null;
           }
           const result = await response.json();
+          if (!response.ok && result && result.error) {
+            showAlert("Error: " + result.error, "danger");
+            return null;
+          }
           return result;
         } catch (error) {
           showAlert("Error: " + error.message, "danger");
@@ -1002,16 +1006,17 @@
         }
 
         const invoices = await apiCall("/admin/invoices");
-        if (invoices) {
+        if (Array.isArray(invoices)) {
           const list = document.getElementById("recent-invoices-list");
-          list.innerHTML = invoices
-            .slice(0, 5)
-            .map(
-              (inv) => `
+          list.innerHTML = invoices.length
+            ? invoices
+                .slice(0, 5)
+                .map(
+                  (inv) => `
           <tr>
             <td>${inv.invoice_number}</td>
             <td>${inv.client_name}</td>
-            <td>R${inv.amount.toFixed(2)}</td>
+            <td>R${Number(inv.amount).toFixed(2)}</td>
             <td><span class="badge status-${inv.status}">${inv.status}</span></td>
             <td>${new Date(inv.created_at).toLocaleDateString()}</td>
             <td>
@@ -1019,23 +1024,25 @@
             </td>
           </tr>
         `,
-            )
-            .join("");
+                )
+                .join("")
+            : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
         }
       }
 
       // Invoices
       async function loadInvoices() {
         const invoices = await apiCall("/admin/invoices");
-        if (invoices) {
+        if (Array.isArray(invoices)) {
           const list = document.getElementById("invoices-list");
-          list.innerHTML = invoices
-            .map(
-              (inv) => `
+          list.innerHTML = invoices.length
+            ? invoices
+                .map(
+                  (inv) => `
           <tr>
             <td>${inv.invoice_number}</td>
             <td>${inv.client_name}</td>
-            <td>R${inv.amount.toFixed(2)}</td>
+            <td>R${Number(inv.amount).toFixed(2)}</td>
             <td><span class="badge status-${inv.status}">${inv.status}</span></td>
             <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "N/A"}</td>
             <td>
@@ -1043,13 +1050,15 @@
                 <button class="btn btn-sm btn-info" onclick="viewInvoice('${inv.id}')">View</button>
                 <button class="btn btn-sm btn-secondary" onclick="editInvoice('${inv.id}')">Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${inv.id}')">Download</button>
+                <button class="btn btn-sm btn-primary" onclick="sendInvoice('${inv.id}')">Send</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
               </div>
             </td>
           </tr>
         `,
-            )
-            .join("");
+                )
+                .join("")
+            : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
         }
       }
 
@@ -1503,24 +1512,21 @@
           showAlert("Select an invoice first", "danger");
           return;
         }
+        sendInvoice(currentViewInvoiceId);
+      }
 
-        if (
-          !confirm(
-            "Send this invoice to the client email address on file?",
-          )
-        ) {
+      async function sendInvoice(id) {
+        if (!confirm("Send this invoice to the client email address on file?")) {
           return;
         }
-
-        apiCall(`/admin/invoices/${currentViewInvoiceId}/send`, "POST").then(
-          (result) => {
-            if (result && result.success) {
-              showAlert("Invoice sent successfully!", "success");
-              loadInvoices();
-              loadDashboard();
-            }
-          },
-        );
+        const result = await apiCall(`/admin/invoices/${id}/send`, "POST");
+        if (result && result.success) {
+          showAlert("Invoice sent successfully!", "success");
+          loadInvoices();
+          loadDashboard();
+        } else if (result && result.error) {
+          showAlert("Failed to send: " + result.error, "danger");
+        }
       }
 
       function logout() {
