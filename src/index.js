@@ -6,7 +6,6 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // CORS headers
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -19,7 +18,6 @@ export default {
     }
 
     try {
-      // Admin routes (require authentication)
       if (path.startsWith("/api/admin/")) {
         const token = request.headers.get("Authorization");
         if (!isValidToken(token, env)) {
@@ -30,44 +28,36 @@ export default {
         }
       }
 
-      // Routes
       if (path === "/api/auth/login" && method === "POST") {
         return handleLogin(request, env);
       }
 
-      // Invoices API
+      if (path === "/api/admin/dashboard" && method === "GET") {
+        return handleDashboardStats(env);
+      }
+
       if (path.startsWith("/api/admin/invoices")) {
         return handleInvoices(request, env, path, method);
       }
 
-      // Quotes API
       if (path.startsWith("/api/admin/quotes")) {
         return handleQuotes(request, env, path, method);
       }
 
-      // Clients API
       if (path.startsWith("/api/admin/clients")) {
         return handleClients(request, env, path, method);
       }
 
-      // Public invoice view
       if (path.startsWith("/api/invoice/")) {
         const invoiceId = path.split("/")[3];
         return handlePublicInvoiceView(invoiceId, env);
       }
 
-      // Public quote view
       if (path.startsWith("/api/quote/")) {
         const quoteId = path.split("/")[3];
         return handlePublicQuoteView(quoteId, env);
       }
 
-      // Dashboard stats
-      if (path === "/api/admin/dashboard" && method === "GET") {
-        return handleDashboardStats(env);
-      }
-
-      // Serve static files (admin pages, invoices, etc.)
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
@@ -108,12 +98,10 @@ function getDefaultBankingInfo(invoiceNumber) {
   ].join("<br>");
 }
 
-// Authentication
 function isValidToken(token, env) {
   if (!token) return false;
   const [scheme, credentials] = token.split(" ");
   if (scheme !== "Bearer") return false;
-  // Use the admin password from environment variables
   return credentials === env.ADMIN_PASSWORD;
 }
 
@@ -122,9 +110,7 @@ async function handleLogin(request, env) {
   if (password === env.ADMIN_PASSWORD) {
     return new Response(
       JSON.stringify({ token: "Bearer " + env.ADMIN_PASSWORD }),
-      {
-        headers: { "Content-Type": "application/json" },
-      },
+      { headers: { "Content-Type": "application/json" } },
     );
   }
   return new Response(JSON.stringify({ error: "Invalid password" }), {
@@ -133,16 +119,14 @@ async function handleLogin(request, env) {
   });
 }
 
-// Invoice handlers
 async function handleInvoices(request, env, path, method) {
   const segments = path.split("/");
   const invoiceId = segments[4];
   const action = segments[5];
 
   if (method === "GET" && !invoiceId) {
-    // List invoices
     const result = await env.DB.prepare(
-      "SELECT * FROM invoices ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, invoice_number, client_name, client_email, client_address, amount, tax, status, created_at, due_date FROM invoices ORDER BY created_at DESC LIMIT 100",
     ).all();
     return new Response(JSON.stringify(result.results), {
       headers: { "Content-Type": "application/json" },
@@ -150,7 +134,6 @@ async function handleInvoices(request, env, path, method) {
   }
 
   if (method === "GET" && invoiceId) {
-    // Get single invoice
     const result = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
       .bind(invoiceId)
       .first();
@@ -164,22 +147,18 @@ async function handleInvoices(request, env, path, method) {
   }
 
   if (method === "POST") {
-    // Create invoice
     const data = await request.json();
     const id = "inv_" + Date.now();
     const invoiceNumber =
       "INV-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-6);
 
-    // Generate QR code
     const qrUrl = `${new URL(request.url).origin}/invoices/index.html?id=${id}`;
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
-    const stmt = env.DB.prepare(
+    await env.DB.prepare(
       `INSERT INTO invoices (id, invoice_number, client_name, client_email, client_address, amount, tax, status, due_date, payment_terms, items, notes, qr_code_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-
-    await stmt
+    )
       .bind(
         id,
         invoiceNumber,
@@ -199,21 +178,15 @@ async function handleInvoices(request, env, path, method) {
 
     return new Response(
       JSON.stringify({ id, invoiceNumber, qr_code_url: qrCode }),
-      {
-        headers: { "Content-Type": "application/json" },
-        status: 201,
-      },
+      { headers: { "Content-Type": "application/json" }, status: 201 },
     );
   }
 
   if (method === "PUT" && invoiceId) {
-    // Update invoice
     const data = await request.json();
-    const stmt = env.DB.prepare(
+    await env.DB.prepare(
       `UPDATE invoices SET client_name = ?, client_email = ?, client_address = ?, amount = ?, tax = ?, status = ?, items = ?, notes = ?, due_date = ?, payment_terms = ? WHERE id = ?`,
-    );
-
-    await stmt
+    )
       .bind(
         data.client_name,
         data.client_email,
@@ -235,7 +208,6 @@ async function handleInvoices(request, env, path, method) {
   }
 
   if (method === "DELETE" && invoiceId) {
-    // Delete invoice (only if draft)
     const invoice = await env.DB.prepare(
       "SELECT status FROM invoices WHERE id = ?",
     )
@@ -244,10 +216,7 @@ async function handleInvoices(request, env, path, method) {
     if (invoice?.status !== "draft") {
       return new Response(
         JSON.stringify({ error: "Cannot delete non-draft invoices" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        },
+        { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -354,12 +323,7 @@ async function handleSendInvoice(request, env, invoiceId) {
       name: env.BREVO_SENDER_NAME || "Beplugged Tech",
       email: env.BREVO_SENDER_EMAIL,
     },
-    to: [
-      {
-        email: invoice.client_email,
-        name: invoice.client_name || "",
-      },
-    ],
+    to: [{ email: invoice.client_email, name: invoice.client_name || "" }],
     subject: `Invoice ${invoice.invoice_number} from Beplugged Tech`,
     htmlContent,
   };
@@ -399,14 +363,13 @@ async function handleSendInvoice(request, env, invoiceId) {
   });
 }
 
-// Quote handlers (similar to invoices)
 async function handleQuotes(request, env, path, method) {
   const segments = path.split("/");
   const quoteId = segments[4];
 
   if (method === "GET" && !quoteId) {
     const result = await env.DB.prepare(
-      "SELECT * FROM quotes ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, quote_number, client_name, client_email, client_address, amount, tax, status, created_at, expiry_date FROM quotes ORDER BY created_at DESC LIMIT 100",
     ).all();
     return new Response(JSON.stringify(result.results), {
       headers: { "Content-Type": "application/json" },
@@ -431,12 +394,10 @@ async function handleQuotes(request, env, path, method) {
     const qrUrl = `${new URL(request.url).origin}/invoices/quote.html?id=${id}`;
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
-    const stmt = env.DB.prepare(
+    await env.DB.prepare(
       `INSERT INTO quotes (id, quote_number, client_name, client_email, client_address, amount, tax, status, expiry_date, items, notes, qr_code_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-
-    await stmt
+    )
       .bind(
         id,
         quoteNumber,
@@ -455,10 +416,7 @@ async function handleQuotes(request, env, path, method) {
 
     return new Response(
       JSON.stringify({ id, quoteNumber, qr_code_url: qrCode }),
-      {
-        headers: { "Content-Type": "application/json" },
-        status: 201,
-      },
+      { headers: { "Content-Type": "application/json" }, status: 201 },
     );
   }
 
@@ -492,10 +450,7 @@ async function handleQuotes(request, env, path, method) {
     if (quote?.status !== "draft") {
       return new Response(
         JSON.stringify({ error: "Cannot delete non-draft quotes" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        },
+        { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -511,7 +466,6 @@ async function handleQuotes(request, env, path, method) {
   });
 }
 
-// Clients handlers
 async function handleClients(request, env, path, method) {
   if (method === "GET") {
     const result = await env.DB.prepare(
@@ -555,7 +509,6 @@ async function handleClients(request, env, path, method) {
   });
 }
 
-// Public invoice view
 async function handlePublicInvoiceView(invoiceId, env) {
   const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
     .bind(invoiceId)
@@ -568,7 +521,6 @@ async function handlePublicInvoiceView(invoiceId, env) {
     });
   }
 
-  // Update status to viewed if not already
   if (invoice.status !== "viewed" && invoice.status !== "paid") {
     await env.DB.prepare("UPDATE invoices SET status = ? WHERE id = ?")
       .bind("viewed", invoiceId)
@@ -580,7 +532,6 @@ async function handlePublicInvoiceView(invoiceId, env) {
   });
 }
 
-// Public quote view
 async function handlePublicQuoteView(quoteId, env) {
   const quote = await env.DB.prepare("SELECT * FROM quotes WHERE id = ?")
     .bind(quoteId)
@@ -604,7 +555,6 @@ async function handlePublicQuoteView(quoteId, env) {
   });
 }
 
-// Dashboard stats
 async function handleDashboardStats(env) {
   const totalInvoices = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM invoices",
@@ -626,8 +576,6 @@ async function handleDashboardStats(env) {
       total_revenue: totalRevenue.total || 0,
       pending_invoices: pendingInvoices.count,
     }),
-    {
-      headers: { "Content-Type": "application/json" },
-    },
+    { headers: { "Content-Type": "application/json" } },
   );
 }
