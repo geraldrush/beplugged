@@ -144,6 +144,23 @@
         border-color: var(--primary-dark);
       }
 
+      .btn-success {
+        background-color: #1f8a52;
+        border-color: #1f8a52;
+        color: white;
+      }
+
+      .btn-success:hover {
+        background-color: #176b3f;
+        border-color: #176b3f;
+        color: white;
+      }
+
+      .status-partially_paid {
+        background-color: rgba(31, 138, 82, 0.18);
+        color: #176b3f;
+      }
+
       .table-responsive {
         background: white;
         border-radius: 0.5rem;
@@ -914,10 +931,94 @@
           </button>
           <button
             type="button"
+            class="btn btn-success"
+            onclick="openPaymentModal(currentViewInvoiceId)"
+          >
+            Record Payment
+          </button>
+          <button
+            type="button"
             class="btn btn-primary"
             onclick="sendInvoiceEmail()"
           >
             Send Email
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Record Payment Modal -->
+    <div id="paymentModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>Record Payment</h5>
+          <button
+            type="button"
+            onclick="closePaymentModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="payment-balance-summary" style="margin-bottom: 1rem;"></div>
+          <form id="paymentForm">
+            <div class="form-group">
+              <label class="form-label">Amount Received *</label>
+              <input
+                type="number"
+                class="form-control"
+                id="payment_amount"
+                min="0.01"
+                step="0.01"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Payment Date *</label>
+              <input type="date" class="form-control" id="payment_date" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Payment Method</label>
+              <input
+                type="text"
+                class="form-control"
+                id="payment_method"
+                placeholder="EFT / Cash / Card"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <input
+                type="text"
+                class="form-control"
+                id="payment_notes"
+                placeholder="Reference / remarks"
+              />
+            </div>
+          </form>
+          <div id="payment-history"></div>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closePaymentModal()"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            onclick="savePayment()"
+          >
+            Save Payment
           </button>
         </div>
       </div>
@@ -1051,6 +1152,7 @@
                 <button class="btn btn-sm btn-secondary" onclick="editInvoice('${inv.id}')">Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${inv.id}')">Download</button>
                 <button class="btn btn-sm btn-primary" onclick="sendInvoice('${inv.id}')">Send</button>
+                <button class="btn btn-sm btn-success" onclick="openPaymentModal('${inv.id}')">Pay</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${inv.id}')">Delete</button>
               </div>
             </td>
@@ -1265,9 +1367,9 @@
             <p><strong>Client:</strong> ${invoice.client_name}<br>
             <strong>Email:</strong> ${invoice.client_email}<br>
             <strong>Address:</strong> ${invoice.client_address}<br>
-            <strong>Amount:</strong> R${invoice.amount.toFixed(2)}<br>
-            <strong>Tax:</strong> R${invoice.tax.toFixed(2)}<br>
-            <strong>Total:</strong> R${(invoice.amount + invoice.tax).toFixed(2)}<br>
+            <strong>Amount:</strong> R${Number(invoice.amount || 0).toFixed(2)}<br>
+            <strong>Tax:</strong> R${Number(invoice.tax || 0).toFixed(2)}<br>
+            <strong>Total:</strong> R${(Number(invoice.amount || 0) + Number(invoice.tax || 0)).toFixed(2)}<br>
             <strong>Status:</strong> ${invoice.status}<br>
             <strong>Due Date:</strong> ${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</p>
             <div class="table-responsive" style="margin: 1rem 0;">
@@ -1309,7 +1411,7 @@
       }
 
       async function deleteInvoice(id) {
-        if (confirm("Are you sure? You can only delete draft invoices.")) {
+        if (confirm("Are you sure you want to delete this invoice?")) {
           const result = await apiCall("/admin/invoices/" + id, "DELETE");
           if (result && result.success) {
             showAlert("Invoice deleted", "success");
@@ -1317,6 +1419,155 @@
             loadDashboard();
           }
         }
+      }
+
+      // Payments
+      let currentPaymentInvoiceId = null;
+
+      function money(value) {
+        return "R" + Number(value || 0).toFixed(2);
+      }
+
+      async function openPaymentModal(id) {
+        if (!id) {
+          showAlert("Select an invoice first", "danger");
+          return;
+        }
+        currentPaymentInvoiceId = id;
+        document.getElementById("paymentForm").reset();
+        document.getElementById("payment_date").value = new Date()
+          .toISOString()
+          .slice(0, 10);
+        document.getElementById("paymentModal").classList.add("show");
+        await loadPayments(id);
+      }
+
+      function closePaymentModal() {
+        document.getElementById("paymentModal").classList.remove("show");
+        currentPaymentInvoiceId = null;
+      }
+
+      async function loadPayments(id) {
+        const data = await apiCall("/admin/invoices/" + id + "/payments");
+        if (!data) {
+          return;
+        }
+
+        document.getElementById("payment-balance-summary").innerHTML = `
+          <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+            <div><strong>Invoice Total:</strong> ${money(data.total)}</div>
+            <div><strong>Paid:</strong> ${money(data.paid)}</div>
+            <div><strong>Balance Due:</strong> <span style="color:var(--primary); font-weight:700;">${money(data.balance)}</span></div>
+          </div>
+        `;
+
+        const amountInput = document.getElementById("payment_amount");
+        amountInput.max = data.balance > 0 ? data.balance.toFixed(2) : "";
+        if (data.balance > 0) {
+          amountInput.value = data.balance.toFixed(2);
+        }
+
+        const payments = data.payments || [];
+        const rows = payments.length
+          ? payments
+              .map(
+                (p) => `
+          <tr>
+            <td>${p.payment_date || new Date(p.created_at).toLocaleDateString()}</td>
+            <td>${money(p.amount)}</td>
+            <td>${p.payment_method || "-"}</td>
+            <td>
+              <button class="btn btn-sm btn-info" onclick="printReceipt('${p.id}')">Print</button>
+              <button class="btn btn-sm btn-secondary" onclick="downloadReceipt('${p.id}')">Download</button>
+              <button class="btn btn-sm btn-danger" onclick="deletePayment('${p.id}')">Delete</button>
+            </td>
+          </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="4" class="text-center">No payments recorded</td></tr>`;
+
+        document.getElementById("payment-history").innerHTML = `
+          <h6 style="margin-top:1rem;">Payment History</h6>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      async function savePayment() {
+        if (!currentPaymentInvoiceId) {
+          return;
+        }
+        if (!document.getElementById("paymentForm").checkValidity()) {
+          showAlert("Please enter an amount and date", "danger");
+          return;
+        }
+
+        const data = {
+          amount: parseFloat(document.getElementById("payment_amount").value),
+          payment_date: document.getElementById("payment_date").value,
+          payment_method: document.getElementById("payment_method").value,
+          notes: document.getElementById("payment_notes").value,
+        };
+
+        const result = await apiCall(
+          "/admin/invoices/" + currentPaymentInvoiceId + "/payments",
+          "POST",
+          data,
+        );
+        if (result && result.success) {
+          showAlert(
+            result.balance <= 0
+              ? "Payment recorded — invoice fully paid!"
+              : "Payment recorded. Balance due: " + money(result.balance),
+            "success",
+          );
+          document.getElementById("paymentForm").reset();
+          document.getElementById("payment_date").value = new Date()
+            .toISOString()
+            .slice(0, 10);
+          await loadPayments(currentPaymentInvoiceId);
+          loadInvoices();
+          loadDashboard();
+          if (result.payment && result.payment.id) {
+            downloadReceipt(result.payment.id);
+          }
+        }
+      }
+
+      async function deletePayment(paymentId) {
+        if (!confirm("Remove this payment?")) {
+          return;
+        }
+        const result = await apiCall(
+          "/admin/invoices/" +
+            currentPaymentInvoiceId +
+            "/payments/" +
+            paymentId,
+          "DELETE",
+        );
+        if (result && result.success) {
+          showAlert("Payment removed", "success");
+          await loadPayments(currentPaymentInvoiceId);
+          loadInvoices();
+          loadDashboard();
+        }
+      }
+
+      function printReceipt(paymentId) {
+        window.open("/receipts/index.html?id=" + paymentId, "_blank");
+      }
+
+      function downloadReceipt(paymentId) {
+        window.open(
+          "/receipts/index.html?id=" + paymentId + "&download=1",
+          "_blank",
+        );
       }
 
       // Quotes
@@ -1330,7 +1581,7 @@
           <tr>
             <td>${q.quote_number}</td>
             <td>${q.client_name}</td>
-            <td>R${q.amount.toFixed(2)}</td>
+            <td>R${Number(q.amount || 0).toFixed(2)}</td>
             <td><span class="badge status-${q.status}">${q.status}</span></td>
             <td>${q.expiry_date ? new Date(q.expiry_date).toLocaleDateString() : "N/A"}</td>
             <td>
@@ -1381,9 +1632,9 @@
             <p><strong>Client:</strong> ${quote.client_name}<br>
             <strong>Email:</strong> ${quote.client_email}<br>
             <strong>Address:</strong> ${quote.client_address}<br>
-            <strong>Amount:</strong> R${quote.amount.toFixed(2)}<br>
-            <strong>Tax:</strong> R${quote.tax.toFixed(2)}<br>
-            <strong>Total:</strong> R${(quote.amount + quote.tax).toFixed(2)}<br>
+            <strong>Amount:</strong> R${Number(quote.amount || 0).toFixed(2)}<br>
+            <strong>Tax:</strong> R${Number(quote.tax || 0).toFixed(2)}<br>
+            <strong>Total:</strong> R${(Number(quote.amount || 0) + Number(quote.tax || 0)).toFixed(2)}<br>
             <strong>Status:</strong> ${quote.status}<br>
             <strong>Expiry Date:</strong> ${quote.expiry_date ? new Date(quote.expiry_date).toLocaleDateString() : "N/A"}</p>
             ${

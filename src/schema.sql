@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     client_address TEXT,
     amount REAL NOT NULL,
     tax REAL DEFAULT 0,
-    status TEXT DEFAULT 'draft', -- draft, sent, viewed, paid
+    status TEXT DEFAULT 'draft', -- draft, sent, viewed, partially_paid, paid
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     due_date DATE,
     payment_terms TEXT,
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     FOREIGN KEY (invoice_id) REFERENCES invoices (id)
 );
 
--- Payments table (future: for tracking payments)
+-- Payments table (tracks full and partial payments; drives receipts)
 CREATE TABLE IF NOT EXISTS payments (
     id TEXT PRIMARY KEY,
     invoice_id TEXT NOT NULL,

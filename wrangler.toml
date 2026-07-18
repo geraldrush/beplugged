@@ -1,8 +1,19 @@
 name = "beplugged-invoicing"
+workers_dev = true
+preview_urls = true
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 assets = { directory = "public", binding = "ASSETS" }
+
+routes = [
+  { pattern = "beplugged.co.za/*", zone_name = "beplugged.co.za" }
+]
+
+[vars]
+BREVO_REPLY_TO = "info@beplugged.co.za"
+BREVO_SENDER_EMAIL = "info@beplugged.co.za"
+BREVO_SENDER_NAME = "BepluggedTech"
 
 [[d1_databases]]
 binding = "DB"

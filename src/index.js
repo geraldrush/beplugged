@@ -58,6 +58,11 @@ export default {
         return handlePublicQuoteView(quoteId, env);
       }
 
+      if (path.startsWith("/api/receipt/")) {
+        const paymentId = path.split("/")[3];
+        return handlePublicReceiptView(paymentId, env);
+      }
+
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
@@ -123,6 +128,11 @@ async function handleInvoices(request, env, path, method) {
   const segments = path.split("/");
   const invoiceId = segments[4];
   const action = segments[5];
+
+  if (invoiceId && action === "payments") {
+    const paymentId = segments[6];
+    return handleInvoicePayments(request, env, invoiceId, paymentId, method);
+  }
 
   if (method === "GET" && !invoiceId) {
     const result = await env.DB.prepare(
@@ -208,18 +218,6 @@ async function handleInvoices(request, env, path, method) {
   }
 
   if (method === "DELETE" && invoiceId) {
-    const invoice = await env.DB.prepare(
-      "SELECT status FROM invoices WHERE id = ?",
-    )
-      .bind(invoiceId)
-      .first();
-    if (invoice?.status !== "draft") {
-      return new Response(
-        JSON.stringify({ error: "Cannot delete non-draft invoices" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
     await env.DB.prepare("DELETE FROM invoices WHERE id = ?")
       .bind(invoiceId)
       .run();
@@ -258,7 +256,7 @@ async function handleSendInvoice(request, env, invoiceId) {
     });
   }
 
-  const body = await request.json().catch(() => ({}));
+  const body = await request.text().then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
   const customMessage = body?.message ? String(body.message).trim() : "";
   const origin = new URL(request.url).origin;
   const invoiceUrl = `${origin}/invoices/index.html?id=${invoice.id}`;
@@ -363,6 +361,195 @@ async function handleSendInvoice(request, env, invoiceId) {
   });
 }
 
+async function ensurePaymentsTable(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS payments (
+      id TEXT PRIMARY KEY,
+      invoice_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      payment_date DATE,
+      payment_method TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+}
+
+function receiptNumberFor(payment) {
+  const year = new Date(payment.created_at || Date.now()).getFullYear();
+  const digits = String(payment.id || "").replace(/\D/g, "").slice(-6) || "000000";
+  return `RCPT-${year}-${digits}`;
+}
+
+async function getInvoiceBalance(env, invoice) {
+  const total = Number(invoice.amount || 0) + Number(invoice.tax || 0);
+  const paidRow = await env.DB.prepare(
+    "SELECT COALESCE(SUM(amount), 0) as paid FROM payments WHERE invoice_id = ?",
+  )
+    .bind(invoice.id)
+    .first();
+  const paid = Number(paidRow?.paid || 0);
+  return { total, paid, balance: Math.max(total - paid, 0) };
+}
+
+async function reconcileInvoiceStatus(env, invoice) {
+  const { total, paid, balance } = await getInvoiceBalance(env, invoice);
+  let status = invoice.status;
+  if (total > 0 && balance <= 0.005) {
+    status = "paid";
+  } else if (paid > 0) {
+    status = "partially_paid";
+  } else if (invoice.status === "paid" || invoice.status === "partially_paid") {
+    status = "sent";
+  }
+  if (status !== invoice.status) {
+    await env.DB.prepare("UPDATE invoices SET status = ? WHERE id = ?")
+      .bind(status, invoice.id)
+      .run();
+  }
+  return { status, total, paid, balance };
+}
+
+async function handleInvoicePayments(request, env, invoiceId, paymentId, method) {
+  await ensurePaymentsTable(env);
+
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
+    .bind(invoiceId)
+    .first();
+  if (!invoice) {
+    return new Response(JSON.stringify({ error: "Invoice not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (method === "GET") {
+    const result = await env.DB.prepare(
+      "SELECT * FROM payments WHERE invoice_id = ? ORDER BY created_at ASC",
+    )
+      .bind(invoiceId)
+      .all();
+    const payments = (result.results || []).map((p) => ({
+      ...p,
+      receipt_number: receiptNumberFor(p),
+    }));
+    const { total, paid, balance } = await getInvoiceBalance(env, invoice);
+    return new Response(
+      JSON.stringify({ payments, total, paid, balance }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (method === "POST") {
+    const data = await request.json();
+    const amount = Number(data.amount);
+    if (!amount || amount <= 0) {
+      return new Response(
+        JSON.stringify({ error: "Payment amount must be greater than zero" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const id = "pay_" + Date.now();
+    await env.DB.prepare(
+      `INSERT INTO payments (id, invoice_id, amount, payment_date, payment_method, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        invoiceId,
+        amount,
+        data.payment_date || new Date().toISOString().slice(0, 10),
+        data.payment_method || "",
+        data.notes || "",
+      )
+      .run();
+
+    const { status, total, paid, balance } = await reconcileInvoiceStatus(
+      env,
+      invoice,
+    );
+    const payment = await env.DB.prepare("SELECT * FROM payments WHERE id = ?")
+      .bind(id)
+      .first();
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        payment: { ...payment, receipt_number: receiptNumberFor(payment) },
+        status,
+        total,
+        paid,
+        balance,
+      }),
+      { status: 201, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (method === "DELETE" && paymentId) {
+    await env.DB.prepare(
+      "DELETE FROM payments WHERE id = ? AND invoice_id = ?",
+    )
+      .bind(paymentId, invoiceId)
+      .run();
+    const { status, total, paid, balance } = await reconcileInvoiceStatus(
+      env,
+      invoice,
+    );
+    return new Response(
+      JSON.stringify({ success: true, status, total, paid, balance }),
+      { headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  return new Response(JSON.stringify({ error: "Method not allowed" }), {
+    status: 405,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function handlePublicReceiptView(paymentId, env) {
+  await ensurePaymentsTable(env);
+
+  const payment = await env.DB.prepare("SELECT * FROM payments WHERE id = ?")
+    .bind(paymentId)
+    .first();
+  if (!payment) {
+    return new Response(JSON.stringify({ error: "Receipt not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
+    .bind(payment.invoice_id)
+    .first();
+  const balance = invoice
+    ? await getInvoiceBalance(env, invoice)
+    : { total: 0, paid: 0, balance: 0 };
+
+  return new Response(
+    JSON.stringify({
+      ...payment,
+      receipt_number: receiptNumberFor(payment),
+      invoice: invoice
+        ? {
+            invoice_number: invoice.invoice_number,
+            client_name: invoice.client_name,
+            client_email: invoice.client_email,
+            client_address: invoice.client_address,
+            payment_terms: invoice.payment_terms,
+            qr_code_url: invoice.qr_code_url,
+          }
+        : null,
+      invoice_total: balance.total,
+      total_paid: balance.paid,
+      balance_due: balance.balance,
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+}
+
 async function handleQuotes(request, env, path, method) {
   const segments = path.split("/");
   const quoteId = segments[4];
@@ -444,16 +631,6 @@ async function handleQuotes(request, env, path, method) {
   }
 
   if (method === "DELETE" && quoteId) {
-    const quote = await env.DB.prepare("SELECT status FROM quotes WHERE id = ?")
-      .bind(quoteId)
-      .first();
-    if (quote?.status !== "draft") {
-      return new Response(
-        JSON.stringify({ error: "Cannot delete non-draft quotes" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
     await env.DB.prepare("DELETE FROM quotes WHERE id = ?").bind(quoteId).run();
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
@@ -556,17 +733,20 @@ async function handlePublicQuoteView(quoteId, env) {
 }
 
 async function handleDashboardStats(env) {
+  await ensurePaymentsTable(env);
   const totalInvoices = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM invoices",
   ).first();
   const totalQuotes = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM quotes",
   ).first();
+  // Revenue is actual cash collected (includes partial payments and tax).
   const totalRevenue = await env.DB.prepare(
-    'SELECT SUM(amount) as total FROM invoices WHERE status = "paid"',
+    "SELECT COALESCE(SUM(amount), 0) as total FROM payments",
   ).first();
+  // Pending = issued invoices that are not yet fully paid (drafts excluded).
   const pendingInvoices = await env.DB.prepare(
-    'SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ("paid", "viewed")',
+    "SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ('paid', 'draft')",
   ).first();
 
   return new Response(
