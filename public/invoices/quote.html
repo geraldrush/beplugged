@@ -295,7 +295,12 @@
     let currentQuote = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const quoteId = window.location.pathname.split('/')[3];
+      const url = new URL(window.location.href);
+      const quoteId = url.searchParams.get('id') || window.location.pathname.split('/')[3];
+      if (!quoteId) {
+        displayError('Quote ID missing');
+        return;
+      }
       await loadQuote(quoteId);
     });
 
@@ -314,36 +319,57 @@
       }
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function safeStatusClass(status) {
+      return String(status || 'draft').replace(/[^a-z_]/g, '');
+    }
+
+    function displayStatus(status) {
+      return escapeHtml(String(status || 'draft').replace(/_/g, ' '));
+    }
+
     function displayQuote(quote) {
       currentQuote = quote;
+      const url = new URL(window.location.href);
+      const autoDownload = url.searchParams.get('download') === '1';
       const items = JSON.parse(quote.items || '[]');
       let itemsHtml = '';
       let itemsTotal = 0;
 
       if (items.length > 0) {
         itemsHtml = items.map(item => {
-          const amount = (item.quantity || 1) * (item.rate || 0);
+          const quantity = Number(item.quantity || 1);
+          const rate = Number(item.rate || 0);
+          const amount = quantity * rate;
           itemsTotal += amount;
           return `
             <tr>
-              <td>${item.description || 'Item'}</td>
-              <td style="text-align: center;">${item.quantity || 1}</td>
-              <td style="text-align: right;">R${(item.rate || 0).toFixed(2)}</td>
+              <td>${escapeHtml(item.description || 'Item')}</td>
+              <td style="text-align: center;">${escapeHtml(quantity)}</td>
+              <td style="text-align: right;">R${rate.toFixed(2)}</td>
               <td style="text-align: right;">R${amount.toFixed(2)}</td>
             </tr>
           `;
         }).join('');
       } else {
-        itemsTotal = quote.amount;
+        itemsTotal = Number(quote.amount || 0);
         itemsHtml = `
           <tr>
             <td colspan="3">Services Rendered</td>
-            <td style="text-align: right;">R${quote.amount.toFixed(2)}</td>
+            <td style="text-align: right;">R${Number(quote.amount || 0).toFixed(2)}</td>
           </tr>
         `;
       }
 
-      const total = quote.amount + quote.tax;
+      const total = Number(quote.amount || 0) + Number(quote.tax || 0);
 
       const html = `
         <div class="quote-header">
@@ -352,13 +378,13 @@
           </div>
           <div class="quote-title">
             <h1>Quote</h1>
-            <p>Quote #: <strong>${quote.quote_number}</strong></p>
+            <p>Quote #: <strong>${escapeHtml(quote.quote_number)}</strong></p>
           </div>
         </div>
 
         <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
           <div>
-            <p style="margin: 0;"><strong>Status:</strong> <span class="status-badge status-${quote.status}">${quote.status}</span></p>
+            <p style="margin: 0;"><strong>Status:</strong> <span class="status-badge status-${safeStatusClass(quote.status)}">${displayStatus(quote.status)}</span></p>
           </div>
           <div style="text-align: right;">
             <p style="margin: 0;"><strong>Quote Date:</strong> ${new Date(quote.created_at).toLocaleDateString()}</p>
@@ -369,9 +395,9 @@
         <div class="quote-details">
           <div class="detail-section">
             <h3>Quote For</h3>
-            <p><strong>${quote.client_name}</strong></p>
-            <p>${quote.client_email}</p>
-            ${quote.client_address ? `<p>${quote.client_address}</p>` : ''}
+            <p><strong>${escapeHtml(quote.client_name)}</strong></p>
+            <p>${escapeHtml(quote.client_email)}</p>
+            ${quote.client_address ? `<p>${escapeHtml(quote.client_address)}</p>` : ''}
           </div>
           <div class="detail-section">
             <h3>Validity</h3>
@@ -396,11 +422,11 @@
         <div class="summary">
           <div class="summary-row">
             <span>Subtotal:</span>
-            <span class="value">R${quote.amount.toFixed(2)}</span>
+            <span class="value">R${Number(quote.amount || 0).toFixed(2)}</span>
           </div>
           <div class="summary-row">
-            <span>Tax:</span>
-            <span class="value">R${quote.tax.toFixed(2)}</span>
+            <span>Tax / Adjustment:</span>
+            <span class="value">R${Number(quote.tax || 0).toFixed(2)}</span>
           </div>
           <div class="summary-row total">
             <span class="label">Total:</span>
@@ -411,7 +437,7 @@
         ${quote.notes ? `
           <div style="margin-bottom: 2rem; padding: 1rem; background-color: #fff5f1; border-radius: 0.25rem;">
             <strong>Notes:</strong>
-            <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${quote.notes}</p>
+            <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${escapeHtml(quote.notes)}</p>
           </div>
         ` : ''}
 
@@ -426,12 +452,16 @@
       `;
 
       document.getElementById('quote-container').innerHTML = html;
+
+      if (autoDownload) {
+        setTimeout(() => downloadPDF(), 300);
+      }
     }
 
     function displayError(message) {
       document.getElementById('quote-container').innerHTML = `
         <div class="error">
-          <p>${message}</p>
+          <p>${escapeHtml(message)}</p>
         </div>
       `;
     }

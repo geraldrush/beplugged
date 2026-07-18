@@ -59,7 +59,7 @@
 ┌──────────────────────────┴──────────────────────────────────────┐
 │                  ADMIN USERS                                      │
 │  - Login: /admin/login.html (password protected)               │
-│  - Dashboard: /admin/index.html (Bearer token in localStorage)│
+│  - Dashboard: /admin/index.html (signed Bearer token in sessionStorage)│
 │    - Create invoices
 │    - View QR codes
 │    - Track status
@@ -121,20 +121,20 @@ POST /api/admin/invoices
       ↓
 Server validates data
       ↓
-Generate unique ID (inv_<timestamp>)
+Generate unique ID (inv_<uuid>)
       ↓
-Generate Invoice Number (INV-2024-123456)
+Generate Invoice Number (INV-2024-UUID)
       ↓
 Generate QR Code → qrcode library
       ↓
-QR Code contains: https://your-worker.workers.dev/api/invoice/{id}
+QR Code contains: https://your-worker.workers.dev/invoices/index.html?id={id}
       ↓
-Store in D1: invoices table
+Store draft in D1: invoices table
   - id, invoice_number, client_name, amount, qr_code_url, etc.
       ↓
 Return to admin with QR code
       ↓
-Admin can now share with client!
+Admin issues by downloading, printing, or emailing before sharing
 ```
 
 ### Client Views Invoice (Via QR Code)
@@ -142,13 +142,13 @@ Admin can now share with client!
 ```
 Client scans QR code
       ↓
-Opens: /api/invoice/{invoiceId}
+Opens: /invoices/index.html?id={invoiceId}
       ↓
 GET /api/invoice/{invoiceId} (no auth needed)
       ↓
 Server finds invoice in D1
       ↓
-Updates status: invoice.status = 'viewed'
+Rejects drafts; updates sent invoice status to 'viewed'
       ↓
 Returns JSON invoice data
       ↓
@@ -167,19 +167,19 @@ Admin enters password
       ↓
 POST /api/auth/login { password }
       ↓
-Server validates: password === env.ADMIN_PASSWORD
+Server verifies password against env.ADMIN_PASSWORD
       ↓
-If valid: return { token: 'Bearer <password>' }
+If valid: return signed Bearer token with expiry
       ↓
-Login page stores token in localStorage
+Login page stores token in sessionStorage
       ↓
 Redirects to /admin/ (dashboard)
       ↓
-Dashboard reads token from localStorage
+Dashboard reads token from sessionStorage
       ↓
 All API calls include: Authorization: Bearer <token>
       ↓
-Server validates token on each request
+Server validates token signature and expiry on each request
       ↓
 If valid: proceed with operation
       ↓
@@ -209,12 +209,25 @@ POST   /api/admin/invoices
        Input:  { client_name, client_email, amount, tax, items, notes, ... }
        Output: { id, invoice_number, qr_code_url }
 
+POST   /api/admin/invoices/{id}/issue
+       Output: { success: true, public_url }
+
+POST   /api/admin/invoices/{id}/send
+       Output: { success: true, public_url }
+
 PUT    /api/admin/invoices/{id}
        Input:  { client_name, client_email, amount, ... }
        Output: { success: true }
 
 DELETE /api/admin/invoices/{id}
        Output: { success: true } (or error if not draft)
+
+GET    /api/admin/invoices/{id}/payments
+       Output: { payments, total, paid, balance }
+
+POST   /api/admin/invoices/{id}/payments
+       Input:  { amount, payment_date, payment_method, notes }
+       Output: { success: true, payment, total, paid, balance }
 ```
 
 ### Admin Quotes (Protected)
@@ -228,6 +241,9 @@ GET    /api/admin/quotes/{id}
 POST   /api/admin/quotes
        Input:  { client_name, client_email, amount, tax, items, ... }
        Output: { id, quote_number, qr_code_url }
+
+POST   /api/admin/quotes/{id}/issue
+       Output: { success: true, public_url }
 
 PUT    /api/admin/quotes/{id}
        Input:  { client_name, client_email, amount, ... }
@@ -262,14 +278,17 @@ GET    /api/admin/dashboard
 ```
 GET    /api/invoice/{id}
        Output: { invoice_data }
-       Side effect: Marks invoice as 'viewed'
+       Side effect: Marks sent invoice as 'viewed'
 ```
 
 ### Public Quote View (No Auth)
 ```
 GET    /api/quote/{id}
        Output: { quote_data }
-       Side effect: Marks quote as 'viewed'
+       Side effect: Marks sent quote as 'viewed'
+
+GET    /api/receipt/{id}
+       Output: { receipt_data }
 ```
 
 ---
@@ -289,17 +308,17 @@ GET    /api/quote/{id}
 │        AUTHENTICATED REQUEST (Method 1)          │
 │  POST /api/auth/login { password: "foo" }       │
 │  ✅ Server validates password                    │
-│  ← Returns { token: "Bearer foo" }              │
+│  ← Returns { token: "Bearer <signed-session>" } │
 │                                                   │
-│  Then store token in localStorage:              │
-│  localStorage.setItem('authToken', token)       │
+│  Then store token in sessionStorage:            │
+│  sessionStorage.setItem('authToken', token)     │
 └─────────────────────────────────────────────────┘
                       ↓
 ┌─────────────────────────────────────────────────┐
 │        AUTHENTICATED REQUEST (Method 2)          │
 │  GET /api/admin/invoices                         │
-│  Authorization: Bearer foo                       │
-│  ✅ Server validates token == ADMIN_PASSWORD    │
+│  Authorization: Bearer <signed-session>          │
+│  ✅ Server validates signature and expiry        │
 │  ← Request proceeds                             │
 └─────────────────────────────────────────────────┘
 ```
@@ -315,8 +334,8 @@ invoices
 ├── id (TEXT PRIMARY KEY)
 ├── invoice_number (TEXT UNIQUE)
 ├── client_name, client_email, client_address
-├── amount, tax (REAL)
-├── status (TEXT: draft|sent|viewed|paid)
+├── amount, tax (NUMERIC), amount_cents, tax_cents
+├── status (TEXT: draft|sent|viewed|partially_paid|paid)
 ├── created_at, due_date
 ├── payment_terms, items (JSON), notes
 └── qr_code_url (Data URL)
@@ -325,8 +344,8 @@ quotes
 ├── id (TEXT PRIMARY KEY)
 ├── quote_number (TEXT UNIQUE)
 ├── client_name, client_email, client_address
-├── amount, tax (REAL)
-├── status (TEXT: draft|sent|viewed|accepted|rejected)
+├── amount, tax (NUMERIC), amount_cents, tax_cents
+├── status (TEXT: draft|sent|viewed|accepted|rejected|converted_to_invoice)
 ├── created_at, expiry_date
 ├── items (JSON), notes
 └── qr_code_url (Data URL)
@@ -347,7 +366,7 @@ invoice_items
 payments
 ├── id (TEXT PRIMARY KEY)
 ├── invoice_id (FOREIGN KEY)
-├── amount, payment_date
+├── amount, amount_cents, payment_date
 ├── payment_method, notes
 ├── created_at
 └── FOREIGN KEY references invoices(id)

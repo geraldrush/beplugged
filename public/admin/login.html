@@ -125,7 +125,11 @@
         const data = await response.json();
 
         if (response.ok && data.token) {
-          localStorage.setItem('authToken', data.token);
+          localStorage.removeItem('authToken');
+          sessionStorage.setItem('authToken', data.token);
+          if (data.expires_at) {
+            sessionStorage.setItem('authTokenExpiresAt', data.expires_at);
+          }
           window.location.href = '/admin/';
         } else {
           showError('Invalid password');

@@ -331,6 +331,19 @@
       return `R ${parts[0]}.${parts[1]}`;
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
+    }
+
     function getBankingInfo(receipt) {
       const invoice = receipt.invoice || {};
       const defaultInfo = [
@@ -355,7 +368,7 @@
         const base64 = btoa(unescape(encodeURIComponent(svg)));
         return `<img src="data:image/svg+xml;base64,${base64}" alt="QR Code">`;
       }
-      return `<img src="${invoice.qr_code_url}" alt="QR Code">`;
+      return `<img src="${escapeAttr(invoice.qr_code_url)}" alt="QR Code">`;
     }
 
     function displayReceipt(receipt) {
@@ -375,7 +388,7 @@
           <div>
             <div class="company-name">Beplugged Tech</div>
             <div class="invoice-title">Payment Receipt</div>
-            <div class="invoice-meta">Receipt #: <strong>${receipt.receipt_number}</strong></div>
+            <div class="invoice-meta">Receipt #: <strong>${escapeHtml(receipt.receipt_number)}</strong></div>
           </div>
           <img src="/img/logo.png" alt="Beplugged Tech" class="brand-logo">
         </div>
@@ -386,17 +399,17 @@
           </div>
           <div style="text-align:right;">
             <p style="margin:0;"><strong>Payment Date:</strong> ${paymentDate}</p>
-            ${invoice.invoice_number ? `<p style="margin:0;"><strong>For Invoice:</strong> ${invoice.invoice_number}</p>` : ''}
-            ${receipt.payment_method ? `<p style="margin:0;"><strong>Method:</strong> ${receipt.payment_method}</p>` : ''}
+            ${invoice.invoice_number ? `<p style="margin:0;"><strong>For Invoice:</strong> ${escapeHtml(invoice.invoice_number)}</p>` : ''}
+            ${receipt.payment_method ? `<p style="margin:0;"><strong>Method:</strong> ${escapeHtml(receipt.payment_method)}</p>` : ''}
           </div>
         </div>
 
         <div class="invoice-details">
           <div class="detail-section">
             <h3>Received From</h3>
-            <p><strong>${invoice.client_name || 'Client'}</strong></p>
-            ${invoice.client_email ? `<p>${invoice.client_email}</p>` : ''}
-            ${invoice.client_address ? `<p>${invoice.client_address}</p>` : ''}
+            <p><strong>${escapeHtml(invoice.client_name || 'Client')}</strong></p>
+            ${invoice.client_email ? `<p>${escapeHtml(invoice.client_email)}</p>` : ''}
+            ${invoice.client_address ? `<p>${escapeHtml(invoice.client_address)}</p>` : ''}
           </div>
         </div>
 
@@ -409,7 +422,7 @@
           </thead>
           <tbody>
             <tr>
-              <td>Payment received${invoice.invoice_number ? ` for invoice ${invoice.invoice_number}` : ''}${receipt.notes ? ` — ${receipt.notes}` : ''}</td>
+              <td>Payment received${invoice.invoice_number ? ` for invoice ${escapeHtml(invoice.invoice_number)}` : ''}${receipt.notes ? ` - ${escapeHtml(receipt.notes)}` : ''}</td>
               <td style="text-align:right;">${formatMoney(receipt.amount)}</td>
             </tr>
           </tbody>
@@ -418,7 +431,7 @@
         <div class="totals-footer">
           <div class="banking-info">
             <h3>Banking Details</h3>
-            <p>${bankingInfo}</p>
+            <p>${escapeHtml(bankingInfo)}</p>
           </div>
           <div class="summary">
             <div class="summary-row">
@@ -455,7 +468,7 @@
 
     function displayError(message) {
       document.getElementById('receipt-container').innerHTML = `
-        <div class="error"><p>${message}</p></div>
+        <div class="error"><p>${escapeHtml(message)}</p></div>
       `;
     }
 

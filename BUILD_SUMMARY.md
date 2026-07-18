@@ -251,8 +251,6 @@ Already built-in:
 - ✅ Client-specific notes
 
 Ready to add:
-- 📧 Email integration (Resend/SendGrid/Mailgun)
-- 💳 Payment tracking
 - 📊 Advanced analytics
 - 🌍 Multi-currency support
 - 🎨 Custom templates
@@ -262,7 +260,7 @@ Ready to add:
 ## ✨ What Makes This Special
 
 1. **QR Codes** - Every invoice gets an auto-generated QR code
-2. **No Email Setup Needed** - Works immediately with QR codes
+2. **Flexible Sharing** - Works with QR codes, public links, PDF downloads, and Brevo email
 3. **Zero Cost** - Completely free with Cloudflare
 4. **Fully Managed** - No servers to maintain
 5. **Scalable** - Starts free, grows with you
@@ -297,7 +295,7 @@ A: Unlimited within free tier (100k requests/day = ~1000 invoices/day)
 A: Yes! Stored in Cloudflare D1 with automatic backups
 
 **Q: Can I add email sending later?**
-A: Yes! Ready to integrate with Resend, SendGrid, or Mailgun
+A: Brevo sending is already wired in; configure the Brevo API key and sender values before using it.
 
 **Q: What if I need more features?**
 A: See "Ready to add" section above - all feasible!

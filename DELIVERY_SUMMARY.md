@@ -219,8 +219,6 @@ Plus performance indexes and foreign key relationships!
 ## 🎁 Bonus Features Ready to Integrate
 
 Already have the foundation for:
-- 📧 Email sending (Resend/SendGrid/Mailgun)
-- 💳 Payment tracking
 - 📊 Advanced analytics
 - 🌍 Multi-currency support
 - 📱 Mobile app integration
@@ -275,10 +273,10 @@ Hosting:
    - Points directly to public viewing page
    - No setup needed - automatic!
 
-2. **Zero Configuration Email**
-   - No email setup required to get started
-   - QR codes work immediately!
-   - Email integration available later if needed
+2. **Flexible Sharing**
+   - QR codes work immediately
+   - Public links and PDF downloads are built in
+   - Brevo email sending is available after configuring sender values
 
 3. **Completely Free**
    - Runs on Cloudflare free tier
@@ -330,7 +328,7 @@ A: Yes! All source code is yours. Edit CSS, templates, branding, etc.
 A: Upgrade to paid plan - no code changes needed.
 
 **Q: Can I add email later?**
-A: Yes! System is ready for email integration via Resend, SendGrid, etc.
+A: Brevo invoice sending is already wired in; configure the API key and sender values first.
 
 **Q: How do I back up my data?**
 A: D1 automatically backs up. Manual exports available via Cloudflare dashboard.

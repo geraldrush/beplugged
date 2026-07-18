@@ -10,7 +10,7 @@ Your complete invoicing system includes:
 - ✅ RESTful API with authentication
 - ✅ D1 SQLite database integration
 - ✅ QR code generation (qrcode library)
-- ✅ CORS support for cross-origin requests
+- ✅ Same-origin CORS handling
 - ✅ Error handling & validation
 
 **Frontend (Admin Dashboard)**
@@ -26,6 +26,7 @@ Your complete invoicing system includes:
 - ✅ Clients management system
 - ✅ Line items support
 - ✅ Payment history tracking
+- ✅ Audit log for operational events
 - ✅ Performance indexes
 
 **Public Pages**
@@ -71,14 +72,15 @@ Or with local testing:
 npx wrangler d1 execute invoicing --file src/schema.sql --local
 ```
 
-### 2. Admin Password
+### 2. Admin Secrets
 
 **Set Password:**
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put SESSION_SECRET
 ```
 
-Enter your password when prompted (don't show output, it's private).
+Use `ADMIN_PASSWORD` for login and a separate long random `SESSION_SECRET` for signing expiring sessions.
 
 **Verify It's Set:**
 ```bash
@@ -90,29 +92,19 @@ Simply run the secret put command again with a new password.
 
 ### 3. Optional: Email Integration
 
-To send invoices by email, choose one:
+Invoice sending uses Brevo:
 
-#### Option A: Resend (Easiest)
-1. Sign up: https://resend.com (free account = 100 emails/day)
-2. Get API key from dashboard
-3. ```bash
-   npx wrangler secret put RESEND_API_KEY
-   ```
-4. Email sending code ready in `src/email.js` (create this file)
+```bash
+npx wrangler secret put BREVO_API_KEY
+```
 
-#### Option B: SendGrid
-1. Sign up: https://sendgrid.com (free = 20,000/month)
-2. Get API key
-3. ```bash
-   npx wrangler secret put SENDGRID_API_KEY
-   ```
+Set these runtime variables:
 
-#### Option C: Mailgun
-1. Sign up: https://mailgun.com (free = 1,000/month)
-2. Get API key
-3. ```bash
-   npx wrangler secret put MAILGUN_API_KEY
-   ```
+```toml
+BREVO_SENDER_EMAIL = "noreply@yourdomain.com"
+BREVO_SENDER_NAME = "Beplugged Tech"
+BREVO_REPLY_TO = "hello@yourdomain.com"
+```
 
 ### 4. Custom Configuration
 
@@ -149,7 +141,7 @@ Change in `public/admin/index.html`:
 
 Edit `public/invoices/index.html` to add:
 - Company logo
-- Tax ID / Registration number
+- Business registration details
 - Bank account info
 - Payment instructions
 - Custom footer
@@ -166,9 +158,11 @@ CREATE TABLE invoices (
   client_name TEXT NOT NULL,
   client_email TEXT NOT NULL,
   client_address TEXT,
-  amount REAL NOT NULL,
-  tax REAL DEFAULT 0,
-  status TEXT DEFAULT 'draft',            -- draft, sent, viewed, paid
+  amount NUMERIC NOT NULL,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  tax NUMERIC DEFAULT 0,
+  tax_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'draft',            -- draft, sent, viewed, partially_paid, paid
   created_at DATETIME DEFAULT NOW(),
   due_date DATE,
   payment_terms TEXT,                     -- "Net 30"
@@ -182,6 +176,7 @@ CREATE TABLE invoices (
 - `draft` → Admin editing, not sent
 - `sent` → Sent to client
 - `viewed` → Client opened invoice
+- `partially_paid` → Some payment received
 - `paid` → Payment received
 
 ### quotes Table
@@ -231,22 +226,22 @@ package.json              # Dependencies & scripts
 
 **Admin Operations:**
 1. User logs in with password → gets auth token
-2. Token stored in localStorage
+2. Signed expiring token stored in sessionStorage
 3. All admin requests include: `Authorization: Bearer <token>`
-4. API validates token before allowing changes
+4. API validates signature and expiry before allowing changes
 
 **Invoice Creation Flow:**
 1. Admin fills form → POST `/api/admin/invoices`
 2. Server generates unique ID & invoice number
 3. Server generates QR code (using qrcode library)
-4. QR code points to: `/api/invoice/{id}`
-5. Invoice stored in D1 with QR code URL
-6. Admin can view, edit, or delete
+4. QR code points to: `/invoices/index.html?id={id}`
+5. Invoice stored as a draft in D1 with QR code URL
+6. Admin can edit/delete while draft, then issue by downloading, printing, or sending
 
 **Client Viewing:**
 1. Client scans QR code
-2. Opens `/api/invoice/{id}` (no auth needed)
-3. Server marks invoice as `viewed` status
+2. Opens `/invoices/index.html?id={id}` (no auth needed)
+3. Server returns issued invoices only and marks `sent` as `viewed`
 4. Invoice displayed in browser
 5. Client can print or download
 
@@ -255,7 +250,7 @@ package.json              # Dependencies & scripts
 ## 🚀 Deployment Checklist
 
 - [ ] Database created and schema initialized
-- [ ] Admin password set via `wrangler secret put`
+- [ ] Admin password and session secret set via `wrangler secret put`
 - [ ] wrangler.toml updated with database_id
 - [ ] Local testing works (`npm run dev`)
 - [ ] Ready for `npm run deploy`
@@ -291,8 +286,8 @@ package.json              # Dependencies & scripts
 ## 🔒 Security Notes
 
 ⚠️ **Current Implementation:**
-- Simple password authentication (suitable for admin-only access)
-- CORS enabled (adjust `corsHeaders` for your domain)
+- Password login with signed expiring admin sessions
+- Same-origin CORS for API responses
 - No rate limiting (add if needed)
 
 ✅ **Production Hardening (Optional):**
@@ -300,8 +295,7 @@ package.json              # Dependencies & scripts
 // Add rate limiting
 // Add request logging
 // Add HTTPS-only enforcement
-// Restrict CORS to your domain
-// Add request validation
+// Rotate SESSION_SECRET if a session token leaks
 // Add SQL injection prevention (already using prepared statements)
 ```
 
@@ -354,7 +348,7 @@ npm run deploy
 
 **Check:**
 1. Are you logged in? Check browser console
-2. Is the auth token valid? `localStorage`
+2. Is the auth token present? `sessionStorage`
 3. Did you create test invoices?
 
 **Debug:**
