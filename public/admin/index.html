@@ -408,6 +408,9 @@
           <button class="nav-link" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
           </button>
+          <button class="nav-link" onclick="showTab('receipts')">
+            <i class="fas fa-receipt"></i> Receipts
+          </button>
           <button class="nav-link" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> Logout
           </button>
@@ -424,36 +427,69 @@
           <div
             style="
               display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
               gap: 1rem;
             "
           >
-            <div class="stat-card">
-              <h3>Total Invoices</h3>
-              <div class="value" id="total-invoices">0</div>
-            </div>
-            <div class="stat-card">
-              <h3>Total Quotes</h3>
-              <div class="value" id="total-quotes">0</div>
-            </div>
-            <div class="stat-card" style="border-left-color: var(--success)">
-              <h3>Total Revenue</h3>
-              <div
-                class="value"
-                id="total-revenue"
-                style="color: var(--success)"
-              >
+            <div class="stat-card" style="border-left-color: #1f8a52">
+              <h3>Revenue Collected</h3>
+              <div class="value" id="kpi-collected" style="color: #1f8a52">
                 R0.00
               </div>
             </div>
             <div class="stat-card" style="border-left-color: var(--warning)">
-              <h3>Pending Invoices</h3>
+              <h3>Outstanding</h3>
               <div
                 class="value"
-                id="pending-invoices"
+                id="kpi-outstanding"
                 style="color: var(--warning)"
               >
-                0
+                R0.00
+              </div>
+            </div>
+            <div class="stat-card">
+              <h3>Total Invoiced</h3>
+              <div class="value" id="kpi-invoiced">R0.00</div>
+            </div>
+            <div class="stat-card">
+              <h3>Pending Invoices</h3>
+              <div class="value" id="kpi-pending">0</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 1.5rem">
+            <div class="card-header">
+              <h4>Revenue Trend — Invoiced vs Collected (last 12 months)</h4>
+            </div>
+            <div style="padding: 1rem; height: 320px">
+              <canvas id="revenueChart"></canvas>
+            </div>
+          </div>
+
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+              gap: 1rem;
+              margin-top: 1.5rem;
+            "
+          >
+            <div class="card">
+              <div class="card-header"><h4>Invoice Status</h4></div>
+              <div style="padding: 1rem; height: 300px">
+                <canvas id="statusChart"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h4>Top Clients by Revenue</h4></div>
+              <div style="padding: 1rem; height: 300px">
+                <canvas id="clientsChart"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h4>Collected vs Outstanding</h4></div>
+              <div style="padding: 1rem; height: 300px">
+                <canvas id="collectedChart"></canvas>
               </div>
             </div>
           </div>
@@ -572,6 +608,36 @@
                 <tbody id="clients-list">
                   <tr>
                     <td colspan="5" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipts Tab -->
+        <div id="receipts-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Receipts</h2>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Receipt #</th>
+                    <th>Invoice #</th>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="receipts-list">
+                  <tr>
+                    <td colspan="7" class="text-center">Loading...</td>
                   </tr>
                 </tbody>
               </table>
@@ -1041,6 +1107,7 @@
     </div>
 
     <script src="/js/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script>
       const API_BASE = "/api";
       let authToken = "";
@@ -1117,6 +1184,8 @@
           loadQuotes();
         } else if (tabName === "clients") {
           loadClients();
+        } else if (tabName === "receipts") {
+          loadReceipts();
         }
       }
 
@@ -1153,17 +1222,42 @@
       }
 
       // Dashboard
+      const chartRegistry = {};
+      const STATUS_COLORS = {
+        draft: "#9ca3af",
+        sent: "#3b82f6",
+        viewed: "#f05023",
+        partially_paid: "#e0a500",
+        paid: "#1f8a52",
+      };
+
+      function fmtCurrency(value) {
+        return "R" + Number(value || 0).toLocaleString("en", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+
       async function loadDashboard() {
-        const stats = await apiCall("/admin/dashboard");
-        if (stats) {
-          document.getElementById("total-invoices").textContent =
-            stats.total_invoices;
-          document.getElementById("total-quotes").textContent =
-            stats.total_quotes;
-          document.getElementById("total-revenue").textContent =
-            "R" + Number(stats.total_revenue || 0).toFixed(2);
-          document.getElementById("pending-invoices").textContent =
-            stats.pending_invoices;
+        // Skip heavy analytics work when the dashboard isn't the active tab.
+        if (document.getElementById("dashboard-tab").classList.contains("hidden")) {
+          return;
+        }
+
+        const analytics = await apiCall("/admin/analytics");
+        if (analytics && analytics.kpis) {
+          document.getElementById("kpi-collected").textContent = fmtCurrency(
+            analytics.kpis.collected,
+          );
+          document.getElementById("kpi-outstanding").textContent = fmtCurrency(
+            analytics.kpis.outstanding,
+          );
+          document.getElementById("kpi-invoiced").textContent = fmtCurrency(
+            analytics.kpis.invoiced,
+          );
+          document.getElementById("kpi-pending").textContent =
+            analytics.kpis.invoices_pending;
+          renderCharts(analytics);
         }
 
         const invoices = await apiCall("/admin/invoices");
@@ -1189,6 +1283,159 @@
                 .join("")
             : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
         }
+      }
+
+      function makeChart(canvasId, config) {
+        if (typeof Chart === "undefined") {
+          return;
+        }
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) {
+          return;
+        }
+        if (chartRegistry[canvasId]) {
+          chartRegistry[canvasId].destroy();
+        }
+        chartRegistry[canvasId] = new Chart(canvas, config);
+      }
+
+      function currencyTick(value) {
+        return "R" + Number(value || 0).toLocaleString("en");
+      }
+
+      function renderCharts(data) {
+        const monthly = data.monthly || [];
+        const labels = monthly.map((m) => m.label);
+
+        makeChart("revenueChart", {
+          data: {
+            labels,
+            datasets: [
+              {
+                type: "bar",
+                label: "Invoiced",
+                data: monthly.map((m) => m.invoiced),
+                backgroundColor: "rgba(240, 80, 35, 0.25)",
+                borderColor: "#f05023",
+                borderWidth: 1,
+                borderRadius: 4,
+                order: 2,
+              },
+              {
+                type: "line",
+                label: "Collected",
+                data: monthly.map((m) => m.collected),
+                borderColor: "#1f8a52",
+                backgroundColor: "rgba(31, 138, 82, 0.15)",
+                borderWidth: 2,
+                tension: 0.35,
+                fill: true,
+                pointRadius: 3,
+                order: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { position: "top" },
+              tooltip: {
+                callbacks: {
+                  label: (c) => `${c.dataset.label}: ${fmtCurrency(c.parsed.y)}`,
+                },
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { callback: currencyTick },
+              },
+            },
+          },
+        });
+
+        const statuses = data.status_breakdown || [];
+        makeChart("statusChart", {
+          type: "doughnut",
+          data: {
+            labels: statuses.map((s) => displayStatus(s.status)),
+            datasets: [
+              {
+                data: statuses.map((s) => s.count),
+                backgroundColor: statuses.map(
+                  (s) => STATUS_COLORS[s.status] || "#9ca3af",
+                ),
+                borderWidth: 2,
+                borderColor: "#fff",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: "bottom" } },
+          },
+        });
+
+        const clients = data.top_clients || [];
+        makeChart("clientsChart", {
+          type: "bar",
+          data: {
+            labels: clients.map((c) => c.name),
+            datasets: [
+              {
+                label: "Collected",
+                data: clients.map((c) => c.collected),
+                backgroundColor: "#2c2d3f",
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (c) => fmtCurrency(c.parsed.x),
+                },
+              },
+            },
+            scales: { x: { beginAtZero: true, ticks: { callback: currencyTick } } },
+          },
+        });
+
+        const kpis = data.kpis || {};
+        makeChart("collectedChart", {
+          type: "doughnut",
+          data: {
+            labels: ["Collected", "Outstanding"],
+            datasets: [
+              {
+                data: [kpis.collected || 0, kpis.outstanding || 0],
+                backgroundColor: ["#1f8a52", "#f05023"],
+                borderWidth: 2,
+                borderColor: "#fff",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label: (c) => `${c.label}: ${fmtCurrency(c.parsed)}`,
+                },
+              },
+            },
+          },
+        });
       }
 
       // Invoices
@@ -1435,6 +1682,12 @@
             <strong>Amount:</strong> R${Number(invoice.amount || 0).toFixed(2)}<br>
             <strong>Tax / Adjustment:</strong> R${Number(invoice.tax || 0).toFixed(2)}<br>
             <strong>Total:</strong> R${(Number(invoice.amount || 0) + Number(invoice.tax || 0)).toFixed(2)}<br>
+            ${
+              Number(invoice.total_paid || 0) > 0
+                ? `<strong>Paid:</strong> <span style="color:#1f8a52;">R${Number(invoice.total_paid || 0).toFixed(2)}</span><br>
+            <strong>Balance Due:</strong> <span style="color:var(--primary); font-weight:700;">R${Number(invoice.balance_due || 0).toFixed(2)}</span><br>`
+                : ""
+            }
             <strong>Status:</strong> ${displayStatus(invoice.status)}<br>
             <strong>Due Date:</strong> ${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : "N/A"}</p>
             <div class="table-responsive" style="margin: 1rem 0;">
@@ -1658,6 +1911,40 @@
           "/receipts/index.html?id=" + encodeURIComponent(paymentId) + "&download=1",
           "_blank",
         );
+      }
+
+      async function loadReceipts() {
+        const receipts = await apiCall("/admin/receipts");
+        const list = document.getElementById("receipts-list");
+        if (!Array.isArray(receipts)) {
+          return;
+        }
+        list.innerHTML = receipts.length
+          ? receipts
+              .map((r) => {
+                const date =
+                  r.payment_date ||
+                  (r.created_at
+                    ? new Date(r.created_at).toLocaleDateString()
+                    : "-");
+                return `
+          <tr>
+            <td>${escapeHtml(r.receipt_number || "-")}</td>
+            <td>${escapeHtml(r.invoice_number || "-")}</td>
+            <td>${escapeHtml(r.client_name || "-")}</td>
+            <td>${money(r.amount)}</td>
+            <td>${escapeHtml(date)}</td>
+            <td>${escapeHtml(r.payment_method || "-")}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="printReceipt('${escapeAttr(r.id)}')">Print</button>
+                <button class="btn btn-sm btn-secondary" onclick="downloadReceipt('${escapeAttr(r.id)}')">Download</button>
+              </div>
+            </td>
+          </tr>`;
+              })
+              .join("")
+          : `<tr><td colspan="7" class="text-center">No receipts yet</td></tr>`;
       }
 
       // Quotes

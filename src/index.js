@@ -67,6 +67,10 @@ export default {
         return await handleDashboardStats(env);
       }
 
+      if (path === "/api/admin/analytics" && method === "GET") {
+        return await handleAnalytics(env);
+      }
+
       if (path.startsWith("/api/admin/invoices")) {
         return await handleInvoices(request, env, path, method);
       }
@@ -77,6 +81,10 @@ export default {
 
       if (path.startsWith("/api/admin/clients")) {
         return await handleClients(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/receipts")) {
+        return await handleReceipts(env);
       }
 
       if (path.startsWith("/api/invoice/")) {
@@ -749,7 +757,16 @@ async function handleInvoices(request, env, path, method) {
     const result = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
       .bind(invoiceId)
       .first();
-    return json(result || { error: "Not found" }, result ? {} : { status: 404 });
+    if (!result) {
+      return json({ error: "Not found" }, { status: 404 });
+    }
+    const { total, paid, balance } = await getInvoiceBalance(env, result);
+    return json({
+      ...result,
+      total_due: total,
+      total_paid: paid,
+      balance_due: balance,
+    });
   }
 
   if (method === "POST" && invoiceId && action === "issue") {
@@ -1187,6 +1204,27 @@ async function handlePublicReceiptView(paymentId, env) {
     });
 }
 
+async function handleReceipts(env) {
+  await ensureSchema(env);
+  const result = await env.DB.prepare(
+    `SELECT p.id, p.invoice_id, p.amount, p.amount_cents, p.payment_date,
+            p.payment_method, p.notes, p.created_at,
+            i.invoice_number, i.client_name, i.client_email
+     FROM payments p
+     LEFT JOIN invoices i ON i.id = p.invoice_id
+     ORDER BY p.created_at DESC
+     LIMIT 200`,
+  ).all();
+  const receipts = (result.results || []).map((payment) => ({
+    ...payment,
+    amount: centsToAmount(
+      persistedCents(payment, "amount_cents", "amount", "Payment amount"),
+    ),
+    receipt_number: receiptNumberFor(payment),
+  }));
+  return json(receipts);
+}
+
 async function handleQuotes(request, env, path, method) {
   await ensureOperationalSchema(env);
   const segments = path.split("/");
@@ -1390,7 +1428,13 @@ async function handlePublicInvoiceView(invoiceId, env) {
     invoice.status = "viewed";
   }
 
-  return json(invoice);
+  const { total, paid, balance } = await getInvoiceBalance(env, invoice);
+  return json({
+    ...invoice,
+    total_due: total,
+    total_paid: paid,
+    balance_due: balance,
+  });
 }
 
 async function handlePublicQuoteView(quoteId, env) {
@@ -1454,5 +1498,105 @@ async function handleDashboardStats(env) {
       total_quotes: totalQuotes.count,
       total_revenue: centsToAmount(Number(totalRevenue.total_cents || 0)),
       pending_invoices: pendingInvoices.count,
+  });
+}
+
+// SQL fragment that reads the integer-cents column but falls back to the legacy
+// REAL amount column when cents has not been backfilled (existing prod rows).
+const PAYMENT_CENTS_SQL =
+  "CASE WHEN amount_cents IS NOT NULL AND (amount_cents != 0 OR amount = 0) THEN amount_cents ELSE ROUND(amount * 100) END";
+const INVOICE_AMOUNT_CENTS_SQL =
+  "CASE WHEN amount_cents IS NOT NULL AND (amount_cents != 0 OR amount = 0) THEN amount_cents ELSE ROUND(amount * 100) END";
+const INVOICE_TAX_CENTS_SQL =
+  "CASE WHEN tax_cents IS NOT NULL AND (tax_cents != 0 OR tax = 0) THEN tax_cents ELSE ROUND(tax * 100) END";
+
+function lastMonths(count) {
+  const months = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleString("en", { month: "short", year: "2-digit" });
+    months.push({ key, label });
+  }
+  return months;
+}
+
+async function handleAnalytics(env) {
+  await ensureSchema(env);
+
+  const collectedRow = await env.DB.prepare(
+    `SELECT COALESCE(SUM(${PAYMENT_CENTS_SQL}), 0) as cents FROM payments`,
+  ).first();
+  const invoicedRow = await env.DB.prepare(
+    `SELECT COALESCE(SUM(${INVOICE_AMOUNT_CENTS_SQL} + ${INVOICE_TAX_CENTS_SQL}), 0) as cents
+     FROM invoices WHERE status != 'draft'`,
+  ).first();
+  const paidCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM invoices WHERE status = 'paid'",
+  ).first();
+  const pendingCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ('paid', 'draft')",
+  ).first();
+
+  const collectedCents = Number(collectedRow?.cents || 0);
+  const invoicedCents = Number(invoicedRow?.cents || 0);
+  const outstandingCents = Math.max(invoicedCents - collectedCents, 0);
+
+  const collectedByMonth = await env.DB.prepare(
+    `SELECT strftime('%Y-%m', COALESCE(payment_date, created_at)) as ym,
+            COALESCE(SUM(${PAYMENT_CENTS_SQL}), 0) as cents
+     FROM payments GROUP BY ym`,
+  ).all();
+  const invoicedByMonth = await env.DB.prepare(
+    `SELECT strftime('%Y-%m', created_at) as ym,
+            COALESCE(SUM(${INVOICE_AMOUNT_CENTS_SQL} + ${INVOICE_TAX_CENTS_SQL}), 0) as cents
+     FROM invoices WHERE status != 'draft' GROUP BY ym`,
+  ).all();
+
+  const collectedMap = new Map(
+    (collectedByMonth.results || []).map((r) => [r.ym, Number(r.cents || 0)]),
+  );
+  const invoicedMap = new Map(
+    (invoicedByMonth.results || []).map((r) => [r.ym, Number(r.cents || 0)]),
+  );
+  const months = lastMonths(12);
+  const monthly = months.map((m) => ({
+    label: m.label,
+    collected: centsToAmount(collectedMap.get(m.key) || 0),
+    invoiced: centsToAmount(invoicedMap.get(m.key) || 0),
+  }));
+
+  const statusRows = await env.DB.prepare(
+    "SELECT status, COUNT(*) as count FROM invoices GROUP BY status",
+  ).all();
+  const status_breakdown = (statusRows.results || []).map((r) => ({
+    status: r.status || "draft",
+    count: Number(r.count || 0),
+  }));
+
+  const paymentCentsQualified =
+    "CASE WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0) THEN p.amount_cents ELSE ROUND(p.amount * 100) END";
+  const topClientRows = await env.DB.prepare(
+    `SELECT i.client_name as name, COALESCE(SUM(${paymentCentsQualified}), 0) as cents
+     FROM payments p JOIN invoices i ON i.id = p.invoice_id
+     GROUP BY i.client_name ORDER BY cents DESC LIMIT 6`,
+  ).all();
+  const top_clients = (topClientRows.results || []).map((r) => ({
+    name: r.name || "Unknown",
+    collected: centsToAmount(Number(r.cents || 0)),
+  }));
+
+  return json({
+    kpis: {
+      collected: centsToAmount(collectedCents),
+      invoiced: centsToAmount(invoicedCents),
+      outstanding: centsToAmount(outstandingCents),
+      invoices_paid: Number(paidCount?.count || 0),
+      invoices_pending: Number(pendingCount?.count || 0),
+    },
+    monthly,
+    status_breakdown,
+    top_clients,
   });
 }
