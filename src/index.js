@@ -827,11 +827,21 @@ async function handleInvoices(request, env, path, method) {
 
   if (method === "PUT" && invoiceId) {
     const invoice = await requireInvoice(env, invoiceId);
-    if (invoice.status !== "draft") {
-      throw new RequestError("Issued invoices cannot be edited", 409);
+    const paymentCount = await env.DB.prepare(
+      "SELECT COUNT(*) as count FROM payments WHERE invoice_id = ?",
+    )
+      .bind(invoiceId)
+      .first();
+    if (Number(paymentCount?.count || 0) > 0) {
+      throw new RequestError(
+        "Invoices with recorded payments cannot be edited",
+        409,
+      );
     }
 
     const data = normalizeInvoicePayload(await parseRequestJson(request));
+    // Preserve the current status so editing a sent/viewed invoice does not
+    // silently un-issue it.
     await env.DB.prepare(
       `UPDATE invoices SET client_name = ?, client_email = ?, client_address = ?, amount = ?, amount_cents = ?, tax = ?, tax_cents = ?, status = ?, items = ?, notes = ?, due_date = ?, payment_terms = ? WHERE id = ?`,
     )
@@ -843,7 +853,7 @@ async function handleInvoices(request, env, path, method) {
         data.amount_cents,
         data.tax,
         data.tax_cents,
-        "draft",
+        invoice.status || "draft",
         JSON.stringify(data.items),
         data.notes,
         data.due_date,
@@ -865,9 +875,6 @@ async function handleInvoices(request, env, path, method) {
 
   if (method === "DELETE" && invoiceId) {
     const invoice = await requireInvoice(env, invoiceId);
-    if (invoice.status !== "draft") {
-      throw new RequestError("Only draft invoices can be deleted", 409);
-    }
     const paymentCount = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM payments WHERE invoice_id = ?",
     )

@@ -1456,11 +1456,11 @@
             <td>
               <div class="action-buttons">
                 <button class="btn btn-sm btn-info" onclick="viewInvoice('${escapeAttr(inv.id)}')">View</button>
-                <button class="btn btn-sm btn-secondary" onclick="editInvoice('${escapeAttr(inv.id)}')" ${inv.status !== "draft" ? "disabled" : ""}>Edit</button>
+                <button class="btn btn-sm btn-secondary" onclick="editInvoice('${escapeAttr(inv.id)}')" ${inv.status === "paid" || inv.status === "partially_paid" ? "disabled" : ""}>Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')">Download</button>
                 <button class="btn btn-sm btn-primary" onclick="sendInvoice('${escapeAttr(inv.id)}')">Send</button>
                 <button class="btn btn-sm btn-success" onclick="openPaymentModal('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')" ${inv.status === "draft" || inv.status === "paid" ? "disabled" : ""}>Pay</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')" ${inv.status !== "draft" ? "disabled" : ""}>Delete</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')" ${inv.status === "paid" || inv.status === "partially_paid" ? "disabled" : ""}>Delete</button>
               </div>
             </td>
           </tr>
