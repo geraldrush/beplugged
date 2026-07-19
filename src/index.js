@@ -1401,6 +1401,15 @@ async function handleSendReceipt(request, env, paymentId) {
     subject: `Receipt ${receiptNumber} from Beplugged Tech`,
     htmlContent,
   };
+
+  // Keep a copy of every receipt on file by CC'ing the business inbox.
+  const ccEmail = env.BREVO_CC_EMAIL || "info@beplugged.co.za";
+  if (ccEmail && ccEmail !== invoice.client_email) {
+    payload.cc = [
+      { email: ccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
+    ];
+  }
+
   if (env.BREVO_REPLY_TO) {
     payload.replyTo = {
       email: env.BREVO_REPLY_TO,
