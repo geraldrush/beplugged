@@ -899,6 +899,51 @@ async function handleInvoices(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+// Bulletproof, centered email CTA button (table-based for Outlook/Gmail).
+function emailButton(url, label, color = "#F05023") {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 28px;">
+      <tr><td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td align="center" bgcolor="${color}" style="border-radius:6px;">
+            <a href="${escapeHtml(url)}" style="display:inline-block;padding:13px 32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;">${escapeHtml(label)}</a>
+          </td>
+        </tr></table>
+      </td></tr>
+    </table>`;
+}
+
+// Section label used above tables/boxes in emails.
+function emailSectionLabel(text) {
+  return `<div style="margin:0 0 10px;font-size:11px;color:#8a8a8a;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">${escapeHtml(text)}</div>`;
+}
+
+// Wraps body content in a branded, responsive-ish email shell.
+function emailShell({ label, accent = "#F05023", bodyHtml }) {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;-webkit-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
+    <tr><td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <tr><td style="background-color:#2C2D3F;padding:22px 32px;">
+          <table role="presentation" width="100%"><tr>
+            <td style="color:#ffffff;font-size:19px;font-weight:bold;letter-spacing:1.5px;">BEPLUGGED&nbsp;TECH</td>
+            <td align="right" style="color:${accent};font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">${escapeHtml(label)}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="height:4px;background-color:${accent};font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td style="padding:32px;">${bodyHtml}</td></tr>
+        <tr><td style="background-color:#fafafb;border-top:1px solid #eeeeee;padding:22px 32px;color:#9a9aa0;font-size:12px;line-height:1.7;">
+          <strong style="color:#2C2D3F;">Beplugged Tech</strong><br>
+          Questions? Just reply to this email or contact <a href="mailto:info@beplugged.co.za" style="color:${accent};text-decoration:none;">info@beplugged.co.za</a>.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
 async function handleSendInvoice(request, env, invoiceId) {
   await ensureOperationalSchema(env);
   if (!env.BREVO_API_KEY) {
@@ -921,21 +966,21 @@ async function handleSendInvoice(request, env, invoiceId) {
   const items = parseStoredItems(invoice.items);
   const itemsRows = items.length
     ? items
-        .map((item) => {
+        .map((item, i) => {
           const quantity = Number(item.quantity || 1);
           const rate = Number(item.rate || 0);
           const discount = Number(item.discount || 0);
           const lineTotal = Math.max(quantity * rate - discount, 0);
-          return `<tr>
-            <td>${escapeHtml(item.description || "Item")}</td>
-            <td style="text-align:center;">${escapeHtml(quantity)}</td>
-            <td style="text-align:right;">${formatMoney(rate)}</td>
-            <td style="text-align:right;">${formatMoney(discount)}</td>
-            <td style="text-align:right;">${formatMoney(lineTotal)}</td>
+          const bg = i % 2 ? "#ffffff" : "#fbfbfc";
+          return `<tr style="background:${bg};">
+            <td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(item.description || "Item")}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#555555;text-align:center;border-bottom:1px solid #eeeeee;">${escapeHtml(quantity)}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#555555;text-align:right;border-bottom:1px solid #eeeeee;">${formatMoney(rate)}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#2C2D3F;text-align:right;border-bottom:1px solid #eeeeee;">${formatMoney(lineTotal)}</td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="5">Services Rendered</td></tr>`;
+    : `<tr><td colspan="4" style="padding:10px 14px;font-size:13px;color:#2C2D3F;">Services Rendered</td></tr>`;
 
   const bankingInfo = invoice.payment_terms
     ? escapeHtmlWithBreaks(
@@ -943,35 +988,52 @@ async function handleSendInvoice(request, env, invoiceId) {
       )
     : getDefaultBankingInfo(invoice.invoice_number);
 
-  const htmlContent = `
-    <div style="font-family: Arial, sans-serif; color: #2C2D3F;">
-      <h2 style="color:#F05023; margin-bottom: 0;">Invoice ${escapeHtml(invoice.invoice_number)}</h2>
-      <p>Hi ${escapeHtml(invoice.client_name || "there")},</p>
-      <p>Your invoice is ready. You can view and download it here:</p>
-      <p><a href="${escapeHtml(invoiceUrl)}">${escapeHtml(invoiceUrl)}</a></p>
-      ${customMessage ? `<p>${escapeHtml(customMessage)}</p>` : ""}
-      <h3 style="margin-top: 20px;">Invoice Summary</h3>
-      <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
-        <thead style="background:#FFF5F1;">
-          <tr>
-            <th align="left">Description</th>
-            <th align="center">Qty</th>
-            <th align="right">Rate</th>
-            <th align="right">Discount</th>
-            <th align="right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsRows}
-        </tbody>
-      </table>
-      <p style="margin-top: 12px;"><strong>Total Due:</strong> ${formatMoney(
-        Number(invoice.amount || 0) + Number(invoice.tax || 0),
-      )}</p>
-      <h3 style="margin-top: 20px;">Banking Details</h3>
-      <p>${bankingInfo}</p>
-    </div>
+  const total = Number(invoice.amount || 0) + Number(invoice.tax || 0);
+  const dueDate = invoice.due_date
+    ? new Date(invoice.due_date).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(invoice.client_name || "there")},</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Thank you for your business. Here is the summary of invoice <strong>${escapeHtml(invoice.invoice_number)}</strong>. Use the button below to view or download the full invoice.</p>
+    ${customMessage ? `<table role="presentation" width="100%" style="margin:0 0 22px;"><tr><td style="background:#FFF5F1;border-left:3px solid #F05023;border-radius:4px;padding:12px 16px;font-size:14px;color:#555555;line-height:1.7;">${escapeHtml(customMessage)}</td></tr></table>` : ""}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF5F1;border-radius:8px;margin:0 0 24px;">
+      <tr><td style="padding:20px 24px;">
+        <div style="font-size:11px;color:#a06a58;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Amount Due</div>
+        <div style="font-size:30px;font-weight:bold;color:#F05023;margin-top:6px;">${formatMoney(total)}</div>
+        ${dueDate ? `<div style="font-size:13px;color:#7a7a80;margin-top:6px;">Due by ${escapeHtml(dueDate)}</div>` : ""}
+      </td></tr>
+    </table>
+    ${emailButton(invoiceUrl, "View & Download Invoice")}
+    ${emailSectionLabel("Invoice Summary")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 20px;">
+      <thead><tr style="background:#2C2D3F;">
+        <th align="left" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Description</th>
+        <th align="center" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Qty</th>
+        <th align="right" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Rate</th>
+        <th align="right" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Amount</th>
+      </tr></thead>
+      <tbody>${itemsRows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" align="right" style="padding:12px 14px;font-size:14px;font-weight:bold;color:#2C2D3F;border-top:2px solid #eeeeee;">Total Due</td>
+        <td align="right" style="padding:12px 14px;font-size:15px;font-weight:bold;color:#F05023;border-top:2px solid #eeeeee;">${formatMoney(total)}</td>
+      </tr></tfoot>
+    </table>
+    ${emailSectionLabel("Banking Details")}
+    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;">
+      <tr><td style="padding:16px 18px;font-size:13px;color:#2C2D3F;line-height:1.9;">${bankingInfo}</td></tr>
+    </table>
   `;
+
+  const htmlContent = emailShell({
+    label: `Invoice ${invoice.invoice_number}`,
+    accent: "#F05023",
+    bodyHtml,
+  });
 
   const payload = {
     sender: {
@@ -1285,26 +1347,40 @@ async function handleSendReceipt(request, env, paymentId) {
   );
   const settled = balance <= 0;
 
-  const htmlContent = `
-    <div style="font-family: Arial, sans-serif; color: #2C2D3F;">
-      <h2 style="color:#1f8a52; margin-bottom: 0;">Payment Receipt ${escapeHtml(receiptNumber)}</h2>
-      <p>Hi ${escapeHtml(invoice.client_name || "there")},</p>
-      <p>Thank you for your payment.${settled ? " Your invoice is now fully paid." : ""}</p>
-      <p>You can view and download your receipt here:</p>
-      <p><a href="${escapeHtml(receiptUrl)}">${escapeHtml(receiptUrl)}</a></p>
-      <h3 style="margin-top: 20px;">Receipt Summary</h3>
-      <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
-        <tbody>
-          <tr><td>Invoice</td><td style="text-align:right;">${escapeHtml(invoice.invoice_number)}</td></tr>
-          <tr><td>Payment Received</td><td style="text-align:right;">${formatMoney(paymentAmount)}</td></tr>
-          <tr><td>Invoice Total</td><td style="text-align:right;">${formatMoney(total)}</td></tr>
-          <tr><td>Total Paid to Date</td><td style="text-align:right;">${formatMoney(paid)}</td></tr>
-          <tr><td><strong>Balance Due</strong></td><td style="text-align:right;"><strong>${formatMoney(balance)}</strong></td></tr>
-        </tbody>
-      </table>
-      ${payment.payment_method ? `<p style="margin-top:12px;">Payment method: ${escapeHtml(payment.payment_method)}</p>` : ""}
-    </div>
+  const summaryRow = (labelText, valueText, strong) => `
+    <tr>
+      <td style="padding:9px 14px;font-size:13px;color:${strong ? "#2C2D3F" : "#555555"};border-bottom:1px solid #eeeeee;${strong ? "font-weight:bold;" : ""}">${escapeHtml(labelText)}</td>
+      <td align="right" style="padding:9px 14px;font-size:13px;color:${strong ? "#2C2D3F" : "#555555"};text-align:right;border-bottom:1px solid #eeeeee;${strong ? "font-weight:bold;" : ""}">${valueText}</td>
+    </tr>`;
+
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(invoice.client_name || "there")},</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Thank you for your payment${settled ? " — your invoice is now fully settled" : ""}. Here is your receipt for invoice <strong>${escapeHtml(invoice.invoice_number)}</strong>. Use the button below to view or download it.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eefaf2;border-radius:8px;margin:0 0 24px;">
+      <tr><td style="padding:20px 24px;">
+        <div style="font-size:11px;color:#2f7d55;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Payment Received</div>
+        <div style="font-size:30px;font-weight:bold;color:#1f8a52;margin-top:6px;">${formatMoney(paymentAmount)}</div>
+        <div style="font-size:13px;color:#5a7a68;margin-top:6px;">Receipt ${escapeHtml(receiptNumber)}${payment.payment_method ? ` · ${escapeHtml(payment.payment_method)}` : ""}</div>
+      </td></tr>
+    </table>
+    ${emailButton(receiptUrl, "View & Download Receipt", "#1f8a52")}
+    ${emailSectionLabel("Receipt Summary")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;">
+      <tbody>
+        ${summaryRow("Invoice", escapeHtml(invoice.invoice_number))}
+        ${summaryRow("Payment Received", formatMoney(paymentAmount))}
+        ${summaryRow("Invoice Total", formatMoney(total))}
+        ${summaryRow("Total Paid to Date", formatMoney(paid))}
+        ${summaryRow(settled ? "Balance Due" : "Balance Outstanding", `<span style="color:${settled ? "#1f8a52" : "#F05023"};">${formatMoney(balance)}</span>`, true)}
+      </tbody>
+    </table>
   `;
+
+  const htmlContent = emailShell({
+    label: `Receipt ${receiptNumber}`,
+    accent: "#1f8a52",
+    bodyHtml,
+  });
 
   const payload = {
     sender: {
