@@ -1047,11 +1047,11 @@ async function handleSendInvoice(request, env, invoiceId) {
     htmlContent,
   };
 
-  // Keep a copy of every invoice on file by CC'ing the business inbox.
-  const ccEmail = env.BREVO_CC_EMAIL || "info@beplugged.co.za";
-  if (ccEmail && ccEmail !== invoice.client_email) {
-    payload.cc = [
-      { email: ccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
+  // Keep a copy of every invoice on file by BCC'ing the business inbox.
+  const bccEmail = env.BREVO_BCC_EMAIL || "info@beplugged.co.za";
+  if (bccEmail && bccEmail !== invoice.client_email) {
+    payload.bcc = [
+      { email: bccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
     ];
   }
 
@@ -1402,11 +1402,11 @@ async function handleSendReceipt(request, env, paymentId) {
     htmlContent,
   };
 
-  // Keep a copy of every receipt on file by CC'ing the business inbox.
-  const ccEmail = env.BREVO_CC_EMAIL || "info@beplugged.co.za";
-  if (ccEmail && ccEmail !== invoice.client_email) {
-    payload.cc = [
-      { email: ccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
+  // Keep a copy of every receipt on file by BCC'ing the business inbox.
+  const bccEmail = env.BREVO_BCC_EMAIL || "info@beplugged.co.za";
+  if (bccEmail && bccEmail !== invoice.client_email) {
+    payload.bcc = [
+      { email: bccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
     ];
   }
 
