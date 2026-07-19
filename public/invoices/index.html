@@ -626,16 +626,34 @@
         ? `invoice-${currentInvoice.invoice_number}.pdf`
         : 'invoice.pdf';
 
+      // The container uses min-height:297mm and a shadow to look like A4 on
+      // screen. html2pdf captures the element as-is, so that fixed height forces
+      // a near-empty second page and top/bottom white space. Neutralise it for
+      // the capture, then restore.
+      const prev = target.getAttribute('style') || '';
+      target.style.minHeight = 'auto';
+      target.style.height = 'auto';
+      target.style.boxShadow = 'none';
+      target.style.borderRadius = '0';
+      target.style.margin = '0';
+      target.style.width = '210mm';
+      target.style.padding = '12mm';
+
+      const restore = () => target.setAttribute('style', prev);
+
       html2pdf()
         .set({
-          margin: 8,
+          margin: 0,
           filename,
           image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: { scale: 2, useCORS: true, windowWidth: target.scrollWidth },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
         .from(target)
-        .save();
+        .save()
+        .then(restore)
+        .catch(restore);
     }
   </script>
 </body>
