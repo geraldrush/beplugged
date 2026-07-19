@@ -926,10 +926,12 @@ function emailShell({ label, accent = "#F05023", bodyHtml }) {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;">
     <tr><td align="center" style="padding:24px 12px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
-        <tr><td style="background-color:#2C2D3F;padding:22px 32px;">
+        <tr><td style="background-color:#ffffff;padding:24px 32px;">
           <table role="presentation" width="100%"><tr>
-            <td style="color:#ffffff;font-size:19px;font-weight:bold;letter-spacing:1.5px;">BEPLUGGED&nbsp;TECH</td>
-            <td align="right" style="color:${accent};font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">${escapeHtml(label)}</td>
+            <td style="vertical-align:middle;">
+              <img src="https://beplugged.co.za/img/logo.png" alt="Beplugged Tech" width="150" height="102" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;" />
+            </td>
+            <td align="right" style="vertical-align:middle;color:${accent};font-size:13px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">${escapeHtml(label)}</td>
           </tr></table>
         </td></tr>
         <tr><td style="height:4px;background-color:${accent};font-size:0;line-height:0;">&nbsp;</td></tr>
