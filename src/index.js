@@ -84,7 +84,7 @@ export default {
       }
 
       if (path.startsWith("/api/admin/receipts")) {
-        return await handleReceipts(env);
+        return await handleReceipts(request, env, path, method);
       }
 
       if (path.startsWith("/api/invoice/")) {
@@ -1211,25 +1211,146 @@ async function handlePublicReceiptView(paymentId, env) {
     });
 }
 
-async function handleReceipts(env) {
+function receiptPublicUrl(request, paymentId) {
+  return `${new URL(request.url).origin}/receipts/index.html?id=${encodeURIComponent(
+    paymentId,
+  )}`;
+}
+
+async function handleReceipts(request, env, path, method) {
   await ensureSchema(env);
-  const result = await env.DB.prepare(
-    `SELECT p.id, p.invoice_id, p.amount, p.amount_cents, p.payment_date,
-            p.payment_method, p.notes, p.created_at,
-            i.invoice_number, i.client_name, i.client_email
-     FROM payments p
-     LEFT JOIN invoices i ON i.id = p.invoice_id
-     ORDER BY p.created_at DESC
-     LIMIT 200`,
-  ).all();
-  const receipts = (result.results || []).map((payment) => ({
-    ...payment,
-    amount: centsToAmount(
-      persistedCents(payment, "amount_cents", "amount", "Payment amount"),
-    ),
-    receipt_number: receiptNumberFor(payment),
-  }));
-  return json(receipts);
+  const segments = path.split("/");
+  const paymentId = segments[4];
+  const action = segments[5];
+
+  if (method === "POST" && paymentId && action === "send") {
+    return handleSendReceipt(request, env, paymentId);
+  }
+
+  if (method === "GET" && !paymentId) {
+    const result = await env.DB.prepare(
+      `SELECT p.id, p.invoice_id, p.amount, p.amount_cents, p.payment_date,
+              p.payment_method, p.notes, p.created_at,
+              i.invoice_number, i.client_name, i.client_email
+       FROM payments p
+       LEFT JOIN invoices i ON i.id = p.invoice_id
+       ORDER BY p.created_at DESC
+       LIMIT 200`,
+    ).all();
+    const receipts = (result.results || []).map((payment) => ({
+      ...payment,
+      amount: centsToAmount(
+        persistedCents(payment, "amount_cents", "amount", "Payment amount"),
+      ),
+      receipt_number: receiptNumberFor(payment),
+    }));
+    return json(receipts);
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleSendReceipt(request, env, paymentId) {
+  if (!env.BREVO_API_KEY) {
+    return json({ error: "Missing BREVO_API_KEY secret" }, { status: 500 });
+  }
+  if (!env.BREVO_SENDER_EMAIL) {
+    return json({ error: "Missing BREVO_SENDER_EMAIL variable" }, { status: 500 });
+  }
+
+  const payment = await env.DB.prepare("SELECT * FROM payments WHERE id = ?")
+    .bind(paymentId)
+    .first();
+  if (!payment) {
+    return json({ error: "Receipt not found" }, { status: 404 });
+  }
+  const invoice = await env.DB.prepare("SELECT * FROM invoices WHERE id = ?")
+    .bind(payment.invoice_id)
+    .first();
+  if (!invoice) {
+    return json({ error: "Invoice for this receipt not found" }, { status: 404 });
+  }
+  if (!invoice.client_email) {
+    return json(
+      { error: "No client email on file for this invoice" },
+      { status: 400 },
+    );
+  }
+
+  const receiptNumber = receiptNumberFor(payment);
+  const receiptUrl = receiptPublicUrl(request, payment.id);
+  const { total, paid, balance } = await getInvoiceBalance(env, invoice);
+  const paymentAmount = centsToAmount(
+    persistedCents(payment, "amount_cents", "amount", "Payment amount"),
+  );
+  const settled = balance <= 0;
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; color: #2C2D3F;">
+      <h2 style="color:#1f8a52; margin-bottom: 0;">Payment Receipt ${escapeHtml(receiptNumber)}</h2>
+      <p>Hi ${escapeHtml(invoice.client_name || "there")},</p>
+      <p>Thank you for your payment.${settled ? " Your invoice is now fully paid." : ""}</p>
+      <p>You can view and download your receipt here:</p>
+      <p><a href="${escapeHtml(receiptUrl)}">${escapeHtml(receiptUrl)}</a></p>
+      <h3 style="margin-top: 20px;">Receipt Summary</h3>
+      <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse: collapse;">
+        <tbody>
+          <tr><td>Invoice</td><td style="text-align:right;">${escapeHtml(invoice.invoice_number)}</td></tr>
+          <tr><td>Payment Received</td><td style="text-align:right;">${formatMoney(paymentAmount)}</td></tr>
+          <tr><td>Invoice Total</td><td style="text-align:right;">${formatMoney(total)}</td></tr>
+          <tr><td>Total Paid to Date</td><td style="text-align:right;">${formatMoney(paid)}</td></tr>
+          <tr><td><strong>Balance Due</strong></td><td style="text-align:right;"><strong>${formatMoney(balance)}</strong></td></tr>
+        </tbody>
+      </table>
+      ${payment.payment_method ? `<p style="margin-top:12px;">Payment method: ${escapeHtml(payment.payment_method)}</p>` : ""}
+    </div>
+  `;
+
+  const payload = {
+    sender: {
+      name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+      email: env.BREVO_SENDER_EMAIL,
+    },
+    to: [{ email: invoice.client_email, name: invoice.client_name || "" }],
+    subject: `Receipt ${receiptNumber} from Beplugged Tech`,
+    htmlContent,
+  };
+  if (env.BREVO_REPLY_TO) {
+    payload.replyTo = {
+      email: env.BREVO_REPLY_TO,
+      name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    };
+  }
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return json({ error: "Brevo send failed", details: errorText }, { status: 502 });
+  }
+
+  await recordAudit(env, {
+    action: "receipt_sent",
+    entity_type: "invoice",
+    entity_id: invoice.id,
+    entity_number: invoice.invoice_number,
+    details: {
+      payment_id: payment.id,
+      receipt_number: receiptNumber,
+      recipient: invoice.client_email,
+    },
+  });
+
+  const result = await response.json().catch(() => ({}));
+  return json({ success: true, result });
 }
 
 async function handleQuotes(request, env, path, method) {

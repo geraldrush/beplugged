@@ -1906,11 +1906,28 @@
         window.open("/receipts/index.html?id=" + encodeURIComponent(paymentId), "_blank");
       }
 
+      function viewReceipt(paymentId) {
+        window.open("/receipts/index.html?id=" + encodeURIComponent(paymentId), "_blank");
+      }
+
       function downloadReceipt(paymentId) {
         window.open(
           "/receipts/index.html?id=" + encodeURIComponent(paymentId) + "&download=1",
           "_blank",
         );
+      }
+
+      async function sendReceipt(paymentId) {
+        if (!confirm("Email this receipt to the client on file?")) {
+          return;
+        }
+        const result = await apiCall(
+          "/admin/receipts/" + paymentId + "/send",
+          "POST",
+        );
+        if (result && result.success) {
+          showAlert("Receipt sent successfully!", "success");
+        }
       }
 
       async function loadReceipts() {
@@ -1937,8 +1954,9 @@
             <td>${escapeHtml(r.payment_method || "-")}</td>
             <td>
               <div class="action-buttons">
-                <button class="btn btn-sm btn-info" onclick="printReceipt('${escapeAttr(r.id)}')">Print</button>
+                <button class="btn btn-sm btn-info" onclick="viewReceipt('${escapeAttr(r.id)}')">View</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadReceipt('${escapeAttr(r.id)}')">Download</button>
+                <button class="btn btn-sm btn-primary" onclick="sendReceipt('${escapeAttr(r.id)}')">Send</button>
               </div>
             </td>
           </tr>`;
