@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice View</title>
   <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" href="/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
       --brand-primary: #F05023;
@@ -333,8 +333,36 @@
     }
 
     @media (max-width: 768px) {
+      body {
+        padding: 1rem 0.5rem;
+      }
+
       .invoice-container {
         min-height: auto;
+        padding: 1.25rem;
+      }
+
+      .invoice-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .brand-logo {
+        width: 90px;
+      }
+
+      .invoice-title {
+        font-size: 1.15rem;
+      }
+
+      /* Status / date row: stack instead of overlapping */
+      .meta-row {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .meta-row > div {
+        text-align: left !important;
       }
 
       .totals-footer {
@@ -351,6 +379,18 @@
 
       .summary {
         width: 100%;
+      }
+
+      .banking-info {
+        min-width: 0;
+      }
+
+      /* Keep the line-items table readable instead of overflowing */
+      table th,
+      table td {
+        padding: 0.45rem 0.4rem;
+        font-size: 0.72rem;
+        word-break: break-word;
       }
 
       .action-buttons {
@@ -519,7 +559,7 @@
           <img src="/img/logo.png" alt="Beplugged Tech" class="brand-logo">
         </div>
 
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+        <div class="meta-row" style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
           <div>
             <p style="margin: 0;"><strong>Status:</strong> <span class="status-badge status-${safeStatusClass(invoice.status)}">${displayStatus(invoice.status)}</span></p>
           </div>

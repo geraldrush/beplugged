@@ -929,7 +929,7 @@ function emailShell({ label, accent = "#F05023", bodyHtml }) {
         <tr><td style="background-color:#ffffff;padding:24px 32px;">
           <table role="presentation" width="100%"><tr>
             <td style="vertical-align:middle;">
-              <img src="https://beplugged.co.za/img/logo.png" alt="Beplugged Tech" width="150" height="102" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;" />
+              <img src="https://beplugged.co.za/img/logo.png" alt="Beplugged Tech" width="120" height="81" style="display:block;width:120px;max-width:120px;height:auto;border:0;outline:none;text-decoration:none;" />
             </td>
             <td align="right" style="vertical-align:middle;color:${accent};font-size:13px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">${escapeHtml(label)}</td>
           </tr></table>
