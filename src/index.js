@@ -1047,6 +1047,14 @@ async function handleSendInvoice(request, env, invoiceId) {
     htmlContent,
   };
 
+  // Keep a copy of every invoice on file by CC'ing the business inbox.
+  const ccEmail = env.BREVO_CC_EMAIL || "info@beplugged.co.za";
+  if (ccEmail && ccEmail !== invoice.client_email) {
+    payload.cc = [
+      { email: ccEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" },
+    ];
+  }
+
   if (env.BREVO_REPLY_TO) {
     payload.replyTo = {
       email: env.BREVO_REPLY_TO,

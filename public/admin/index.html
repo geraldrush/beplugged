@@ -1244,22 +1244,9 @@
           return;
         }
 
-        const analytics = await apiCall("/admin/analytics");
-        if (analytics && analytics.kpis) {
-          document.getElementById("kpi-collected").textContent = fmtCurrency(
-            analytics.kpis.collected,
-          );
-          document.getElementById("kpi-outstanding").textContent = fmtCurrency(
-            analytics.kpis.outstanding,
-          );
-          document.getElementById("kpi-invoiced").textContent = fmtCurrency(
-            analytics.kpis.invoiced,
-          );
-          document.getElementById("kpi-pending").textContent =
-            analytics.kpis.invoices_pending;
-          renderCharts(analytics);
-        }
-
+        // Render the recent invoices FIRST. Previously the charts were drawn
+        // before this, so any Chart.js error aborted loadDashboard and left the
+        // invoice list stale until a manual page refresh.
         const invoices = await apiCall("/admin/invoices");
         if (Array.isArray(invoices)) {
           const list = document.getElementById("recent-invoices-list");
@@ -1283,6 +1270,28 @@
                 .join("")
             : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
         }
+
+        // Analytics + charts second, isolated so a failure can never block the
+        // list above.
+        const analytics = await apiCall("/admin/analytics");
+        if (analytics && analytics.kpis) {
+          document.getElementById("kpi-collected").textContent = fmtCurrency(
+            analytics.kpis.collected,
+          );
+          document.getElementById("kpi-outstanding").textContent = fmtCurrency(
+            analytics.kpis.outstanding,
+          );
+          document.getElementById("kpi-invoiced").textContent = fmtCurrency(
+            analytics.kpis.invoiced,
+          );
+          document.getElementById("kpi-pending").textContent =
+            analytics.kpis.invoices_pending;
+          try {
+            renderCharts(analytics);
+          } catch (err) {
+            console.error("Dashboard chart render failed:", err);
+          }
+        }
       }
 
       function makeChart(canvasId, config) {
@@ -1293,10 +1302,17 @@
         if (!canvas) {
           return;
         }
-        if (chartRegistry[canvasId]) {
-          chartRegistry[canvasId].destroy();
+        try {
+          // Reuse-safe: destroy any instance we tracked AND any orphan Chart.js
+          // still bound to this canvas (prevents "Canvas is already in use").
+          const existing = chartRegistry[canvasId] || Chart.getChart(canvas);
+          if (existing) {
+            existing.destroy();
+          }
+          chartRegistry[canvasId] = new Chart(canvas, config);
+        } catch (err) {
+          console.error("Chart init failed for", canvasId, err);
         }
-        chartRegistry[canvasId] = new Chart(canvas, config);
       }
 
       function currencyTick(value) {
