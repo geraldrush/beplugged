@@ -38,6 +38,76 @@ const DOCUMENT_STATUSES = new Set([
   "approved",
   "archived",
 ]);
+const REQUIREMENT_STATUSES = new Set([
+  "draft",
+  "discovery",
+  "review",
+  "approved",
+  "converted",
+]);
+const REQUIREMENT_TEMPLATES = new Set([
+  "website",
+  "erp",
+  "crm",
+  "mobile_app",
+  "ecommerce",
+  "ai_project",
+  "government_project",
+  "training_platform",
+  "school_system",
+  "custom",
+]);
+const QUALITY_RECORD_TYPES = new Set([
+  "policy",
+  "sop",
+  "work_instruction",
+  "template",
+  "register",
+  "internal_audit",
+  "external_audit",
+  "corrective_action",
+  "preventive_action",
+  "non_conformity",
+  "customer_feedback",
+  "management_review",
+  "kpi",
+  "continuous_improvement",
+  "record",
+  "lesson_learned",
+]);
+const QUALITY_STATUSES = new Set([
+  "draft",
+  "active",
+  "review",
+  "closed",
+  "archived",
+]);
+const SECURITY_RECORD_TYPES = new Set([
+  "asset",
+  "asset_register",
+  "risk",
+  "risk_assessment",
+  "access_control",
+  "password_management",
+  "security_incident",
+  "vulnerability",
+  "business_continuity",
+  "disaster_recovery",
+  "backup",
+  "recovery_test",
+  "security_awareness",
+  "risk_register",
+  "access_review",
+]);
+const SECURITY_STATUSES = new Set([
+  "open",
+  "assessing",
+  "active",
+  "mitigated",
+  "closed",
+  "archived",
+]);
+const RISK_LEVELS = new Set(["low", "medium", "high", "critical"]);
 const PRIORITIES = new Set(["low", "medium", "high"]);
 
 class RequestError extends Error {
@@ -106,12 +176,24 @@ export default {
         return await handleLeads(request, env, path, method);
       }
 
+      if (path.startsWith("/api/admin/requirements")) {
+        return await handleRequirements(request, env, path, method);
+      }
+
       if (path.startsWith("/api/admin/projects")) {
         return await handleProjects(request, env, path, method);
       }
 
       if (path.startsWith("/api/admin/documents")) {
         return await handleDocuments(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/quality")) {
+        return await handleQualityRecords(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/security")) {
+        return await handleSecurityRecords(request, env, path, method);
       }
 
       if (path.startsWith("/api/admin/team")) {
@@ -626,6 +708,39 @@ function normalizeLeadPayload(raw) {
   };
 }
 
+function normalizeRequirementPayload(raw) {
+  return {
+    title: trimText(raw.title, "Requirement title", {
+      required: true,
+      maxLength: 240,
+    }),
+    client_name: trimText(raw.client_name, "Client name", {
+      required: true,
+      maxLength: 200,
+    }),
+    contact_name: trimText(raw.contact_name, "Contact name", { maxLength: 200 }),
+    template: normalizeKey(
+      raw.template,
+      "Requirement template",
+      REQUIREMENT_TEMPLATES,
+      "website",
+    ),
+    status: normalizeKey(
+      raw.status,
+      "Requirement status",
+      REQUIREMENT_STATUSES,
+      "draft",
+    ),
+    priority: normalizeKey(raw.priority, "Requirement priority", PRIORITIES, "medium"),
+    owner: trimText(raw.owner, "Owner", { maxLength: 200 }),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    goals: trimText(raw.goals, "Business goals", { maxLength: 4000 }),
+    scope: trimText(raw.scope, "Scope", { maxLength: 4000 }),
+    constraints: trimText(raw.constraints, "Constraints", { maxLength: 3000 }),
+    notes: trimText(raw.notes, "Requirement notes", { maxLength: 3000 }),
+  };
+}
+
 function normalizeProjectPayload(raw) {
   const budgetCents = amountToCents(raw.budget || 0, "Budget");
   return {
@@ -664,6 +779,69 @@ function normalizeDocumentPayload(raw) {
     linked_id: trimText(raw.linked_id, "Linked id", { maxLength: 160 }),
     location_url: normalizeOptionalUrl(raw.location_url, "Location URL"),
     notes: trimText(raw.notes, "Document notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeQualityPayload(raw) {
+  return {
+    title: trimText(raw.title, "Quality title", {
+      required: true,
+      maxLength: 240,
+    }),
+    record_type: normalizeKey(
+      raw.record_type,
+      "Quality record type",
+      QUALITY_RECORD_TYPES,
+      "policy",
+    ),
+    status: normalizeKey(raw.status, "Quality status", QUALITY_STATUSES, "draft"),
+    owner: trimText(raw.owner, "Quality owner", { maxLength: 200 }),
+    project_name: trimText(raw.project_name, "Project name", { maxLength: 200 }),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    review_date: normalizeDate(raw.review_date, "Review date"),
+    evidence_url: normalizeOptionalUrl(raw.evidence_url, "Evidence URL"),
+    description: trimText(raw.description, "Description", { maxLength: 4000 }),
+    notes: trimText(raw.notes, "Quality notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeSecurityPayload(raw) {
+  return {
+    title: trimText(raw.title, "Security title", {
+      required: true,
+      maxLength: 240,
+    }),
+    record_type: normalizeKey(
+      raw.record_type,
+      "Security record type",
+      SECURITY_RECORD_TYPES,
+      "risk",
+    ),
+    status: normalizeKey(raw.status, "Security status", SECURITY_STATUSES, "open"),
+    risk_level: normalizeKey(raw.risk_level, "Risk level", RISK_LEVELS, "medium"),
+    owner: trimText(raw.owner, "Security owner", { maxLength: 200 }),
+    asset_name: trimText(raw.asset_name, "Asset name", { maxLength: 200 }),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    review_date: normalizeDate(raw.review_date, "Review date"),
+    evidence_url: normalizeOptionalUrl(raw.evidence_url, "Evidence URL"),
+    description: trimText(raw.description, "Description", { maxLength: 4000 }),
+    mitigation: trimText(raw.mitigation, "Mitigation", { maxLength: 4000 }),
+    notes: trimText(raw.notes, "Security notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeClientPayload(raw) {
+  return {
+    name: trimText(raw.name, "Client name", { required: true, maxLength: 200 }),
+    email: validateEmail(raw.email, "Client email"),
+    phone: trimText(raw.phone, "Client phone", { maxLength: 100 }),
+    address: trimText(raw.address, "Client address", { maxLength: 1000 }),
+    city: trimText(raw.city, "Client city", { maxLength: 100 }),
+    state: trimText(raw.state, "Client state", { maxLength: 100 }),
+    postal_code: trimText(raw.postal_code, "Client postal code", {
+      maxLength: 30,
+    }),
+    country: trimText(raw.country, "Client country", { maxLength: 100 }),
   };
 }
 
@@ -779,6 +957,26 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS requirements (
+      id TEXT PRIMARY KEY,
+      requirement_number TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      contact_name TEXT,
+      template TEXT NOT NULL DEFAULT 'website' CHECK (template IN ('website', 'erp', 'crm', 'mobile_app', 'ecommerce', 'ai_project', 'government_project', 'training_platform', 'school_system', 'custom')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'discovery', 'review', 'approved', 'converted')),
+      priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+      owner TEXT,
+      due_date DATE,
+      goals TEXT,
+      scope TEXT,
+      constraints TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       project_code TEXT NOT NULL UNIQUE,
@@ -815,6 +1013,44 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS quality_records (
+      id TEXT PRIMARY KEY,
+      record_number TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      record_type TEXT NOT NULL DEFAULT 'policy' CHECK (record_type IN ('policy', 'sop', 'work_instruction', 'template', 'register', 'internal_audit', 'external_audit', 'corrective_action', 'preventive_action', 'non_conformity', 'customer_feedback', 'management_review', 'kpi', 'continuous_improvement', 'record', 'lesson_learned')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'review', 'closed', 'archived')),
+      owner TEXT,
+      project_name TEXT,
+      due_date DATE,
+      review_date DATE,
+      evidence_url TEXT,
+      description TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS security_records (
+      id TEXT PRIMARY KEY,
+      record_number TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      record_type TEXT NOT NULL DEFAULT 'risk' CHECK (record_type IN ('asset', 'asset_register', 'risk', 'risk_assessment', 'access_control', 'password_management', 'security_incident', 'vulnerability', 'business_continuity', 'disaster_recovery', 'backup', 'recovery_test', 'security_awareness', 'risk_register', 'access_review')),
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'assessing', 'active', 'mitigated', 'closed', 'archived')),
+      risk_level TEXT NOT NULL DEFAULT 'medium' CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+      owner TEXT,
+      asset_name TEXT,
+      due_date DATE,
+      review_date DATE,
+      evidence_url TEXT,
+      description TEXT,
+      mitigation TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS team_members (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -840,6 +1076,12 @@ async function runSchemaSetup(env) {
     "CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up)",
   ).run();
   await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_requirements_due_date ON requirements (due_date)",
+  ).run();
+  await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_projects_status ON projects (status)",
   ).run();
   await env.DB.prepare(
@@ -852,6 +1094,27 @@ async function runSchemaSetup(env) {
     "CREATE INDEX IF NOT EXISTS idx_documents_review_date ON documents (review_date)",
   ).run();
   await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_quality_records_type ON quality_records (record_type)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_quality_records_status ON quality_records (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_quality_records_review_date ON quality_records (review_date)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_security_records_type ON security_records (record_type)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_security_records_status ON security_records (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_security_records_risk_level ON security_records (risk_level)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_security_records_review_date ON security_records (review_date)",
+  ).run();
+  await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email)",
   ).run();
   await ensureColumn(env, "invoices", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
@@ -859,6 +1122,265 @@ async function runSchemaSetup(env) {
   await ensureColumn(env, "quotes", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "quotes", "tax_cents", "tax_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "payments", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
+  await seedEditableReferenceData(env);
+}
+
+async function seedEditableReferenceData(env) {
+  const policyCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quality_records WHERE record_type = 'policy'",
+  ).first();
+  if (Number(policyCount?.count || 0) === 0) {
+    const policySeeds = [
+      {
+        id: "demo_qms_quality_policy",
+        record_number: "QMS-2026-POL-001",
+        title: "Quality Management Policy",
+        record_type: "policy",
+        status: "active",
+        owner: "Managing Director",
+        project_name: "Company-wide",
+        due_date: "2026-09-30",
+        review_date: "2026-10-31",
+        description:
+          "ISO 9001 policy covering policies, SOPs, work instructions, templates, registers, internal audits, external audits, corrective actions, preventive actions, non-conformities, customer feedback, management reviews, KPIs, and continuous improvement.",
+        notes:
+          "Use this as the top-level quality policy. Every project should automatically produce ISO evidence.",
+      },
+      {
+        id: "demo_qms_security_policy",
+        record_number: "QMS-2026-POL-002",
+        title: "Information Security Policy",
+        record_type: "policy",
+        status: "review",
+        owner: "Security Owner",
+        project_name: "Internal Systems",
+        due_date: "2026-08-31",
+        review_date: "2026-09-30",
+        description:
+          "ISO 27001 policy covering assets, asset register, risks, risk assessments, access control, password management, security incidents, vulnerabilities, business continuity, disaster recovery, backups, recovery tests, and security awareness.",
+        notes:
+          "Keep this linked to the Security register so assets, risks, access reviews, incidents, backups, and continuity records stay together.",
+      },
+    ];
+    for (const seed of policySeeds) {
+      await insertQualitySeed(env, seed);
+    }
+  }
+
+  const sopCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quality_records WHERE record_type = 'sop'",
+  ).first();
+  if (Number(sopCount?.count || 0) === 0) {
+    const sopSeeds = [
+      {
+        id: "demo_qms_project_evidence_sop",
+        record_number: "QMS-2026-SOP-001",
+        title: "Project ISO Evidence SOP",
+        record_type: "sop",
+        status: "active",
+        owner: "Project Lead",
+        project_name: "Project Delivery",
+        due_date: "2026-08-15",
+        review_date: "2026-10-15",
+        description:
+          "Procedure for producing ISO evidence from requirements, project delivery, document reviews, lessons learned, corrective actions, and customer feedback.",
+        notes:
+          "Use this SOP to make sure project work creates quality records without a separate admin exercise.",
+      },
+      {
+        id: "demo_qms_invoice_payment_sop",
+        record_number: "QMS-2026-SOP-002",
+        title: "Invoice Issue and Payment SOP",
+        record_type: "sop",
+        status: "active",
+        owner: "Finance",
+        project_name: "Billing",
+        due_date: "2026-08-20",
+        review_date: "2026-11-30",
+        description:
+          "Procedure for creating invoices, issuing client documents, recording partial or full payments, and keeping receipt evidence.",
+        notes:
+          "Links finance records to customer communication and audit evidence.",
+      },
+    ];
+    for (const seed of sopSeeds) {
+      await insertQualitySeed(env, seed);
+    }
+  }
+
+  const qualityEvidenceCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quality_records WHERE record_type NOT IN ('policy', 'sop')",
+  ).first();
+  if (Number(qualityEvidenceCount?.count || 0) === 0) {
+    const qualitySeeds = [
+      {
+        id: "demo_qms_customer_feedback",
+        record_number: "QMS-2026-FDB-001",
+        title: "Customer Satisfaction Register",
+        record_type: "customer_feedback",
+        status: "active",
+        owner: "Operations",
+        project_name: "All Projects",
+        due_date: "2026-09-15",
+        review_date: "2026-10-31",
+        description:
+          "Register for customer feedback and satisfaction evidence across completed projects and support interactions.",
+        notes:
+          "Feeds management reviews, KPIs, continuous improvement, corrective actions, and preventive actions.",
+      },
+      {
+        id: "demo_qms_corrective_action",
+        record_number: "QMS-2026-CAPA-001",
+        title: "Corrective Action: Late Sign-off",
+        record_type: "corrective_action",
+        status: "draft",
+        owner: "Project Lead",
+        project_name: "Client Portal Setup",
+        due_date: "2026-08-10",
+        review_date: "2026-08-31",
+        description:
+          "Corrective action record for a delayed client sign-off and the process change needed to prevent repeat delivery delays.",
+        notes:
+          "Use this to track root cause, action owner, due date, verification, and closure evidence.",
+      },
+      {
+        id: "demo_qms_management_review",
+        record_number: "QMS-2026-MRV-001",
+        title: "Quarterly Management Review",
+        record_type: "management_review",
+        status: "review",
+        owner: "Managing Director",
+        project_name: "Quality Management",
+        due_date: "2026-09-30",
+        review_date: "2026-09-30",
+        description:
+          "Management review record for KPIs, audit findings, customer feedback, non-conformities, corrective actions, preventive actions, and lessons learned.",
+        notes:
+          "Use this as the recurring ISO 9001 review agenda and evidence record.",
+      },
+    ];
+    for (const seed of qualitySeeds) {
+      await insertQualitySeed(env, seed);
+    }
+  }
+
+  const securityCount = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM security_records",
+  ).first();
+  if (Number(securityCount?.count || 0) === 0) {
+    const securitySeeds = [
+      {
+        id: "demo_sec_access_review",
+        record_number: "SEC-2026-ACCESS-001",
+        title: "Cloudflare Account Access Review",
+        record_type: "access_review",
+        status: "assessing",
+        risk_level: "high",
+        owner: "Security Owner",
+        asset_name: "Cloudflare",
+        due_date: "2026-08-15",
+        review_date: "2026-08-31",
+        description:
+          "Access review for Cloudflare users, roles, MFA, privileged access, and administrator permissions.",
+        mitigation:
+          "Review active users monthly, remove unused access, enforce MFA, and record approvals.",
+        notes:
+          "Links to access control, passwords, assets, risk register, and security awareness.",
+      },
+      {
+        id: "demo_sec_recovery_test",
+        record_number: "SEC-2026-DR-001",
+        title: "Production Backup Recovery Test",
+        record_type: "recovery_test",
+        status: "open",
+        risk_level: "medium",
+        owner: "Operations",
+        asset_name: "D1 Database",
+        due_date: "2026-08-30",
+        review_date: "2026-09-15",
+        description:
+          "Recovery test record for backups, disaster recovery, and business continuity evidence.",
+        mitigation:
+          "Document backup location, restore steps, test result, issues found, and next recovery test date.",
+        notes:
+          "Use this to prove backups are not only configured but recoverable.",
+      },
+      {
+        id: "demo_sec_risk_register",
+        record_number: "SEC-2026-RISK-001",
+        title: "Client Data Risk Register",
+        record_type: "risk_register",
+        status: "active",
+        risk_level: "critical",
+        owner: "Managing Director",
+        asset_name: "Client Records",
+        due_date: "2026-08-10",
+        review_date: "2026-08-31",
+        description:
+          "Risk register entry for protecting client records, invoices, quotes, receipts, and project information.",
+        mitigation:
+          "Limit access, review roles, track incidents, test backups, and keep business continuity actions current.",
+        notes:
+          "Everything should remain linked: assets, risks, access reviews, incidents, backups, recovery tests, and business continuity.",
+      },
+    ];
+    for (const seed of securitySeeds) {
+      await insertSecuritySeed(env, seed);
+    }
+  }
+}
+
+async function insertQualitySeed(env, seed) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO quality_records (
+       id, record_number, title, record_type, status, owner, project_name,
+       due_date, review_date, evidence_url, description, notes
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      seed.id,
+      seed.record_number,
+      seed.title,
+      seed.record_type,
+      seed.status,
+      seed.owner,
+      seed.project_name,
+      seed.due_date,
+      seed.review_date,
+      "",
+      seed.description,
+      seed.notes,
+    )
+    .run();
+}
+
+async function insertSecuritySeed(env, seed) {
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO security_records (
+       id, record_number, title, record_type, status, risk_level, owner,
+       asset_name, due_date, review_date, evidence_url, description,
+       mitigation, notes
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      seed.id,
+      seed.record_number,
+      seed.title,
+      seed.record_type,
+      seed.status,
+      seed.risk_level,
+      seed.owner,
+      seed.asset_name,
+      seed.due_date,
+      seed.review_date,
+      "",
+      seed.description,
+      seed.mitigation,
+      seed.notes,
+    )
+    .run();
 }
 
 async function ensureColumn(env, tableName, columnName, columnDefinition) {
@@ -2240,6 +2762,147 @@ async function handleLeads(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+async function handleRequirements(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const requirementId = segments[4];
+
+  if (method === "GET" && !requirementId) {
+    const result = await env.DB.prepare(
+      `SELECT * FROM requirements
+       ORDER BY
+         CASE status
+           WHEN 'discovery' THEN 1
+           WHEN 'draft' THEN 2
+           WHEN 'review' THEN 3
+           WHEN 'approved' THEN 4
+           WHEN 'converted' THEN 5
+           ELSE 6
+         END,
+         COALESCE(due_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && requirementId) {
+    const requirement = await env.DB.prepare(
+      "SELECT * FROM requirements WHERE id = ?",
+    )
+      .bind(requirementId)
+      .first();
+    return json(
+      requirement || { error: "Requirement not found" },
+      requirement ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !requirementId) {
+    const data = normalizeRequirementPayload(await parseRequestJson(request));
+    const id = createEntityId("req");
+    const requirementNumber = generateDocumentNumber("REQ");
+    await env.DB.prepare(
+      `INSERT INTO requirements (
+         id, requirement_number, title, client_name, contact_name, template,
+         status, priority, owner, due_date, goals, scope, constraints, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        requirementNumber,
+        data.title,
+        data.client_name,
+        data.contact_name,
+        data.template,
+        data.status,
+        data.priority,
+        data.owner,
+        data.due_date,
+        data.goals,
+        data.scope,
+        data.constraints,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "requirement",
+      entity_id: id,
+      entity_number: requirementNumber,
+      details: { client: data.client_name, template: data.template },
+    });
+    return json({ id, requirement_number: requirementNumber, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && requirementId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM requirements WHERE id = ?",
+    )
+      .bind(requirementId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Requirement not found", 404);
+    }
+    const data = normalizeRequirementPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE requirements SET
+         title = ?, client_name = ?, contact_name = ?, template = ?, status = ?,
+         priority = ?, owner = ?, due_date = ?, goals = ?, scope = ?,
+         constraints = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.title,
+        data.client_name,
+        data.contact_name,
+        data.template,
+        data.status,
+        data.priority,
+        data.owner,
+        data.due_date,
+        data.goals,
+        data.scope,
+        data.constraints,
+        data.notes,
+        requirementId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "requirement",
+      entity_id: requirementId,
+      entity_number: existing.requirement_number,
+      details: { previous_status: existing.status, status: data.status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && requirementId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM requirements WHERE id = ?",
+    )
+      .bind(requirementId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Requirement not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM requirements WHERE id = ?")
+      .bind(requirementId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "requirement",
+      entity_id: requirementId,
+      entity_number: existing.requirement_number,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
 async function handleProjects(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
@@ -2501,6 +3164,318 @@ async function handleDocuments(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+async function handleQualityRecords(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const recordId = segments[4];
+  const url = new URL(request.url);
+
+  if (method === "GET" && !recordId) {
+    const filterValue = trimText(url.searchParams.get("record_type"), "Record type", {
+      maxLength: 80,
+    });
+    const recordTypeFilter = filterValue
+      ? normalizeKey(
+          filterValue,
+          "Quality record type",
+          QUALITY_RECORD_TYPES,
+          "policy",
+        )
+      : "";
+    const statement = env.DB.prepare(
+      `SELECT * FROM quality_records
+       ${recordTypeFilter ? "WHERE record_type = ?" : ""}
+       ORDER BY
+         CASE status
+           WHEN 'review' THEN 1
+           WHEN 'draft' THEN 2
+           WHEN 'active' THEN 3
+           WHEN 'closed' THEN 4
+           WHEN 'archived' THEN 5
+           ELSE 6
+         END,
+         COALESCE(review_date, due_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    );
+    const result = recordTypeFilter
+      ? await statement.bind(recordTypeFilter).all()
+      : await statement.all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && recordId) {
+    const record = await env.DB.prepare(
+      "SELECT * FROM quality_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    return json(
+      record || { error: "Quality record not found" },
+      record ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !recordId) {
+    const data = normalizeQualityPayload(await parseRequestJson(request));
+    const id = createEntityId("qms");
+    const recordNumber = generateDocumentNumber("QMS");
+    await env.DB.prepare(
+      `INSERT INTO quality_records (
+         id, record_number, title, record_type, status, owner, project_name,
+         due_date, review_date, evidence_url, description, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        recordNumber,
+        data.title,
+        data.record_type,
+        data.status,
+        data.owner,
+        data.project_name,
+        data.due_date,
+        data.review_date,
+        data.evidence_url,
+        data.description,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "quality_record",
+      entity_id: id,
+      entity_number: recordNumber,
+      details: { type: data.record_type, status: data.status },
+    });
+    return json({ id, record_number: recordNumber, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && recordId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM quality_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Quality record not found", 404);
+    }
+    const data = normalizeQualityPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE quality_records SET
+         title = ?, record_type = ?, status = ?, owner = ?, project_name = ?,
+         due_date = ?, review_date = ?, evidence_url = ?, description = ?,
+         notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.title,
+        data.record_type,
+        data.status,
+        data.owner,
+        data.project_name,
+        data.due_date,
+        data.review_date,
+        data.evidence_url,
+        data.description,
+        data.notes,
+        recordId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "quality_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+      details: { previous_status: existing.status, status: data.status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && recordId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM quality_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Quality record not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM quality_records WHERE id = ?")
+      .bind(recordId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "quality_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleSecurityRecords(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const recordId = segments[4];
+
+  if (method === "GET" && !recordId) {
+    const result = await env.DB.prepare(
+      `SELECT * FROM security_records
+       ORDER BY
+         CASE status
+           WHEN 'open' THEN 1
+           WHEN 'assessing' THEN 2
+           WHEN 'active' THEN 3
+           WHEN 'mitigated' THEN 4
+           WHEN 'closed' THEN 5
+           WHEN 'archived' THEN 6
+           ELSE 7
+         END,
+         CASE risk_level
+           WHEN 'critical' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'medium' THEN 3
+           WHEN 'low' THEN 4
+           ELSE 5
+         END,
+         COALESCE(review_date, due_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && recordId) {
+    const record = await env.DB.prepare(
+      "SELECT * FROM security_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    return json(
+      record || { error: "Security record not found" },
+      record ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !recordId) {
+    const data = normalizeSecurityPayload(await parseRequestJson(request));
+    const id = createEntityId("sec");
+    const recordNumber = generateDocumentNumber("SEC");
+    await env.DB.prepare(
+      `INSERT INTO security_records (
+         id, record_number, title, record_type, status, risk_level, owner,
+         asset_name, due_date, review_date, evidence_url, description,
+         mitigation, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        recordNumber,
+        data.title,
+        data.record_type,
+        data.status,
+        data.risk_level,
+        data.owner,
+        data.asset_name,
+        data.due_date,
+        data.review_date,
+        data.evidence_url,
+        data.description,
+        data.mitigation,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "security_record",
+      entity_id: id,
+      entity_number: recordNumber,
+      details: {
+        type: data.record_type,
+        risk_level: data.risk_level,
+        status: data.status,
+      },
+    });
+    return json({ id, record_number: recordNumber, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && recordId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM security_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Security record not found", 404);
+    }
+    const data = normalizeSecurityPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE security_records SET
+         title = ?, record_type = ?, status = ?, risk_level = ?, owner = ?,
+         asset_name = ?, due_date = ?, review_date = ?, evidence_url = ?,
+         description = ?, mitigation = ?, notes = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.title,
+        data.record_type,
+        data.status,
+        data.risk_level,
+        data.owner,
+        data.asset_name,
+        data.due_date,
+        data.review_date,
+        data.evidence_url,
+        data.description,
+        data.mitigation,
+        data.notes,
+        recordId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "security_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+      details: {
+        previous_status: existing.status,
+        status: data.status,
+        risk_level: data.risk_level,
+      },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && recordId) {
+    const existing = await env.DB.prepare(
+      "SELECT * FROM security_records WHERE id = ?",
+    )
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Security record not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM security_records WHERE id = ?")
+      .bind(recordId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "security_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
 async function handleTeamMembers(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
@@ -2747,27 +3722,120 @@ async function handleQuotes(request, env, path, method) {
 
 async function handleClients(request, env, path, method) {
   await ensureOperationalSchema(env);
-  if (method === "GET") {
-    const result = await env.DB.prepare(
-      "SELECT * FROM clients ORDER BY name DESC",
-    ).all();
-    return json(result.results);
+  const segments = path.split("/");
+  const clientId = segments[4];
+
+  if (method === "GET" && clientId) {
+    const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ?")
+      .bind(clientId)
+      .first();
+    return json(
+      client || { error: "Client not found" },
+      client ? {} : { status: 404 },
+    );
   }
 
-  if (method === "POST") {
-    const raw = await parseRequestJson(request);
-    const data = {
-      name: trimText(raw.name, "Client name", { required: true, maxLength: 200 }),
-      email: validateEmail(raw.email, "Client email"),
-      phone: trimText(raw.phone, "Client phone", { maxLength: 100 }),
-      address: trimText(raw.address, "Client address", { maxLength: 1000 }),
-      city: trimText(raw.city, "Client city", { maxLength: 100 }),
-      state: trimText(raw.state, "Client state", { maxLength: 100 }),
-      postal_code: trimText(raw.postal_code, "Client postal code", {
-        maxLength: 30,
-      }),
-      country: trimText(raw.country, "Client country", { maxLength: 100 }),
-    };
+  if (method === "GET" && !clientId) {
+    const result = await env.DB.prepare(
+      `WITH invoice_balances AS (
+         SELECT
+           LOWER(TRIM(i.client_email)) as client_key,
+           i.client_email,
+           i.client_name,
+           i.status,
+           (
+             CASE
+               WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0)
+                 THEN i.amount_cents
+               ELSE ROUND(i.amount * 100)
+             END
+             +
+             CASE
+               WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0)
+                 THEN i.tax_cents
+               ELSE ROUND(i.tax * 100)
+             END
+           ) as total_cents,
+           COALESCE((
+             SELECT SUM(
+               CASE
+                 WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0)
+                   THEN p.amount_cents
+                 ELSE ROUND(p.amount * 100)
+               END
+             )
+             FROM payments p
+             WHERE p.invoice_id = i.id
+           ), 0) as paid_cents
+         FROM invoices i
+         WHERE TRIM(i.client_email) != ''
+       ),
+       invoice_rollups AS (
+         SELECT
+           client_key,
+           MAX(client_email) as invoice_email,
+           MAX(client_name) as invoice_name,
+           COUNT(*) as invoice_count,
+           SUM(CASE WHEN status != 'draft' THEN total_cents ELSE 0 END) as invoiced_cents,
+           SUM(CASE WHEN status != 'draft' THEN paid_cents ELSE 0 END) as paid_cents,
+           SUM(
+             CASE
+               WHEN status != 'draft' THEN MAX(total_cents - paid_cents, 0)
+               ELSE 0
+             END
+           ) as outstanding_cents,
+           SUM(
+             CASE
+               WHEN status NOT IN ('draft', 'paid') AND total_cents - paid_cents > 0
+                 THEN 1
+               ELSE 0
+             END
+           ) as outstanding_invoice_count
+         FROM invoice_balances
+         GROUP BY client_key
+       ),
+       client_keys AS (
+         SELECT LOWER(TRIM(email)) as client_key FROM clients WHERE TRIM(email) != ''
+         UNION
+         SELECT client_key FROM invoice_rollups
+       )
+       SELECT
+         COALESCE(c.id, '') as id,
+         COALESCE(c.name, ir.invoice_name, ir.invoice_email) as name,
+         COALESCE(c.email, ir.invoice_email) as email,
+         COALESCE(c.phone, '') as phone,
+         COALESCE(c.address, '') as address,
+         COALESCE(c.city, '') as city,
+         COALESCE(c.state, '') as state,
+         COALESCE(c.postal_code, '') as postal_code,
+         COALESCE(c.country, '') as country,
+         c.created_at,
+         COALESCE(ir.invoice_count, 0) as invoice_count,
+         COALESCE(ir.outstanding_invoice_count, 0) as outstanding_invoice_count,
+         COALESCE(ir.invoiced_cents, 0) as invoiced_cents,
+         COALESCE(ir.paid_cents, 0) as paid_cents,
+         COALESCE(ir.outstanding_cents, 0) as outstanding_cents,
+         CASE WHEN c.id IS NULL THEN 1 ELSE 0 END as derived_from_invoices
+       FROM client_keys ck
+       LEFT JOIN clients c ON LOWER(TRIM(c.email)) = ck.client_key
+       LEFT JOIN invoice_rollups ir ON ir.client_key = ck.client_key
+       ORDER BY outstanding_cents DESC, name COLLATE NOCASE ASC`,
+    ).all();
+    return json(
+      (result.results || []).map((client) => ({
+        ...client,
+        invoice_count: Number(client.invoice_count || 0),
+        outstanding_invoice_count: Number(client.outstanding_invoice_count || 0),
+        total_invoiced: centsToAmount(Number(client.invoiced_cents || 0)),
+        total_paid: centsToAmount(Number(client.paid_cents || 0)),
+        outstanding: centsToAmount(Number(client.outstanding_cents || 0)),
+        derived_from_invoices: Number(client.derived_from_invoices || 0) === 1,
+      })),
+    );
+  }
+
+  if (method === "POST" && !clientId) {
+    const data = normalizeClientPayload(await parseRequestJson(request));
     const id = createEntityId("client");
 
     await runOrConflict(
@@ -2796,6 +3864,65 @@ async function handleClients(request, env, path, method) {
     });
 
     return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && clientId) {
+    const existing = await env.DB.prepare("SELECT * FROM clients WHERE id = ?")
+      .bind(clientId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Client not found", 404);
+    }
+    const data = normalizeClientPayload(await parseRequestJson(request));
+
+    await runOrConflict(
+      env.DB.prepare(
+        `UPDATE clients SET
+           name = ?, email = ?, phone = ?, address = ?, city = ?, state = ?,
+           postal_code = ?, country = ?
+         WHERE id = ?`,
+      ).bind(
+        data.name,
+        data.email,
+        data.phone || "",
+        data.address || "",
+        data.city || "",
+        data.state || "",
+        data.postal_code || "",
+        data.country || "",
+        clientId,
+      ),
+      "A client with that email already exists",
+    );
+
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "client",
+      entity_id: clientId,
+      entity_number: data.email,
+      details: { previous_email: existing.email },
+    });
+
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && clientId) {
+    const existing = await env.DB.prepare("SELECT * FROM clients WHERE id = ?")
+      .bind(clientId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Client not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM clients WHERE id = ?")
+      .bind(clientId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "client",
+      entity_id: clientId,
+      entity_number: existing.email,
+    });
+    return json({ success: true });
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
@@ -2893,8 +4020,17 @@ async function handleDashboardStats(env) {
   const activeProjects = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM projects WHERE status IN ('planning', 'active', 'on_hold')",
   ).first();
+  const openRequirements = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM requirements WHERE status NOT IN ('approved', 'converted')",
+  ).first();
   const documentsInReview = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM documents WHERE status = 'review'",
+  ).first();
+  const qualityActions = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quality_records WHERE status NOT IN ('closed', 'archived')",
+  ).first();
+  const securityRisks = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM security_records WHERE status NOT IN ('mitigated', 'closed', 'archived')",
   ).first();
   const teamMembers = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM team_members WHERE active = 1",
@@ -2906,8 +4042,11 @@ async function handleDashboardStats(env) {
       total_revenue: centsToAmount(Number(totalRevenue.total_cents || 0)),
       pending_invoices: pendingInvoices.count,
       open_leads: Number(openLeads?.count || 0),
+      open_requirements: Number(openRequirements?.count || 0),
       active_projects: Number(activeProjects?.count || 0),
       documents_in_review: Number(documentsInReview?.count || 0),
+      quality_actions: Number(qualityActions?.count || 0),
+      security_risks: Number(securityRisks?.count || 0),
       team_members: Number(teamMembers?.count || 0),
   });
 }
@@ -2955,6 +4094,9 @@ async function handleAnalytics(env) {
   const activeProjects = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM projects WHERE status IN ('planning', 'active', 'on_hold')",
   ).first();
+  const openRequirements = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM requirements WHERE status NOT IN ('approved', 'converted')",
+  ).first();
   const documentsInReview = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM documents WHERE status = 'review'",
   ).first();
@@ -2963,6 +4105,12 @@ async function handleAnalytics(env) {
      WHERE review_date IS NOT NULL
        AND status != 'archived'
        AND review_date <= date('now', '+30 days')`,
+  ).first();
+  const qualityActions = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quality_records WHERE status NOT IN ('closed', 'archived')",
+  ).first();
+  const securityRisks = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM security_records WHERE status NOT IN ('mitigated', 'closed', 'archived')",
   ).first();
   const teamMembers = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM team_members WHERE active = 1",
@@ -3027,9 +4175,12 @@ async function handleAnalytics(env) {
       invoices_paid: Number(paidCount?.count || 0),
       invoices_pending: Number(pendingCount?.count || 0),
       open_leads: Number(openLeads?.count || 0),
+      open_requirements: Number(openRequirements?.count || 0),
       active_projects: Number(activeProjects?.count || 0),
       documents_in_review: Number(documentsInReview?.count || 0),
       upcoming_document_reviews: Number(upcomingDocumentReviews?.count || 0),
+      quality_actions: Number(qualityActions?.count || 0),
+      security_risks: Number(securityRisks?.count || 0),
       team_members: Number(teamMembers?.count || 0),
       outstanding_quotes: Number(outstandingQuotes?.count || 0),
     },

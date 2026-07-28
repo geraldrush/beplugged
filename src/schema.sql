@@ -126,6 +126,26 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Requirements capture table
+CREATE TABLE IF NOT EXISTS requirements (
+    id TEXT PRIMARY KEY,
+    requirement_number TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    contact_name TEXT,
+    template TEXT NOT NULL DEFAULT 'website' CHECK (template IN ('website', 'erp', 'crm', 'mobile_app', 'ecommerce', 'ai_project', 'government_project', 'training_platform', 'school_system', 'custom')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'discovery', 'review', 'approved', 'converted')),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+    owner TEXT,
+    due_date DATE,
+    goals TEXT,
+    scope TEXT,
+    constraints TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Project delivery table
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -157,6 +177,44 @@ CREATE TABLE IF NOT EXISTS documents (
     linked_type TEXT,
     linked_id TEXT,
     location_url TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Quality management table (ISO 9001 evidence and action records)
+CREATE TABLE IF NOT EXISTS quality_records (
+    id TEXT PRIMARY KEY,
+    record_number TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    record_type TEXT NOT NULL DEFAULT 'policy' CHECK (record_type IN ('policy', 'sop', 'work_instruction', 'template', 'register', 'internal_audit', 'external_audit', 'corrective_action', 'preventive_action', 'non_conformity', 'customer_feedback', 'management_review', 'kpi', 'continuous_improvement', 'record', 'lesson_learned')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'review', 'closed', 'archived')),
+    owner TEXT,
+    project_name TEXT,
+    due_date DATE,
+    review_date DATE,
+    evidence_url TEXT,
+    description TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Information security table (ISO 27001 assets, risks, controls, incidents)
+CREATE TABLE IF NOT EXISTS security_records (
+    id TEXT PRIMARY KEY,
+    record_number TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    record_type TEXT NOT NULL DEFAULT 'risk' CHECK (record_type IN ('asset', 'asset_register', 'risk', 'risk_assessment', 'access_control', 'password_management', 'security_incident', 'vulnerability', 'business_continuity', 'disaster_recovery', 'backup', 'recovery_test', 'security_awareness', 'risk_register', 'access_review')),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'assessing', 'active', 'mitigated', 'closed', 'archived')),
+    risk_level TEXT NOT NULL DEFAULT 'medium' CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+    owner TEXT,
+    asset_name TEXT,
+    due_date DATE,
+    review_date DATE,
+    evidence_url TEXT,
+    description TEXT,
+    mitigation TEXT,
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -195,6 +253,10 @@ CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads (stage);
 
 CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up);
 
+CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements (status);
+
+CREATE INDEX IF NOT EXISTS idx_requirements_due_date ON requirements (due_date);
+
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects (status);
 
 CREATE INDEX IF NOT EXISTS idx_projects_due_date ON projects (due_date);
@@ -202,5 +264,19 @@ CREATE INDEX IF NOT EXISTS idx_projects_due_date ON projects (due_date);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents (status);
 
 CREATE INDEX IF NOT EXISTS idx_documents_review_date ON documents (review_date);
+
+CREATE INDEX IF NOT EXISTS idx_quality_records_type ON quality_records (record_type);
+
+CREATE INDEX IF NOT EXISTS idx_quality_records_status ON quality_records (status);
+
+CREATE INDEX IF NOT EXISTS idx_quality_records_review_date ON quality_records (review_date);
+
+CREATE INDEX IF NOT EXISTS idx_security_records_type ON security_records (record_type);
+
+CREATE INDEX IF NOT EXISTS idx_security_records_status ON security_records (status);
+
+CREATE INDEX IF NOT EXISTS idx_security_records_risk_level ON security_records (risk_level);
+
+CREATE INDEX IF NOT EXISTS idx_security_records_review_date ON security_records (review_date);
 
 CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email);

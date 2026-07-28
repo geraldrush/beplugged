@@ -310,6 +310,7 @@
 
       .status-qualified,
       .status-meeting,
+      .status-discovery,
       .status-active,
       .status-review {
         background-color: rgba(240, 80, 35, 0.18);
@@ -318,23 +319,48 @@
 
       .status-requirements,
       .status-proposal,
-      .status-on_hold {
+      .status-on_hold,
+      .status-open,
+      .status-assessing,
+      .status-high,
+      .status-medium {
         background-color: rgba(224, 165, 0, 0.18);
         color: #8a6500;
       }
 
       .status-won,
+      .status-accepted,
       .status-completed,
-      .status-approved {
+      .status-approved,
+      .status-closed,
+      .status-mitigated,
+      .status-low {
         background-color: rgba(31, 138, 82, 0.18);
         color: #176b3f;
       }
 
       .status-lost,
+      .status-rejected,
       .status-cancelled,
-      .status-archived {
+      .status-archived,
+      .status-critical {
         background-color: rgba(44, 45, 63, 0.15);
         color: var(--dark);
+      }
+
+      .status-critical {
+        background-color: rgba(192, 57, 43, 0.14);
+        color: #a33227;
+      }
+
+      .status-converted_to_invoice {
+        background-color: rgba(31, 138, 82, 0.18);
+        color: #176b3f;
+      }
+
+      .status-converted {
+        background-color: rgba(31, 138, 82, 0.18);
+        color: #176b3f;
       }
 
       .status-live {
@@ -647,6 +673,9 @@
           <button class="nav-link" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
           </button>
+          <button class="nav-link" onclick="showTab('requirements')">
+            <i class="fas fa-clipboard-list"></i> Requirements
+          </button>
           <button class="nav-link" onclick="showTab('quotes')">
             <i class="fas fa-quote-left"></i> Quotes
           </button>
@@ -656,6 +685,19 @@
           </button>
           <button class="nav-link" onclick="showTab('documents')">
             <i class="fas fa-folder-open"></i> Documents
+          </button>
+          <div class="nav-section-title">Quality & Security</div>
+          <button class="nav-link" onclick="showTab('policies')">
+            <i class="fas fa-file-signature"></i> Policies
+          </button>
+          <button class="nav-link" onclick="showTab('sops')">
+            <i class="fas fa-list-check"></i> SOPs
+          </button>
+          <button class="nav-link" onclick="showTab('quality')">
+            <i class="fas fa-clipboard-check"></i> Quality
+          </button>
+          <button class="nav-link" onclick="showTab('security')">
+            <i class="fas fa-shield-halved"></i> Security
           </button>
           <div class="nav-section-title">Finance</div>
           <button class="nav-link" onclick="showTab('invoices')">
@@ -715,6 +757,10 @@
                 0
               </div>
             </div>
+            <div class="stat-card">
+              <h3>Open Requirements</h3>
+              <div class="value" id="kpi-open-requirements">0</div>
+            </div>
             <div class="stat-card" style="border-left-color: #1f8a52">
               <h3>Active Projects</h3>
               <div class="value" id="kpi-active-projects" style="color: #1f8a52">
@@ -724,6 +770,16 @@
             <div class="stat-card">
               <h3>Document Reviews</h3>
               <div class="value" id="kpi-document-reviews">0</div>
+            </div>
+            <div class="stat-card">
+              <h3>Quality Actions</h3>
+              <div class="value" id="kpi-quality-actions">0</div>
+            </div>
+            <div class="stat-card" style="border-left-color: var(--danger)">
+              <h3>Security Risks</h3>
+              <div class="value" id="kpi-security-risks" style="color: var(--danger)">
+                0
+              </div>
             </div>
             <div class="stat-card">
               <h3>Team Members</h3>
@@ -961,6 +1017,39 @@
           </div>
         </div>
 
+        <!-- Requirements Tab -->
+        <div id="requirements-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Requirements</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('requirements')">
+              <i class="fas fa-plus"></i> New Requirement
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Client</th>
+                    <th>Template</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Due</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="requirements-list">
+                  <tr>
+                    <td colspan="7" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- Projects Tab -->
         <div id="projects-tab" class="tab-content hidden">
           <div class="header-actions">
@@ -1019,6 +1108,137 @@
                 <tbody id="documents-list">
                   <tr>
                     <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Policies Tab -->
+        <div id="policies-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Policies</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('policies')">
+              <i class="fas fa-plus"></i> New Policy
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Policy</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Applies To</th>
+                    <th>Review</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="policies-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SOPs Tab -->
+        <div id="sops-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>SOPs</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('sops')">
+              <i class="fas fa-plus"></i> New SOP
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>SOP</th>
+                    <th>Status</th>
+                    <th>Process Owner</th>
+                    <th>Process Area</th>
+                    <th>Review</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="sops-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quality Tab -->
+        <div id="quality-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Quality</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('quality')">
+              <i class="fas fa-plus"></i> New Quality Record
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Record</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Project</th>
+                    <th>Review</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="quality-list">
+                  <tr>
+                    <td colspan="7" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security Tab -->
+        <div id="security-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Security</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('security')">
+              <i class="fas fa-plus"></i> New Security Record
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Record</th>
+                    <th>Type</th>
+                    <th>Risk</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Asset</th>
+                    <th>Review</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="security-list">
+                  <tr>
+                    <td colspan="8" class="text-center">Loading...</td>
                   </tr>
                 </tbody>
               </table>
@@ -1388,7 +1608,7 @@
     <div id="clientModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h5>Add Client</h5>
+          <h5 id="client-modal-title">Add Client</h5>
           <button
             type="button"
             onclick="closeClientModal()"
@@ -1667,8 +1887,10 @@
       let currentEditInvoiceId = null;
       let currentEditInvoiceStatus = "draft";
       let currentEditQuoteId = null;
+      let currentEditClientId = null;
       let currentModuleName = null;
       let currentModuleRecordId = null;
+      const clientCache = new Map();
 
       const MODULES = {
         leads: {
@@ -1707,6 +1929,55 @@
             { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
           ],
           render: renderLeadRows,
+        },
+        requirements: {
+          endpoint: "/admin/requirements",
+          listId: "requirements-list",
+          singular: "Requirement",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            { name: "client_name", label: "Client", required: true },
+            { name: "contact_name", label: "Contact" },
+            {
+              name: "template",
+              label: "Template",
+              type: "select",
+              defaultValue: "website",
+              options: [
+                "website",
+                "erp",
+                "crm",
+                "mobile_app",
+                "ecommerce",
+                "ai_project",
+                "government_project",
+                "training_platform",
+                "school_system",
+                "custom",
+              ],
+            },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "discovery", "review", "approved", "converted"],
+            },
+            {
+              name: "priority",
+              label: "Priority",
+              type: "select",
+              defaultValue: "medium",
+              options: ["low", "medium", "high"],
+            },
+            { name: "owner", label: "Owner" },
+            { name: "due_date", label: "Due Date", type: "date" },
+            { name: "goals", label: "Business Goals", type: "textarea", fullSpan: true },
+            { name: "scope", label: "Scope", type: "textarea", fullSpan: true },
+            { name: "constraints", label: "Constraints", type: "textarea", fullSpan: true },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderRequirementRows,
         },
         projects: {
           endpoint: "/admin/projects",
@@ -1777,6 +2048,157 @@
           ],
           render: renderDocumentRows,
         },
+        policies: {
+          endpoint: "/admin/quality",
+          query: { record_type: "policy" },
+          fixedValues: { record_type: "policy" },
+          listId: "policies-list",
+          singular: "Policy",
+          fields: [
+            { name: "title", label: "Policy Title", required: true },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "active", "review", "closed", "archived"],
+            },
+            { name: "owner", label: "Policy Owner" },
+            { name: "project_name", label: "Applies To" },
+            { name: "due_date", label: "Action Due Date", type: "date" },
+            { name: "review_date", label: "Review Date", type: "date" },
+            { name: "evidence_url", label: "Policy URL", type: "url", fullSpan: true },
+            { name: "description", label: "Policy Statement / Purpose", type: "textarea", fullSpan: true },
+            { name: "notes", label: "Review Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderPolicyRows,
+        },
+        sops: {
+          endpoint: "/admin/quality",
+          query: { record_type: "sop" },
+          fixedValues: { record_type: "sop" },
+          listId: "sops-list",
+          singular: "SOP",
+          fields: [
+            { name: "title", label: "SOP Title", required: true },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "active", "review", "closed", "archived"],
+            },
+            { name: "owner", label: "Process Owner" },
+            { name: "project_name", label: "Process Area / Project" },
+            { name: "due_date", label: "Action Due Date", type: "date" },
+            { name: "review_date", label: "Review Date", type: "date" },
+            { name: "evidence_url", label: "SOP URL", type: "url", fullSpan: true },
+            { name: "description", label: "Procedure Summary", type: "textarea", fullSpan: true },
+            { name: "notes", label: "Steps / Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderSopRows,
+        },
+        quality: {
+          endpoint: "/admin/quality",
+          listId: "quality-list",
+          singular: "Quality Record",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            {
+              name: "record_type",
+              label: "Record Type",
+              type: "select",
+              defaultValue: "policy",
+              options: [
+                "policy",
+                "sop",
+                "work_instruction",
+                "template",
+                "register",
+                "internal_audit",
+                "external_audit",
+                "corrective_action",
+                "preventive_action",
+                "non_conformity",
+                "customer_feedback",
+                "management_review",
+                "kpi",
+                "continuous_improvement",
+                "record",
+                "lesson_learned",
+              ],
+            },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "active", "review", "closed", "archived"],
+            },
+            { name: "owner", label: "Owner" },
+            { name: "project_name", label: "Project" },
+            { name: "due_date", label: "Due Date", type: "date" },
+            { name: "review_date", label: "Review Date", type: "date" },
+            { name: "evidence_url", label: "Evidence URL", type: "url", fullSpan: true },
+            { name: "description", label: "Description", type: "textarea", fullSpan: true },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderQualityRows,
+        },
+        security: {
+          endpoint: "/admin/security",
+          listId: "security-list",
+          singular: "Security Record",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            {
+              name: "record_type",
+              label: "Record Type",
+              type: "select",
+              defaultValue: "risk",
+              options: [
+                "asset",
+                "asset_register",
+                "risk",
+                "risk_assessment",
+                "access_control",
+                "password_management",
+                "security_incident",
+                "vulnerability",
+                "business_continuity",
+                "disaster_recovery",
+                "backup",
+                "recovery_test",
+                "security_awareness",
+                "risk_register",
+                "access_review",
+              ],
+            },
+            {
+              name: "risk_level",
+              label: "Risk Level",
+              type: "select",
+              defaultValue: "medium",
+              options: ["low", "medium", "high", "critical"],
+            },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "open",
+              options: ["open", "assessing", "active", "mitigated", "closed", "archived"],
+            },
+            { name: "owner", label: "Owner" },
+            { name: "asset_name", label: "Asset" },
+            { name: "due_date", label: "Due Date", type: "date" },
+            { name: "review_date", label: "Review Date", type: "date" },
+            { name: "evidence_url", label: "Evidence URL", type: "url", fullSpan: true },
+            { name: "description", label: "Description", type: "textarea", fullSpan: true },
+            { name: "mitigation", label: "Mitigation", type: "textarea", fullSpan: true },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderSecurityRows,
+        },
         team: {
           endpoint: "/admin/team",
           listId: "team-list",
@@ -1816,8 +2238,8 @@
           modules: [
             { name: "Leads", status: "live", tab: "leads" },
             { name: "Clients", status: "live", tab: "clients" },
+            { name: "Requirements", status: "live", tab: "requirements" },
             { name: "Quotations", status: "live", tab: "quotes" },
-            { name: "Requirements", status: "next" },
             { name: "Proposals", status: "next" },
             { name: "Contracts", status: "later" },
             { name: "Meetings", status: "later" },
@@ -1853,14 +2275,37 @@
         {
           group: "Quality & Security",
           modules: [
-            { name: "Policies", status: "next" },
-            { name: "SOPs", status: "next" },
-            { name: "Internal Audits", status: "later" },
-            { name: "Corrective Actions", status: "later" },
-            { name: "Asset Register", status: "later" },
-            { name: "Security Risks", status: "later" },
-            { name: "Incidents", status: "later" },
-            { name: "Backups", status: "later" },
+            { name: "Policies", status: "live", tab: "policies" },
+            { name: "SOPs", status: "live", tab: "sops" },
+            { name: "Work Instructions", status: "live", tab: "quality" },
+            { name: "Templates", status: "live", tab: "quality" },
+            { name: "Records", status: "live", tab: "quality" },
+            { name: "Registers", status: "live", tab: "quality" },
+            { name: "Internal Audits", status: "live", tab: "quality" },
+            { name: "External Audits", status: "live", tab: "quality" },
+            { name: "Corrective Actions", status: "live", tab: "quality" },
+            { name: "Preventive Actions", status: "live", tab: "quality" },
+            { name: "Non-Conformities", status: "live", tab: "quality" },
+            { name: "Customer Feedback", status: "live", tab: "quality" },
+            { name: "Management Reviews", status: "live", tab: "quality" },
+            { name: "KPIs", status: "live", tab: "quality" },
+            { name: "Continuous Improvement", status: "live", tab: "quality" },
+            { name: "Lessons Learned", status: "live", tab: "quality" },
+            { name: "Assets", status: "live", tab: "security" },
+            { name: "Asset Register", status: "live", tab: "security" },
+            { name: "Risks", status: "live", tab: "security" },
+            { name: "Risk Register", status: "live", tab: "security" },
+            { name: "Risk Assessments", status: "live", tab: "security" },
+            { name: "Access Control", status: "live", tab: "security" },
+            { name: "Password Management / Passwords", status: "live", tab: "security" },
+            { name: "Security Incidents", status: "live", tab: "security" },
+            { name: "Vulnerabilities", status: "live", tab: "security" },
+            { name: "Business Continuity", status: "live", tab: "security" },
+            { name: "Disaster Recovery", status: "live", tab: "security" },
+            { name: "Backups", status: "live", tab: "security" },
+            { name: "Recovery Tests", status: "live", tab: "security" },
+            { name: "Security Awareness", status: "live", tab: "security" },
+            { name: "Access Reviews", status: "live", tab: "security" },
           ],
         },
         {
@@ -1906,8 +2351,44 @@
         return String(status || "draft").replace(/[^a-z_]/g, "");
       }
 
+      const DISPLAY_LABELS = {
+        ai_project: "AI Project",
+        asset_register: "Asset Register",
+        access_control: "Access Control",
+        access_review: "Access Review",
+        business_continuity: "Business Continuity",
+        continuous_improvement: "Continuous Improvement",
+        converted_to_invoice: "Converted to Invoice",
+        corrective_action: "Corrective Action",
+        customer_feedback: "Customer Feedback",
+        disaster_recovery: "Disaster Recovery",
+        ecommerce: "Ecommerce",
+        external_audit: "External Audit",
+        government_project: "Government Project",
+        internal_audit: "Internal Audit",
+        kpi: "KPI",
+        lesson_learned: "Lesson Learned",
+        management_review: "Management Review",
+        mobile_app: "Mobile App",
+        non_conformity: "Non-Conformity",
+        on_hold: "On Hold",
+        partially_paid: "Partially Paid",
+        password_management: "Password Management",
+        preventive_action: "Preventive Action",
+        recovery_test: "Recovery Test",
+        risk_assessment: "Risk Assessment",
+        risk_register: "Risk Register",
+        school_system: "School System",
+        security_awareness: "Security Awareness",
+        security_incident: "Security Incident",
+        sop: "SOP",
+        training_platform: "Training Platform",
+        work_instruction: "Work Instruction",
+      };
+
       function displayStatus(status) {
-        return escapeHtml(String(status || "draft").replace(/_/g, " "));
+        const value = String(status || "draft");
+        return escapeHtml(DISPLAY_LABELS[value] || value.replace(/_/g, " "));
       }
 
       function setViewFooterMode(mode) {
@@ -1953,10 +2434,20 @@
           loadModule("team");
         } else if (tabName === "leads") {
           loadModule("leads");
+        } else if (tabName === "requirements") {
+          loadModule("requirements");
         } else if (tabName === "projects") {
           loadModule("projects");
         } else if (tabName === "documents") {
           loadModule("documents");
+        } else if (tabName === "policies") {
+          loadModule("policies");
+        } else if (tabName === "sops") {
+          loadModule("sops");
+        } else if (tabName === "quality") {
+          loadModule("quality");
+        } else if (tabName === "security") {
+          loadModule("security");
         } else if (tabName === "invoices") {
           loadInvoices();
         } else if (tabName === "quotes") {
@@ -2047,7 +2538,7 @@
         `,
                 )
                 .join("")
-            : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
+            : exampleRecentInvoiceRows();
         }
 
         // Analytics + charts second, isolated so a failure can never block the
@@ -2067,10 +2558,16 @@
             analytics.kpis.invoices_pending;
           document.getElementById("kpi-open-leads").textContent =
             analytics.kpis.open_leads;
+          document.getElementById("kpi-open-requirements").textContent =
+            analytics.kpis.open_requirements;
           document.getElementById("kpi-active-projects").textContent =
             analytics.kpis.active_projects;
           document.getElementById("kpi-document-reviews").textContent =
             analytics.kpis.documents_in_review;
+          document.getElementById("kpi-quality-actions").textContent =
+            analytics.kpis.quality_actions;
+          document.getElementById("kpi-security-risks").textContent =
+            analytics.kpis.security_risks;
           document.getElementById("kpi-team-members").textContent =
             analytics.kpis.team_members;
           try {
@@ -2079,6 +2576,27 @@
             console.error("Dashboard chart render failed:", err);
           }
         }
+      }
+
+      function exampleRecentInvoiceRows() {
+        return `
+          <tr class="example-row">
+            <td>INV-2026-DEMO <span class="badge status-later">Example</span></td>
+            <td>Afroscaff</td>
+            <td>${money(12000)}</td>
+            <td><span class="badge status-sent">sent</span></td>
+            <td>${displayDate(new Date(Date.now() - 86400000 * 5).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>View</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>INV-2026-PAID <span class="badge status-later">Example</span></td>
+            <td>Project Client</td>
+            <td>${money(4200)}</td>
+            <td><span class="badge status-paid">paid</span></td>
+            <td>${displayDate(new Date(Date.now() - 86400000 * 12).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>View</button></td>
+          </tr>
+        `;
       }
 
       function makeChart(canvasId, config) {
@@ -2322,16 +2840,43 @@
         `;
       }
 
+      function clientActionButtons(client) {
+        const key = client.id || `invoice:${client.email || client.name || ""}`;
+        clientCache.set(key, client);
+        const safeKey = escapeAttr(key);
+        const editLabel = client.derived_from_invoices ? "Create Profile" : "Edit";
+        return `
+          <div class="action-buttons">
+            <button class="btn btn-sm btn-info" data-client-action="edit" data-client-key="${safeKey}">${editLabel}</button>
+            ${
+              client.derived_from_invoices
+                ? ""
+                : `<button class="btn btn-sm btn-danger" data-client-action="delete" data-client-key="${safeKey}">Delete</button>`
+            }
+          </div>
+        `;
+      }
+
       document.addEventListener("click", (event) => {
         const button = event.target.closest("[data-module-action]");
-        if (!button) {
+        if (button) {
+          const { moduleAction, module: moduleName, id } = button.dataset;
+          if (moduleAction === "edit") {
+            openModuleModal(moduleName, id);
+          } else if (moduleAction === "delete") {
+            deleteModuleItem(moduleName, id);
+          }
+        }
+
+        const clientButton = event.target.closest("[data-client-action]");
+        if (!clientButton) {
           return;
         }
-        const { moduleAction, module: moduleName, id } = button.dataset;
-        if (moduleAction === "edit") {
-          openModuleModal(moduleName, id);
-        } else if (moduleAction === "delete") {
-          deleteModuleItem(moduleName, id);
+        const { clientAction, clientKey } = clientButton.dataset;
+        if (clientAction === "edit") {
+          openClientModal(clientKey);
+        } else if (clientAction === "delete") {
+          deleteClient(clientKey);
         }
       });
 
@@ -2360,6 +2905,16 @@
         if (input) {
           input.value = value ?? "";
         }
+      }
+
+      function moduleListEndpoint(config) {
+        const params = new URLSearchParams(config.query || {});
+        const query = params.toString();
+        return config.endpoint + (query ? "?" + query : "");
+      }
+
+      function moduleRecordEndpoint(config, id) {
+        return config.endpoint + "/" + encodeURIComponent(id);
       }
 
       async function saveCompany() {
@@ -2398,7 +2953,7 @@
         if (!config) {
           return;
         }
-        const rows = await apiCall(config.endpoint);
+        const rows = await apiCall(moduleListEndpoint(config));
         const list = document.getElementById(config.listId);
         if (!Array.isArray(rows)) {
           return;
@@ -2413,8 +2968,7 @@
       }
 
       function renderLeadRows(rows) {
-        const empty = emptyRows(rows, 6, "leads");
-        if (empty) return empty;
+        if (!rows.length) return exampleLeadRows();
         return rows
           .map(
             (lead) => `
@@ -2434,9 +2988,33 @@
           .join("");
       }
 
+      function renderRequirementRows(rows) {
+        if (!rows.length) return exampleRequirementRows();
+        return rows
+          .map(
+            (requirement) => `
+          <tr>
+            <td>
+              ${displayPlain(requirement.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(requirement.requirement_number, "")}</div>
+            </td>
+            <td>
+              ${displayPlain(requirement.client_name)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(requirement.contact_name, "")}</div>
+            </td>
+            <td>${displayStatus(requirement.template)}</td>
+            <td><span class="badge status-${safeStatusClass(requirement.status)}">${displayStatus(requirement.status)}</span></td>
+            <td>${displayPlain(requirement.owner)}</td>
+            <td>${displayDate(requirement.due_date)}</td>
+            <td>${actionButtons("requirements", requirement.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
       function renderProjectRows(rows) {
-        const empty = emptyRows(rows, 7, "projects");
-        if (empty) return empty;
+        if (!rows.length) return exampleProjectRows();
         return rows
           .map((project) => {
             const progress = Math.min(Math.max(Number(project.progress || 0), 0), 100);
@@ -2462,8 +3040,7 @@
       }
 
       function renderDocumentRows(rows) {
-        const empty = emptyRows(rows, 6, "documents");
-        if (empty) return empty;
+        if (!rows.length) return exampleDocumentRows();
         return rows
           .map(
             (doc) => `
@@ -2483,9 +3060,95 @@
           .join("");
       }
 
+      function renderPolicyRows(rows) {
+        if (!rows.length) return examplePolicyRows();
+        return rows
+          .map(
+            (record) => `
+          <tr>
+            <td>
+              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
+            </td>
+            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${displayPlain(record.project_name)}</td>
+            <td>${displayDate(record.review_date || record.due_date)}</td>
+            <td>${actionButtons("policies", record.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function renderSopRows(rows) {
+        if (!rows.length) return exampleSopRows();
+        return rows
+          .map(
+            (record) => `
+          <tr>
+            <td>
+              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
+            </td>
+            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${displayPlain(record.project_name)}</td>
+            <td>${displayDate(record.review_date || record.due_date)}</td>
+            <td>${actionButtons("sops", record.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function renderQualityRows(rows) {
+        if (!rows.length) return exampleQualityRows();
+        return rows
+          .map(
+            (record) => `
+          <tr>
+            <td>
+              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
+            </td>
+            <td>${displayStatus(record.record_type)}</td>
+            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${displayPlain(record.project_name)}</td>
+            <td>${displayDate(record.review_date || record.due_date)}</td>
+            <td>${actionButtons("quality", record.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function renderSecurityRows(rows) {
+        if (!rows.length) return exampleSecurityRows();
+        return rows
+          .map(
+            (record) => `
+          <tr>
+            <td>
+              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
+            </td>
+            <td>${displayStatus(record.record_type)}</td>
+            <td><span class="badge status-${safeStatusClass(record.risk_level)}">${displayStatus(record.risk_level)}</span></td>
+            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${displayPlain(record.asset_name)}</td>
+            <td>${displayDate(record.review_date || record.due_date)}</td>
+            <td>${actionButtons("security", record.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
       function renderTeamRows(rows) {
-        const empty = emptyRows(rows, 6, "team members");
-        if (empty) return empty;
+        if (!rows.length) return exampleTeamRows();
         return rows
           .map(
             (member) => `
@@ -2505,6 +3168,296 @@
           .join("");
       }
 
+      function exampleLeadRows() {
+        return `
+          <tr class="example-row">
+            <td>Northside School <span class="badge status-later">Example</span></td>
+            <td>
+              Maria Jacobs
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">maria@school.example</div>
+            </td>
+            <td><span class="badge status-qualified">qualified</span></td>
+            <td>${money(28000)}</td>
+            <td>${displayDate(new Date().toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>Cloud Migration Lead <span class="badge status-later">Example</span></td>
+            <td>
+              Sipho Dlamini
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">sipho@client.example</div>
+            </td>
+            <td><span class="badge status-meeting">meeting</span></td>
+            <td>${money(45000)}</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 7).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleRequirementRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              School Website Discovery <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">REQ-2026-DEMO</div>
+            </td>
+            <td>
+              Northside School
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">Maria Jacobs</div>
+            </td>
+            <td>website</td>
+            <td><span class="badge status-discovery">discovery</span></td>
+            <td>Solutions Architect</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 10).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Cloud CRM Requirements <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">REQ-2026-CRM</div>
+            </td>
+            <td>
+              Cloud Migration Lead
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">Sipho Dlamini</div>
+            </td>
+            <td>crm</td>
+            <td><span class="badge status-review">review</span></td>
+            <td>Gerald</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 18).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleProjectRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Website Refresh <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">PRJ-2026-DEMO</div>
+            </td>
+            <td>Afroscaff</td>
+            <td><span class="badge status-active">active</span></td>
+            <td>Solutions Architect</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 21).toISOString())}</td>
+            <td>
+              <div class="progress-mini"><span style="width:45%"></span></div>
+              <div style="font-size:0.8rem;">45%</div>
+            </td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Client Portal Setup <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">PRJ-2026-PORTAL</div>
+            </td>
+            <td>Project Client</td>
+            <td><span class="badge status-planning">planning</span></td>
+            <td>Gerald</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 45).toISOString())}</td>
+            <td>
+              <div class="progress-mini"><span style="width:10%"></span></div>
+              <div style="font-size:0.8rem;">10%</div>
+            </td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleDocumentRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Website Requirements v1 <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">Solutions Architect</div>
+            </td>
+            <td>Requirements</td>
+            <td>1.0</td>
+            <td><span class="badge status-review">review</span></td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 30).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Standard Website Proposal <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">Sales</div>
+            </td>
+            <td>Template</td>
+            <td>2.1</td>
+            <td><span class="badge status-approved">approved</span></td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 90).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function examplePolicyRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Quality Policy <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-POL</div>
+            </td>
+            <td><span class="badge status-active">active</span></td>
+            <td>Managing Director</td>
+            <td>Company-wide</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 90).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Information Security Policy <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-SEC-POL</div>
+            </td>
+            <td><span class="badge status-review">review</span></td>
+            <td>Security Owner</td>
+            <td>Internal Systems</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 30).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleSopRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Website Delivery SOP <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-SOP</div>
+            </td>
+            <td><span class="badge status-review">review</span></td>
+            <td>Solutions Architect</td>
+            <td>Project Delivery</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 20).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Invoice Issue and Payment SOP <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-FIN-SOP</div>
+            </td>
+            <td><span class="badge status-active">active</span></td>
+            <td>Finance</td>
+            <td>Billing</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 60).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleQualityRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Website Delivery SOP <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-SOP</div>
+            </td>
+            <td>${displayStatus("sop")}</td>
+            <td><span class="badge status-review">review</span></td>
+            <td>ISO Manager</td>
+            <td>Beplugged Enterprise</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 20).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Customer Satisfaction Register <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-CSAT</div>
+            </td>
+            <td>${displayStatus("customer_feedback")}</td>
+            <td><span class="badge status-active">active</span></td>
+            <td>Operations</td>
+            <td>All Projects</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 45).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Corrective Action: Late Sign-off <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">QMS-2026-CAPA</div>
+            </td>
+            <td>${displayStatus("corrective_action")}</td>
+            <td><span class="badge status-draft">draft</span></td>
+            <td>Project Lead</td>
+            <td>Client Portal Setup</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 7).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleSecurityRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Cloudflare Account Access Review <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">SEC-2026-ACCESS</div>
+            </td>
+            <td>${displayStatus("access_review")}</td>
+            <td><span class="badge status-high">high</span></td>
+            <td><span class="badge status-assessing">assessing</span></td>
+            <td>Security Owner</td>
+            <td>Cloudflare</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 14).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Production Backup Recovery Test <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">SEC-2026-DR</div>
+            </td>
+            <td>${displayStatus("recovery_test")}</td>
+            <td><span class="badge status-medium">medium</span></td>
+            <td><span class="badge status-open">open</span></td>
+            <td>Operations</td>
+            <td>D1 Database</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 30).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Client Data Risk Register <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">SEC-2026-RISK</div>
+            </td>
+            <td>${displayStatus("risk_register")}</td>
+            <td><span class="badge status-critical">critical</span></td>
+            <td><span class="badge status-active">active</span></td>
+            <td>Managing Director</td>
+            <td>Client Records</td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 10).toISOString())}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function exampleTeamRows() {
+        return `
+          <tr class="example-row">
+            <td>
+              Gerald Rushwaya <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">gerald@example.com</div>
+            </td>
+            <td>Managing Director</td>
+            <td>Executive</td>
+            <td>CRM, Projects, Finance, Documents</td>
+            <td><span class="badge status-won">Active</span></td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+          <tr class="example-row">
+            <td>
+              Finance User <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">finance@example.com</div>
+            </td>
+            <td>Finance</td>
+            <td>Accounts</td>
+            <td>Invoices, Payments, Receipts</td>
+            <td><span class="badge status-won">Active</span></td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
       async function openModuleModal(moduleName, id = null) {
         const config = MODULES[moduleName];
         if (!config) {
@@ -2512,7 +3465,7 @@
         }
         currentModuleName = moduleName;
         currentModuleRecordId = id;
-        const record = id ? await apiCall(config.endpoint + "/" + id) : {};
+        const record = id ? await apiCall(moduleRecordEndpoint(config, id)) : {};
         if (!record) {
           return;
         }
@@ -2607,7 +3560,7 @@
           showAlert("Please fill in all required fields", "danger");
           return;
         }
-        const data = {};
+        const data = { ...(config.fixedValues || {}) };
         config.fields.forEach((field) => {
           const input = document.getElementById("module_" + field.name);
           if (!input) {
@@ -2620,7 +3573,7 @@
           }
         });
         const endpoint = currentModuleRecordId
-          ? config.endpoint + "/" + currentModuleRecordId
+          ? moduleRecordEndpoint(config, currentModuleRecordId)
           : config.endpoint;
         const method = currentModuleRecordId ? "PUT" : "POST";
         const result = await apiCall(endpoint, method, data);
@@ -2638,7 +3591,7 @@
         if (!config || !confirm("Delete this " + config.singular.toLowerCase() + "?")) {
           return;
         }
-        const result = await apiCall(config.endpoint + "/" + id, "DELETE");
+        const result = await apiCall(moduleRecordEndpoint(config, id), "DELETE");
         if (result && result.success) {
           showAlert(config.singular + " deleted", "success");
           loadModule(moduleName);
@@ -2675,8 +3628,42 @@
         `,
                 )
                 .join("")
-            : `<tr><td colspan="6" class="text-center">No invoices yet</td></tr>`;
+            : exampleInvoiceRows();
         }
+      }
+
+      function exampleInvoiceRows() {
+        return `
+          <tr class="example-row">
+            <td>INV-2026-DEMO <span class="badge status-later">Example</span></td>
+            <td>Afroscaff</td>
+            <td>${money(12000)}</td>
+            <td><span class="badge status-sent">sent</span></td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 14).toISOString())}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Edit</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+                <button class="btn btn-sm btn-primary" disabled>Send</button>
+                <button class="btn btn-sm btn-success" disabled>Pay</button>
+              </div>
+            </td>
+          </tr>
+          <tr class="example-row">
+            <td>INV-2026-PAID <span class="badge status-later">Example</span></td>
+            <td>Project Client</td>
+            <td>${money(4200)}</td>
+            <td><span class="badge status-paid">paid</span></td>
+            <td>${displayDate(new Date(Date.now() - 86400000 * 3).toISOString())}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+              </div>
+            </td>
+          </tr>
+        `;
       }
 
       function addInvoiceItem(item = {}) {
@@ -3170,17 +4157,52 @@
           </tr>`;
               })
               .join("")
-          : `<tr><td colspan="7" class="text-center">No receipts yet</td></tr>`;
+          : exampleReceiptRows();
+      }
+
+      function exampleReceiptRows() {
+        return `
+          <tr class="example-row">
+            <td>RCPT-2026-DEMO <span class="badge status-later">Example</span></td>
+            <td>INV-2026-PAID</td>
+            <td>Project Client</td>
+            <td>${money(4200)}</td>
+            <td>${displayDate(new Date().toISOString())}</td>
+            <td>EFT</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+                <button class="btn btn-sm btn-primary" disabled>Send</button>
+              </div>
+            </td>
+          </tr>
+          <tr class="example-row">
+            <td>RCPT-2026-PART <span class="badge status-later">Example</span></td>
+            <td>INV-2026-DEMO</td>
+            <td>Afroscaff</td>
+            <td>${money(3000)}</td>
+            <td>${displayDate(new Date(Date.now() - 86400000 * 2).toISOString())}</td>
+            <td>Cash</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+              </div>
+            </td>
+          </tr>
+        `;
       }
 
       // Quotes
       async function loadQuotes() {
         const quotes = await apiCall("/admin/quotes");
-        if (quotes) {
+        if (Array.isArray(quotes)) {
           const list = document.getElementById("quotes-list");
-          list.innerHTML = quotes
-            .map(
-              (q) => `
+          list.innerHTML = quotes.length
+            ? quotes
+                .map(
+                  (q) => `
           <tr>
             <td>${escapeHtml(q.quote_number)}</td>
             <td>${escapeHtml(q.client_name)}</td>
@@ -3197,9 +4219,43 @@
             </td>
           </tr>
         `,
-            )
-            .join("");
+                )
+                .join("")
+            : exampleQuoteRows();
         }
+      }
+
+      function exampleQuoteRows() {
+        return `
+          <tr class="example-row">
+            <td>QUOTE-2026-DEMO <span class="badge status-later">Example</span></td>
+            <td>Northside School</td>
+            <td>${money(28000)}</td>
+            <td><span class="badge status-sent">sent</span></td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 14).toISOString())}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Edit</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+                <button class="btn btn-sm btn-danger" disabled>Delete</button>
+              </div>
+            </td>
+          </tr>
+          <tr class="example-row">
+            <td>QUOTE-2026-WON <span class="badge status-later">Example</span></td>
+            <td>Cloud Migration Lead</td>
+            <td>${money(45000)}</td>
+            <td><span class="badge status-accepted">accepted</span></td>
+            <td>${displayDate(new Date(Date.now() + 86400000 * 30).toISOString())}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" disabled>View</button>
+                <button class="btn btn-sm btn-secondary" disabled>Download</button>
+              </div>
+            </td>
+          </tr>
+        `;
       }
 
       async function saveQuote() {
@@ -3341,24 +4397,63 @@
       // Clients
       async function loadClients() {
         const clients = await apiCall("/admin/clients");
-        if (clients) {
-          const list = document.getElementById("clients-list");
-          list.innerHTML = clients
-            .map(
-              (c) => `
+        if (!Array.isArray(clients)) {
+          return;
+        }
+        const list = document.getElementById("clients-list");
+        clientCache.clear();
+        list.innerHTML = clients.length
+          ? clients
+              .map(
+                (c) => `
           <tr>
-            <td>${escapeHtml(c.name)}</td>
-            <td>${escapeHtml(c.email)}</td>
-            <td>${escapeHtml(c.phone || "N/A")}</td>
-            <td>${escapeHtml(c.city || "N/A")}</td>
             <td>
-              <button class="btn btn-sm btn-info">Edit</button>
+              ${escapeHtml(c.name)}
+              ${c.derived_from_invoices ? '<div><span class="badge status-later">From invoices</span></div>' : ""}
+            </td>
+            <td>${escapeHtml(c.email || "N/A")}</td>
+            <td>${escapeHtml(c.phone || "N/A")}</td>
+            <td>
+              ${Number(c.invoice_count || 0)}
+              ${Number(c.outstanding_invoice_count || 0) > 0 ? `<div style="font-size:0.8rem;color:var(--danger);">${Number(c.outstanding_invoice_count || 0)} outstanding</div>` : ""}
+            </td>
+            <td>${money(c.total_invoiced)}</td>
+            <td>${money(c.total_paid)}</td>
+            <td style="font-weight:600;color:${Number(c.outstanding || 0) > 0 ? "var(--danger)" : "var(--success)"};">${money(c.outstanding)}</td>
+            <td>
+              <span class="badge status-${c.derived_from_invoices ? "later" : "live"}">${c.derived_from_invoices ? "Invoice client" : "Saved client"}</span>
+              ${clientActionButtons(c)}
             </td>
           </tr>
         `,
-            )
-            .join("");
-        }
+              )
+              .join("")
+          : exampleClientRows();
+      }
+
+      function exampleClientRows() {
+        return `
+          <tr class="example-row">
+            <td>Afroscaff <span class="badge status-later">Example</span></td>
+            <td>accounts@afroscaff.example</td>
+            <td>+27 11 000 0000</td>
+            <td><div>3</div><div style="font-size:0.8rem;color:var(--danger);">2 outstanding</div></td>
+            <td>${money(18500)}</td>
+            <td>${money(9500)}</td>
+            <td style="font-weight:600;color:var(--danger);">${money(9000)}</td>
+            <td><span class="badge status-later">Example</span></td>
+          </tr>
+          <tr class="example-row">
+            <td>Project Client <span class="badge status-later">Example</span></td>
+            <td>finance@client.example</td>
+            <td>N/A</td>
+            <td>1</td>
+            <td>${money(4200)}</td>
+            <td>${money(4200)}</td>
+            <td style="font-weight:600;color:var(--success);">${money(0)}</td>
+            <td><span class="badge status-later">Example</span></td>
+          </tr>
+        `;
       }
 
       async function saveClient() {
@@ -3378,10 +4473,32 @@
           country: document.getElementById("client_country").value,
         };
 
-        const result = await apiCall("/admin/clients", "POST", data);
-        if (result && result.id) {
-          showAlert("Client added successfully!", "success");
+        const endpoint = currentEditClientId
+          ? "/admin/clients/" + encodeURIComponent(currentEditClientId)
+          : "/admin/clients";
+        const method = currentEditClientId ? "PUT" : "POST";
+        const result = await apiCall(endpoint, method, data);
+        if (result && (result.id || result.success)) {
+          showAlert("Client saved successfully!", "success");
           closeClientModal();
+          loadClients();
+        }
+      }
+
+      async function deleteClient(clientKey) {
+        const client = clientCache.get(clientKey);
+        if (!client || client.derived_from_invoices || !client.id) {
+          return;
+        }
+        if (!confirm("Delete this client profile? Invoice history will remain.")) {
+          return;
+        }
+        const result = await apiCall(
+          "/admin/clients/" + encodeURIComponent(client.id),
+          "DELETE",
+        );
+        if (result && result.success) {
+          showAlert("Client deleted successfully!", "success");
           loadClients();
         }
       }
@@ -3418,13 +4535,32 @@
         currentEditQuoteId = null;
       }
 
-      function openClientModal() {
+      function openClientModal(clientKey = null) {
         document.getElementById("clientForm").reset();
+        currentEditClientId = null;
+        const client = clientKey ? clientCache.get(clientKey) : null;
+        document.getElementById("client-modal-title").textContent = client
+          ? client.derived_from_invoices
+            ? "Create Client Profile"
+            : "Edit Client"
+          : "Add Client";
+        if (client) {
+          currentEditClientId = client.derived_from_invoices ? null : client.id;
+          setField("client_name", client.name);
+          setField("client_email", client.email);
+          setField("client_phone", client.phone);
+          setField("client_address", client.address);
+          setField("client_city", client.city);
+          setField("client_state", client.state);
+          setField("client_postal_code", client.postal_code);
+          setField("client_country", client.country);
+        }
         document.getElementById("clientModal").classList.add("show");
       }
 
       function closeClientModal() {
         document.getElementById("clientModal").classList.remove("show");
+        currentEditClientId = null;
       }
 
       function closeViewInvoiceModal() {
