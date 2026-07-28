@@ -16,6 +16,29 @@ const QUOTE_STATUSES = new Set([
   "rejected",
   "converted_to_invoice",
 ]);
+const LEAD_STAGES = new Set([
+  "new",
+  "qualified",
+  "meeting",
+  "requirements",
+  "proposal",
+  "won",
+  "lost",
+]);
+const PROJECT_STATUSES = new Set([
+  "planning",
+  "active",
+  "on_hold",
+  "completed",
+  "cancelled",
+]);
+const DOCUMENT_STATUSES = new Set([
+  "draft",
+  "review",
+  "approved",
+  "archived",
+]);
+const PRIORITIES = new Set(["low", "medium", "high"]);
 
 class RequestError extends Error {
   constructor(message, status = 400) {
@@ -73,6 +96,26 @@ export default {
 
       if (path === "/api/admin/analytics" && method === "GET") {
         return await handleAnalytics(env);
+      }
+
+      if (path.startsWith("/api/admin/company")) {
+        return await handleCompanyProfile(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/leads")) {
+        return await handleLeads(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/projects")) {
+        return await handleProjects(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/documents")) {
+        return await handleDocuments(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/team")) {
+        return await handleTeamMembers(request, env, path, method);
       }
 
       if (path.startsWith("/api/admin/invoices")) {
@@ -279,6 +322,80 @@ function trimText(value, field, { required = false, maxLength = 500 } = {}) {
   return text;
 }
 
+function normalizeKey(value, field, allowed, defaultValue) {
+  const raw = trimText(value || defaultValue, field, { maxLength: 80 });
+  const normalized = raw.toLowerCase().replace(/\s+/g, "_");
+  if (!normalized && defaultValue) {
+    return defaultValue;
+  }
+  if (!allowed.has(normalized)) {
+    throw new RequestError(`${field} is invalid`);
+  }
+  return normalized;
+}
+
+function normalizeOptionalEmail(value, field = "Email") {
+  const email = trimText(value, field, { maxLength: 254 });
+  return email ? validateEmail(email, field) : "";
+}
+
+function normalizeDate(value, field) {
+  const date = trimText(value, field, { maxLength: 30 });
+  if (!date) {
+    return null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new RequestError(`${field} must use YYYY-MM-DD format`);
+  }
+  return date;
+}
+
+function normalizeOptionalUrl(value, field) {
+  const url = trimText(value, field, { maxLength: 1000 });
+  if (!url) {
+    return "";
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new RequestError(`${field} must be a valid URL`);
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new RequestError(`${field} must use http or https`);
+  }
+  return parsed.toString();
+}
+
+function normalizeInteger(value, field, { min = 0, max = 100, fallback = 0 } = {}) {
+  const hasValue = value !== undefined && value !== null && String(value) !== "";
+  const number = Number(hasValue ? value : fallback);
+  if (!Number.isInteger(number) || number < min || number > max) {
+    throw new RequestError(`${field} must be between ${min} and ${max}`);
+  }
+  return number;
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function normalizeStringList(value, field) {
+  const rawList = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const list = rawList.map((item) =>
+    trimText(item, field, { required: true, maxLength: 80 }),
+  );
+  if (list.length > 20) {
+    throw new RequestError(`${field} has too many entries`);
+  }
+  return [...new Set(list)];
+}
+
 function validateEmail(value, field = "Email") {
   const email = trimText(value, field, { required: true, maxLength: 254 });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -405,6 +522,130 @@ function normalizeQuotePayload(data) {
   };
 }
 
+function normalizeCompanyPayload(raw) {
+  const defaultTaxRate = Number(raw.default_tax_rate || 0);
+  if (!Number.isFinite(defaultTaxRate) || defaultTaxRate < 0 || defaultTaxRate > 100) {
+    throw new RequestError("Default tax rate must be between 0 and 100");
+  }
+  const currency = trimText(raw.currency || "ZAR", "Currency", {
+    maxLength: 8,
+  }).toUpperCase();
+
+  return {
+    company_name: trimText(raw.company_name, "Company name", {
+      required: true,
+      maxLength: 200,
+    }),
+    registration_number: trimText(raw.registration_number, "Registration number", {
+      maxLength: 100,
+    }),
+    vat_number: trimText(raw.vat_number, "VAT number", { maxLength: 100 }),
+    email: normalizeOptionalEmail(raw.email, "Company email"),
+    phone: trimText(raw.phone, "Company phone", { maxLength: 100 }),
+    website: normalizeOptionalUrl(raw.website, "Website"),
+    address: trimText(raw.address, "Address", { maxLength: 1500 }),
+    bank_name: trimText(raw.bank_name, "Bank name", { maxLength: 100 }),
+    account_name: trimText(raw.account_name, "Account name", { maxLength: 150 }),
+    account_number: trimText(raw.account_number, "Account number", {
+      maxLength: 100,
+    }),
+    branch_code: trimText(raw.branch_code, "Branch code", { maxLength: 50 }),
+    currency: currency || "ZAR",
+    default_tax_rate: Number(defaultTaxRate.toFixed(2)),
+  };
+}
+
+function defaultCompanyProfile() {
+  return {
+    id: "default",
+    company_name: "Beplugged Tech",
+    registration_number: "",
+    vat_number: "",
+    email: "info@beplugged.co.za",
+    phone: "",
+    website: "https://beplugged.co.za",
+    address: "",
+    bank_name: "FNB",
+    account_name: "Gerald Rushwaya",
+    account_number: "63125701268",
+    branch_code: "250655",
+    currency: "ZAR",
+    default_tax_rate: 0,
+  };
+}
+
+function normalizeLeadPayload(raw) {
+  const estimatedValueCents = amountToCents(raw.estimated_value || 0, "Estimated value");
+  return {
+    company_name: trimText(raw.company_name, "Company name", {
+      required: true,
+      maxLength: 200,
+    }),
+    contact_name: trimText(raw.contact_name, "Contact name", { maxLength: 200 }),
+    email: normalizeOptionalEmail(raw.email, "Lead email"),
+    phone: trimText(raw.phone, "Lead phone", { maxLength: 100 }),
+    source: trimText(raw.source, "Lead source", { maxLength: 100 }),
+    stage: normalizeKey(raw.stage, "Lead stage", LEAD_STAGES, "new"),
+    priority: normalizeKey(raw.priority, "Lead priority", PRIORITIES, "medium"),
+    estimated_value: centsToAmount(estimatedValueCents),
+    estimated_value_cents: estimatedValueCents,
+    next_follow_up: normalizeDate(raw.next_follow_up, "Next follow-up"),
+    notes: trimText(raw.notes, "Lead notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeProjectPayload(raw) {
+  const budgetCents = amountToCents(raw.budget || 0, "Budget");
+  return {
+    name: trimText(raw.name, "Project name", { required: true, maxLength: 200 }),
+    client_name: trimText(raw.client_name, "Client name", { maxLength: 200 }),
+    status: normalizeKey(raw.status, "Project status", PROJECT_STATUSES, "planning"),
+    priority: normalizeKey(raw.priority, "Project priority", PRIORITIES, "medium"),
+    owner: trimText(raw.owner, "Project owner", { maxLength: 200 }),
+    start_date: normalizeDate(raw.start_date, "Start date"),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    budget: centsToAmount(budgetCents),
+    budget_cents: budgetCents,
+    progress: normalizeInteger(raw.progress, "Progress", {
+      min: 0,
+      max: 100,
+      fallback: 0,
+    }),
+    notes: trimText(raw.notes, "Project notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeDocumentPayload(raw) {
+  return {
+    title: trimText(raw.title, "Document title", {
+      required: true,
+      maxLength: 240,
+    }),
+    category: trimText(raw.category, "Document category", { maxLength: 120 }),
+    owner: trimText(raw.owner, "Document owner", { maxLength: 200 }),
+    status: normalizeKey(raw.status, "Document status", DOCUMENT_STATUSES, "draft"),
+    version: trimText(raw.version || "1.0", "Document version", {
+      maxLength: 40,
+    }) || "1.0",
+    review_date: normalizeDate(raw.review_date, "Review date"),
+    linked_type: trimText(raw.linked_type, "Linked type", { maxLength: 80 }),
+    linked_id: trimText(raw.linked_id, "Linked id", { maxLength: 160 }),
+    location_url: normalizeOptionalUrl(raw.location_url, "Location URL"),
+    notes: trimText(raw.notes, "Document notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeTeamMemberPayload(raw) {
+  return {
+    name: trimText(raw.name, "Name", { required: true, maxLength: 200 }),
+    email: validateEmail(raw.email, "Team member email"),
+    role: trimText(raw.role, "Role", { required: true, maxLength: 120 }),
+    department: trimText(raw.department, "Department", { maxLength: 120 }),
+    permissions: normalizeStringList(raw.permissions, "Permissions"),
+    active: raw.active === undefined ? true : normalizeBoolean(raw.active),
+  };
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -469,10 +710,117 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS company_profile (
+      id TEXT PRIMARY KEY DEFAULT 'default',
+      company_name TEXT NOT NULL,
+      registration_number TEXT,
+      vat_number TEXT,
+      email TEXT,
+      phone TEXT,
+      website TEXT,
+      address TEXT,
+      bank_name TEXT,
+      account_name TEXT,
+      account_number TEXT,
+      branch_code TEXT,
+      currency TEXT NOT NULL DEFAULT 'ZAR',
+      default_tax_rate REAL NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      company_name TEXT NOT NULL,
+      contact_name TEXT,
+      email TEXT,
+      phone TEXT,
+      source TEXT,
+      stage TEXT NOT NULL DEFAULT 'new' CHECK (stage IN ('new', 'qualified', 'meeting', 'requirements', 'proposal', 'won', 'lost')),
+      priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+      estimated_value REAL NOT NULL DEFAULT 0,
+      estimated_value_cents INTEGER NOT NULL DEFAULT 0,
+      next_follow_up DATE,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      project_code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      client_name TEXT,
+      status TEXT NOT NULL DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'on_hold', 'completed', 'cancelled')),
+      priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+      owner TEXT,
+      start_date DATE,
+      due_date DATE,
+      budget REAL NOT NULL DEFAULT 0,
+      budget_cents INTEGER NOT NULL DEFAULT 0,
+      progress INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT,
+      owner TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'approved', 'archived')),
+      version TEXT NOT NULL DEFAULT '1.0',
+      review_date DATE,
+      linked_type TEXT,
+      linked_id TEXT,
+      location_url TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS team_members (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL,
+      department TEXT,
+      permissions TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id)",
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads (stage)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_projects_status ON projects (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_projects_due_date ON projects (due_date)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_documents_status ON documents (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_documents_review_date ON documents (review_date)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email)",
   ).run();
   await ensureColumn(env, "invoices", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "invoices", "tax_cents", "tax_cents INTEGER NOT NULL DEFAULT 0");
@@ -850,7 +1198,50 @@ async function handleContactMessage(request, env, method) {
     );
   }
 
+  await createLeadFromContact(env, data);
+
   return json({ success: true });
+}
+
+async function createLeadFromContact(env, data) {
+  if (!env.DB) {
+    return;
+  }
+  try {
+    await ensureSchema(env);
+    const id = createEntityId("lead");
+    await env.DB.prepare(
+      `INSERT INTO leads (id, company_name, contact_name, email, phone, source, stage, priority, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.name,
+        data.name,
+        data.email,
+        data.phone || "",
+        "Website",
+        "new",
+        "medium",
+        data.message,
+      )
+      .run();
+    await recordAudit(env, {
+      actor: "public",
+      action: "created",
+      entity_type: "lead",
+      entity_id: id,
+      entity_number: data.email,
+      details: { source: "Website contact" },
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "contact_lead_capture_failed",
+        error: String(error?.message || error),
+      }),
+    );
+  }
 }
 
 async function handleLogin(request, env) {
@@ -1618,6 +2009,582 @@ async function handleSendReceipt(request, env, paymentId) {
   return json({ success: true, result });
 }
 
+async function handleCompanyProfile(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  if (segments[4]) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (method === "GET") {
+    const profile = await env.DB.prepare(
+      "SELECT * FROM company_profile WHERE id = ?",
+    )
+      .bind("default")
+      .first();
+    return json(profile || defaultCompanyProfile());
+  }
+
+  if (method === "PUT" || method === "POST") {
+    const data = normalizeCompanyPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `INSERT INTO company_profile (
+         id, company_name, registration_number, vat_number, email, phone,
+         website, address, bank_name, account_name, account_number,
+         branch_code, currency, default_tax_rate, updated_at
+       )
+       VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(id) DO UPDATE SET
+         company_name = excluded.company_name,
+         registration_number = excluded.registration_number,
+         vat_number = excluded.vat_number,
+         email = excluded.email,
+         phone = excluded.phone,
+         website = excluded.website,
+         address = excluded.address,
+         bank_name = excluded.bank_name,
+         account_name = excluded.account_name,
+         account_number = excluded.account_number,
+         branch_code = excluded.branch_code,
+         currency = excluded.currency,
+         default_tax_rate = excluded.default_tax_rate,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(
+        data.company_name,
+        data.registration_number,
+        data.vat_number,
+        data.email,
+        data.phone,
+        data.website,
+        data.address,
+        data.bank_name,
+        data.account_name,
+        data.account_number,
+        data.branch_code,
+        data.currency,
+        data.default_tax_rate,
+      )
+      .run();
+
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "company_profile",
+      entity_id: "default",
+      entity_number: data.company_name,
+    });
+
+    return json({ success: true, ...data });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleLeads(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const leadId = segments[4];
+
+  if (method === "GET" && !leadId) {
+    const result = await env.DB.prepare(
+      `SELECT * FROM leads
+       ORDER BY
+         CASE stage
+           WHEN 'new' THEN 1
+           WHEN 'qualified' THEN 2
+           WHEN 'meeting' THEN 3
+           WHEN 'requirements' THEN 4
+           WHEN 'proposal' THEN 5
+           WHEN 'won' THEN 6
+           WHEN 'lost' THEN 7
+           ELSE 8
+         END,
+         COALESCE(next_follow_up, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && leadId) {
+    const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+      .bind(leadId)
+      .first();
+    return json(lead || { error: "Lead not found" }, lead ? {} : { status: 404 });
+  }
+
+  if (method === "POST" && !leadId) {
+    const data = normalizeLeadPayload(await parseRequestJson(request));
+    const id = createEntityId("lead");
+    await env.DB.prepare(
+      `INSERT INTO leads (
+         id, company_name, contact_name, email, phone, source, stage, priority,
+         estimated_value, estimated_value_cents, next_follow_up, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.company_name,
+        data.contact_name,
+        data.email,
+        data.phone,
+        data.source,
+        data.stage,
+        data.priority,
+        data.estimated_value,
+        data.estimated_value_cents,
+        data.next_follow_up,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "lead",
+      entity_id: id,
+      entity_number: data.company_name,
+      details: { stage: data.stage, source: data.source },
+    });
+    return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && leadId) {
+    const existing = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+      .bind(leadId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Lead not found", 404);
+    }
+    const data = normalizeLeadPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE leads SET
+         company_name = ?, contact_name = ?, email = ?, phone = ?, source = ?,
+         stage = ?, priority = ?, estimated_value = ?, estimated_value_cents = ?,
+         next_follow_up = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.company_name,
+        data.contact_name,
+        data.email,
+        data.phone,
+        data.source,
+        data.stage,
+        data.priority,
+        data.estimated_value,
+        data.estimated_value_cents,
+        data.next_follow_up,
+        data.notes,
+        leadId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "lead",
+      entity_id: leadId,
+      entity_number: data.company_name,
+      details: { previous_stage: existing.stage, stage: data.stage },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && leadId) {
+    const existing = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+      .bind(leadId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Lead not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM leads WHERE id = ?").bind(leadId).run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "lead",
+      entity_id: leadId,
+      entity_number: existing.company_name,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleProjects(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const projectId = segments[4];
+
+  if (method === "GET" && !projectId) {
+    const result = await env.DB.prepare(
+      `SELECT * FROM projects
+       ORDER BY
+         CASE status
+           WHEN 'active' THEN 1
+           WHEN 'planning' THEN 2
+           WHEN 'on_hold' THEN 3
+           WHEN 'completed' THEN 4
+           WHEN 'cancelled' THEN 5
+           ELSE 6
+         END,
+         COALESCE(due_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && projectId) {
+    const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+      .bind(projectId)
+      .first();
+    return json(
+      project || { error: "Project not found" },
+      project ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !projectId) {
+    const data = normalizeProjectPayload(await parseRequestJson(request));
+    const id = createEntityId("project");
+    const projectCode = generateDocumentNumber("PRJ");
+    await env.DB.prepare(
+      `INSERT INTO projects (
+         id, project_code, name, client_name, status, priority, owner,
+         start_date, due_date, budget, budget_cents, progress, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        projectCode,
+        data.name,
+        data.client_name,
+        data.status,
+        data.priority,
+        data.owner,
+        data.start_date,
+        data.due_date,
+        data.budget,
+        data.budget_cents,
+        data.progress,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "project",
+      entity_id: id,
+      entity_number: projectCode,
+      details: { status: data.status, client: data.client_name },
+    });
+    return json({ id, project_code: projectCode, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && projectId) {
+    const existing = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+      .bind(projectId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Project not found", 404);
+    }
+    const data = normalizeProjectPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE projects SET
+         name = ?, client_name = ?, status = ?, priority = ?, owner = ?,
+         start_date = ?, due_date = ?, budget = ?, budget_cents = ?,
+         progress = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.name,
+        data.client_name,
+        data.status,
+        data.priority,
+        data.owner,
+        data.start_date,
+        data.due_date,
+        data.budget,
+        data.budget_cents,
+        data.progress,
+        data.notes,
+        projectId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "project",
+      entity_id: projectId,
+      entity_number: existing.project_code,
+      details: { previous_status: existing.status, status: data.status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && projectId) {
+    const existing = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+      .bind(projectId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Project not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM projects WHERE id = ?")
+      .bind(projectId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "project",
+      entity_id: projectId,
+      entity_number: existing.project_code,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleDocuments(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const documentId = segments[4];
+
+  if (method === "GET" && !documentId) {
+    const result = await env.DB.prepare(
+      `SELECT * FROM documents
+       ORDER BY
+         CASE status
+           WHEN 'review' THEN 1
+           WHEN 'draft' THEN 2
+           WHEN 'approved' THEN 3
+           WHEN 'archived' THEN 4
+           ELSE 5
+         END,
+         COALESCE(review_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && documentId) {
+    const document = await env.DB.prepare("SELECT * FROM documents WHERE id = ?")
+      .bind(documentId)
+      .first();
+    return json(
+      document || { error: "Document not found" },
+      document ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !documentId) {
+    const data = normalizeDocumentPayload(await parseRequestJson(request));
+    const id = createEntityId("doc");
+    await env.DB.prepare(
+      `INSERT INTO documents (
+         id, title, category, owner, status, version, review_date, linked_type,
+         linked_id, location_url, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.title,
+        data.category,
+        data.owner,
+        data.status,
+        data.version,
+        data.review_date,
+        data.linked_type,
+        data.linked_id,
+        data.location_url,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "document",
+      entity_id: id,
+      entity_number: data.title,
+      details: { status: data.status, category: data.category },
+    });
+    return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && documentId) {
+    const existing = await env.DB.prepare("SELECT * FROM documents WHERE id = ?")
+      .bind(documentId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Document not found", 404);
+    }
+    const data = normalizeDocumentPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE documents SET
+         title = ?, category = ?, owner = ?, status = ?, version = ?,
+         review_date = ?, linked_type = ?, linked_id = ?, location_url = ?,
+         notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.title,
+        data.category,
+        data.owner,
+        data.status,
+        data.version,
+        data.review_date,
+        data.linked_type,
+        data.linked_id,
+        data.location_url,
+        data.notes,
+        documentId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "document",
+      entity_id: documentId,
+      entity_number: data.title,
+      details: { previous_status: existing.status, status: data.status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && documentId) {
+    const existing = await env.DB.prepare("SELECT * FROM documents WHERE id = ?")
+      .bind(documentId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Document not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM documents WHERE id = ?")
+      .bind(documentId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "document",
+      entity_id: documentId,
+      entity_number: existing.title,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleTeamMembers(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const memberId = segments[4];
+
+  if (method === "GET" && !memberId) {
+    const result = await env.DB.prepare(
+      "SELECT * FROM team_members ORDER BY active DESC, name ASC LIMIT 200",
+    ).all();
+    const members = (result.results || []).map((member) => ({
+      ...member,
+      permissions: parseStoredItems(member.permissions),
+      active: Number(member.active || 0) === 1,
+    }));
+    return json(members);
+  }
+
+  if (method === "GET" && memberId) {
+    const member = await env.DB.prepare("SELECT * FROM team_members WHERE id = ?")
+      .bind(memberId)
+      .first();
+    return json(
+      member
+        ? {
+            ...member,
+            permissions: parseStoredItems(member.permissions),
+            active: Number(member.active || 0) === 1,
+          }
+        : { error: "Team member not found" },
+      member ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !memberId) {
+    const data = normalizeTeamMemberPayload(await parseRequestJson(request));
+    const id = createEntityId("member");
+    await env.DB.prepare(
+      `INSERT INTO team_members (id, name, email, role, department, permissions, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.name,
+        data.email,
+        data.role,
+        data.department,
+        JSON.stringify(data.permissions),
+        data.active ? 1 : 0,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "team_member",
+      entity_id: id,
+      entity_number: data.email,
+      details: { role: data.role, department: data.department },
+    });
+    return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && memberId) {
+    const existing = await env.DB.prepare("SELECT * FROM team_members WHERE id = ?")
+      .bind(memberId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Team member not found", 404);
+    }
+    const data = normalizeTeamMemberPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE team_members SET
+         name = ?, email = ?, role = ?, department = ?, permissions = ?,
+         active = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.name,
+        data.email,
+        data.role,
+        data.department,
+        JSON.stringify(data.permissions),
+        data.active ? 1 : 0,
+        memberId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "team_member",
+      entity_id: memberId,
+      entity_number: data.email,
+      details: { previous_role: existing.role, role: data.role },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && memberId) {
+    const existing = await env.DB.prepare("SELECT * FROM team_members WHERE id = ?")
+      .bind(memberId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Team member not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM team_members WHERE id = ?")
+      .bind(memberId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "team_member",
+      entity_id: memberId,
+      entity_number: existing.email,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
 async function handleQuotes(request, env, path, method) {
   await ensureOperationalSchema(env);
   const segments = path.split("/");
@@ -1864,7 +2831,7 @@ async function handlePublicQuoteView(quoteId, env) {
 }
 
 async function handleDashboardStats(env) {
-  await ensurePaymentsTable(env);
+  await ensureSchema(env);
   const totalInvoices = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM invoices",
   ).first();
@@ -1885,12 +2852,28 @@ async function handleDashboardStats(env) {
   const pendingInvoices = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ('paid', 'draft')",
   ).first();
+  const openLeads = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM leads WHERE stage NOT IN ('won', 'lost')",
+  ).first();
+  const activeProjects = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM projects WHERE status IN ('planning', 'active', 'on_hold')",
+  ).first();
+  const documentsInReview = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM documents WHERE status = 'review'",
+  ).first();
+  const teamMembers = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM team_members WHERE active = 1",
+  ).first();
 
   return json({
       total_invoices: totalInvoices.count,
       total_quotes: totalQuotes.count,
       total_revenue: centsToAmount(Number(totalRevenue.total_cents || 0)),
       pending_invoices: pendingInvoices.count,
+      open_leads: Number(openLeads?.count || 0),
+      active_projects: Number(activeProjects?.count || 0),
+      documents_in_review: Number(documentsInReview?.count || 0),
+      team_members: Number(teamMembers?.count || 0),
   });
 }
 
@@ -1930,6 +2913,27 @@ async function handleAnalytics(env) {
   ).first();
   const pendingCount = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM invoices WHERE status NOT IN ('paid', 'draft')",
+  ).first();
+  const openLeads = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM leads WHERE stage NOT IN ('won', 'lost')",
+  ).first();
+  const activeProjects = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM projects WHERE status IN ('planning', 'active', 'on_hold')",
+  ).first();
+  const documentsInReview = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM documents WHERE status = 'review'",
+  ).first();
+  const upcomingDocumentReviews = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM documents
+     WHERE review_date IS NOT NULL
+       AND status != 'archived'
+       AND review_date <= date('now', '+30 days')`,
+  ).first();
+  const teamMembers = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM team_members WHERE active = 1",
+  ).first();
+  const outstandingQuotes = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM quotes WHERE status IN ('draft', 'sent', 'viewed')",
   ).first();
 
   const collectedCents = Number(collectedRow?.cents || 0);
@@ -1987,6 +2991,12 @@ async function handleAnalytics(env) {
       outstanding: centsToAmount(outstandingCents),
       invoices_paid: Number(paidCount?.count || 0),
       invoices_pending: Number(pendingCount?.count || 0),
+      open_leads: Number(openLeads?.count || 0),
+      active_projects: Number(activeProjects?.count || 0),
+      documents_in_review: Number(documentsInReview?.count || 0),
+      upcoming_document_reviews: Number(upcomingDocumentReviews?.count || 0),
+      team_members: Number(teamMembers?.count || 0),
+      outstanding_quotes: Number(outstandingQuotes?.count || 0),
     },
     monthly,
     status_breakdown,

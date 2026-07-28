@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Invoicing System - Admin</title>
+    <title>Beplugged Enterprise - Admin</title>
     <link rel="stylesheet" href="/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <style>
@@ -197,6 +197,42 @@
         color: var(--dark);
       }
 
+      .status-new,
+      .status-planning,
+      .status-draft {
+        background-color: rgba(44, 45, 63, 0.12);
+        color: var(--dark);
+      }
+
+      .status-qualified,
+      .status-meeting,
+      .status-active,
+      .status-review {
+        background-color: rgba(240, 80, 35, 0.18);
+        color: var(--primary);
+      }
+
+      .status-requirements,
+      .status-proposal,
+      .status-on_hold {
+        background-color: rgba(224, 165, 0, 0.18);
+        color: #8a6500;
+      }
+
+      .status-won,
+      .status-completed,
+      .status-approved {
+        background-color: rgba(31, 138, 82, 0.18);
+        color: #176b3f;
+      }
+
+      .status-lost,
+      .status-cancelled,
+      .status-archived {
+        background-color: rgba(44, 45, 63, 0.15);
+        color: var(--dark);
+      }
+
       .modal {
         display: none;
         position: fixed;
@@ -361,6 +397,30 @@
         max-width: 300px;
       }
 
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+
+      .full-span {
+        grid-column: 1 / -1;
+      }
+
+      .progress-mini {
+        background: rgba(44, 45, 63, 0.12);
+        border-radius: 999px;
+        height: 8px;
+        overflow: hidden;
+        width: 100px;
+      }
+
+      .progress-mini span {
+        background: var(--primary);
+        display: block;
+        height: 100%;
+      }
+
       @media (max-width: 768px) {
         .sidebar {
           display: none;
@@ -385,7 +445,7 @@
     <!-- Navigation -->
     <nav class="navbar">
       <div class="navbar-brand">
-        <i class="fas fa-file-invoice-dollar"></i> Invoicing System
+        <i class="fas fa-building"></i> Beplugged Enterprise
       </div>
       <div class="navbar-nav">
         <a class="nav-link" href="#" onclick="logout()">Logout</a>
@@ -399,14 +459,29 @@
           <button class="nav-link active" onclick="showTab('dashboard')">
             <i class="fas fa-th-large"></i> Dashboard
           </button>
+          <button class="nav-link" onclick="showTab('company')">
+            <i class="fas fa-building"></i> Company
+          </button>
+          <button class="nav-link" onclick="showTab('team')">
+            <i class="fas fa-user-shield"></i> Team
+          </button>
+          <button class="nav-link" onclick="showTab('leads')">
+            <i class="fas fa-bullseye"></i> Leads
+          </button>
+          <button class="nav-link" onclick="showTab('clients')">
+            <i class="fas fa-users"></i> Clients
+          </button>
+          <button class="nav-link" onclick="showTab('projects')">
+            <i class="fas fa-diagram-project"></i> Projects
+          </button>
+          <button class="nav-link" onclick="showTab('documents')">
+            <i class="fas fa-folder-open"></i> Documents
+          </button>
           <button class="nav-link" onclick="showTab('invoices')">
             <i class="fas fa-file-invoice"></i> Invoices
           </button>
           <button class="nav-link" onclick="showTab('quotes')">
             <i class="fas fa-quote-left"></i> Quotes
-          </button>
-          <button class="nav-link" onclick="showTab('clients')">
-            <i class="fas fa-users"></i> Clients
           </button>
           <button class="nav-link" onclick="showTab('receipts')">
             <i class="fas fa-receipt"></i> Receipts
@@ -454,6 +529,26 @@
             <div class="stat-card">
               <h3>Pending Invoices</h3>
               <div class="value" id="kpi-pending">0</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #2c2d3f">
+              <h3>Open Leads</h3>
+              <div class="value" id="kpi-open-leads" style="color: #2c2d3f">
+                0
+              </div>
+            </div>
+            <div class="stat-card" style="border-left-color: #1f8a52">
+              <h3>Active Projects</h3>
+              <div class="value" id="kpi-active-projects" style="color: #1f8a52">
+                0
+              </div>
+            </div>
+            <div class="stat-card">
+              <h3>Document Reviews</h3>
+              <div class="value" id="kpi-document-reviews">0</div>
+            </div>
+            <div class="stat-card">
+              <h3>Team Members</h3>
+              <div class="value" id="kpi-team-members">0</div>
             </div>
           </div>
 
@@ -511,6 +606,207 @@
                   </tr>
                 </thead>
                 <tbody id="recent-invoices-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Company Tab -->
+        <div id="company-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Company</h2>
+            <button class="btn btn-primary" onclick="saveCompany()">
+              <i class="fas fa-save"></i> Save Company
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h4>Company Profile</h4></div>
+            <div class="modal-body">
+              <form id="companyForm">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label class="form-label">Company Name *</label>
+                    <input type="text" class="form-control" id="company_name" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Registration Number</label>
+                    <input type="text" class="form-control" id="company_registration_number" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">VAT Number</label>
+                    <input type="text" class="form-control" id="company_vat_number" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" id="company_email" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" class="form-control" id="company_phone" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Website</label>
+                    <input type="url" class="form-control" id="company_website" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Currency</label>
+                    <input type="text" class="form-control" id="company_currency" maxlength="8" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Default Tax Rate %</label>
+                    <input type="number" class="form-control" id="company_default_tax_rate" min="0" max="100" step="0.01" />
+                  </div>
+                  <div class="form-group full-span">
+                    <label class="form-label">Address</label>
+                    <textarea class="form-control" id="company_address" rows="3"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Bank Name</label>
+                    <input type="text" class="form-control" id="company_bank_name" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Account Name</label>
+                    <input type="text" class="form-control" id="company_account_name" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Account Number</label>
+                    <input type="text" class="form-control" id="company_account_number" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Branch Code</label>
+                    <input type="text" class="form-control" id="company_branch_code" />
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Team Tab -->
+        <div id="team-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Team</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('team')">
+              <i class="fas fa-plus"></i> New Member
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Access Areas</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="team-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Leads Tab -->
+        <div id="leads-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Leads</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('leads')">
+              <i class="fas fa-plus"></i> New Lead
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Contact</th>
+                    <th>Stage</th>
+                    <th>Value</th>
+                    <th>Follow-up</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="leads-list">
+                  <tr>
+                    <td colspan="6" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Projects Tab -->
+        <div id="projects-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Projects</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('projects')">
+              <i class="fas fa-plus"></i> New Project
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Due</th>
+                    <th>Progress</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="projects-list">
+                  <tr>
+                    <td colspan="7" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Documents Tab -->
+        <div id="documents-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Documents</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('documents')">
+              <i class="fas fa-plus"></i> New Document
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Review Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="documents-list">
                   <tr>
                     <td colspan="6" class="text-center">Loading...</td>
                   </tr>
@@ -1106,6 +1402,45 @@
       </div>
     </div>
 
+    <!-- EBMS Module Modal -->
+    <div id="moduleModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="module-modal-title">Create Record</h5>
+          <button
+            type="button"
+            onclick="closeModuleModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="moduleForm">
+            <div id="module-form-grid" class="form-grid"></div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="closeModuleModal()"
+          >
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" onclick="saveModuleItem()">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="/js/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script>
@@ -1119,6 +1454,137 @@
       let currentEditInvoiceId = null;
       let currentEditInvoiceStatus = "draft";
       let currentEditQuoteId = null;
+      let currentModuleName = null;
+      let currentModuleRecordId = null;
+
+      const MODULES = {
+        leads: {
+          endpoint: "/admin/leads",
+          listId: "leads-list",
+          singular: "Lead",
+          fields: [
+            { name: "company_name", label: "Company", required: true },
+            { name: "contact_name", label: "Contact" },
+            { name: "email", label: "Email", type: "email" },
+            { name: "phone", label: "Phone", type: "tel" },
+            { name: "source", label: "Source" },
+            {
+              name: "stage",
+              label: "Stage",
+              type: "select",
+              defaultValue: "new",
+              options: ["new", "qualified", "meeting", "requirements", "proposal", "won", "lost"],
+            },
+            {
+              name: "priority",
+              label: "Priority",
+              type: "select",
+              defaultValue: "medium",
+              options: ["low", "medium", "high"],
+            },
+            {
+              name: "estimated_value",
+              label: "Estimated Value",
+              type: "number",
+              step: "0.01",
+              min: "0",
+              defaultValue: "0",
+            },
+            { name: "next_follow_up", label: "Next Follow-up", type: "date" },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderLeadRows,
+        },
+        projects: {
+          endpoint: "/admin/projects",
+          listId: "projects-list",
+          singular: "Project",
+          fields: [
+            { name: "name", label: "Project Name", required: true },
+            { name: "client_name", label: "Client" },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "planning",
+              options: ["planning", "active", "on_hold", "completed", "cancelled"],
+            },
+            {
+              name: "priority",
+              label: "Priority",
+              type: "select",
+              defaultValue: "medium",
+              options: ["low", "medium", "high"],
+            },
+            { name: "owner", label: "Owner" },
+            { name: "start_date", label: "Start Date", type: "date" },
+            { name: "due_date", label: "Due Date", type: "date" },
+            {
+              name: "budget",
+              label: "Budget",
+              type: "number",
+              step: "0.01",
+              min: "0",
+              defaultValue: "0",
+            },
+            {
+              name: "progress",
+              label: "Progress %",
+              type: "number",
+              step: "1",
+              min: "0",
+              max: "100",
+              defaultValue: "0",
+            },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderProjectRows,
+        },
+        documents: {
+          endpoint: "/admin/documents",
+          listId: "documents-list",
+          singular: "Document",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            { name: "category", label: "Category" },
+            { name: "owner", label: "Owner" },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "review", "approved", "archived"],
+            },
+            { name: "version", label: "Version", defaultValue: "1.0" },
+            { name: "review_date", label: "Review Date", type: "date" },
+            { name: "linked_type", label: "Linked Type" },
+            { name: "linked_id", label: "Linked ID" },
+            { name: "location_url", label: "Location URL", type: "url", fullSpan: true },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderDocumentRows,
+        },
+        team: {
+          endpoint: "/admin/team",
+          listId: "team-list",
+          singular: "Team Member",
+          fields: [
+            { name: "name", label: "Name", required: true },
+            { name: "email", label: "Email", type: "email", required: true },
+            { name: "role", label: "Role", required: true },
+            { name: "department", label: "Department" },
+            {
+              name: "permissions",
+              label: "Access Areas",
+              type: "textarea",
+              fullSpan: true,
+              placeholder: "CRM, Projects, Finance",
+            },
+            { name: "active", label: "Active", type: "checkbox", defaultValue: true },
+          ],
+          render: renderTeamRows,
+        },
+      };
 
       // Initialize
       document.addEventListener("DOMContentLoaded", function () {
@@ -1175,9 +1641,28 @@
           .querySelectorAll(".tab-content")
           .forEach((tab) => tab.classList.add("hidden"));
         document.getElementById(tabName + "-tab").classList.remove("hidden");
+        document
+          .querySelectorAll(".sidebar .nav-link")
+          .forEach((button) => button.classList.remove("active"));
+        const activeButton = Array.from(
+          document.querySelectorAll(".sidebar .nav-link"),
+        ).find((button) => button.getAttribute("onclick") === `showTab('${tabName}')`);
+        if (activeButton) {
+          activeButton.classList.add("active");
+        }
 
         if (tabName === "dashboard") {
           loadDashboard();
+        } else if (tabName === "company") {
+          loadCompany();
+        } else if (tabName === "team") {
+          loadModule("team");
+        } else if (tabName === "leads") {
+          loadModule("leads");
+        } else if (tabName === "projects") {
+          loadModule("projects");
+        } else if (tabName === "documents") {
+          loadModule("documents");
         } else if (tabName === "invoices") {
           loadInvoices();
         } else if (tabName === "quotes") {
@@ -1286,6 +1771,14 @@
           );
           document.getElementById("kpi-pending").textContent =
             analytics.kpis.invoices_pending;
+          document.getElementById("kpi-open-leads").textContent =
+            analytics.kpis.open_leads;
+          document.getElementById("kpi-active-projects").textContent =
+            analytics.kpis.active_projects;
+          document.getElementById("kpi-document-reviews").textContent =
+            analytics.kpis.documents_in_review;
+          document.getElementById("kpi-team-members").textContent =
+            analytics.kpis.team_members;
           try {
             renderCharts(analytics);
           } catch (err) {
@@ -1452,6 +1945,347 @@
             },
           },
         });
+      }
+
+      // Company + EBMS v1 modules
+      function displayDate(value) {
+        return value ? new Date(value).toLocaleDateString() : "N/A";
+      }
+
+      function displayPlain(value, fallback = "N/A") {
+        const text = String(value || "").trim();
+        return text ? escapeHtml(text) : fallback;
+      }
+
+      function displayList(value) {
+        const list = Array.isArray(value)
+          ? value
+          : String(value || "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+        return list.length ? escapeHtml(list.join(", ")) : "N/A";
+      }
+
+      function actionButtons(moduleName, id) {
+        const safeId = escapeAttr(id);
+        return `
+          <div class="action-buttons">
+            <button class="btn btn-sm btn-info" onclick="openModuleModal('${moduleName}', '${safeId}')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteModuleItem('${moduleName}', '${safeId}')">Delete</button>
+          </div>
+        `;
+      }
+
+      async function loadCompany() {
+        const company = await apiCall("/admin/company");
+        if (!company) {
+          return;
+        }
+        setField("company_name", company.company_name);
+        setField("company_registration_number", company.registration_number);
+        setField("company_vat_number", company.vat_number);
+        setField("company_email", company.email);
+        setField("company_phone", company.phone);
+        setField("company_website", company.website);
+        setField("company_currency", company.currency || "ZAR");
+        setField("company_default_tax_rate", company.default_tax_rate || 0);
+        setField("company_address", company.address);
+        setField("company_bank_name", company.bank_name);
+        setField("company_account_name", company.account_name);
+        setField("company_account_number", company.account_number);
+        setField("company_branch_code", company.branch_code);
+      }
+
+      function setField(id, value) {
+        const input = document.getElementById(id);
+        if (input) {
+          input.value = value ?? "";
+        }
+      }
+
+      async function saveCompany() {
+        if (!document.getElementById("companyForm").checkValidity()) {
+          showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+        const data = {
+          company_name: document.getElementById("company_name").value,
+          registration_number: document.getElementById(
+            "company_registration_number",
+          ).value,
+          vat_number: document.getElementById("company_vat_number").value,
+          email: document.getElementById("company_email").value,
+          phone: document.getElementById("company_phone").value,
+          website: document.getElementById("company_website").value,
+          currency: document.getElementById("company_currency").value || "ZAR",
+          default_tax_rate:
+            parseFloat(document.getElementById("company_default_tax_rate").value) ||
+            0,
+          address: document.getElementById("company_address").value,
+          bank_name: document.getElementById("company_bank_name").value,
+          account_name: document.getElementById("company_account_name").value,
+          account_number: document.getElementById("company_account_number").value,
+          branch_code: document.getElementById("company_branch_code").value,
+        };
+        const result = await apiCall("/admin/company", "PUT", data);
+        if (result && result.success) {
+          showAlert("Company profile saved", "success");
+          loadDashboard();
+        }
+      }
+
+      async function loadModule(moduleName) {
+        const config = MODULES[moduleName];
+        if (!config) {
+          return;
+        }
+        const rows = await apiCall(config.endpoint);
+        const list = document.getElementById(config.listId);
+        if (!Array.isArray(rows)) {
+          return;
+        }
+        list.innerHTML = config.render(rows);
+      }
+
+      function emptyRows(rows, colspan, label) {
+        return rows.length
+          ? null
+          : `<tr><td colspan="${colspan}" class="text-center">No ${label} yet</td></tr>`;
+      }
+
+      function renderLeadRows(rows) {
+        const empty = emptyRows(rows, 6, "leads");
+        if (empty) return empty;
+        return rows
+          .map(
+            (lead) => `
+          <tr>
+            <td>${displayPlain(lead.company_name)}</td>
+            <td>
+              ${displayPlain(lead.contact_name)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(lead.email, "")}</div>
+            </td>
+            <td><span class="badge status-${safeStatusClass(lead.stage)}">${displayStatus(lead.stage)}</span></td>
+            <td>${money(lead.estimated_value)}</td>
+            <td>${displayDate(lead.next_follow_up)}</td>
+            <td>${actionButtons("leads", lead.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function renderProjectRows(rows) {
+        const empty = emptyRows(rows, 7, "projects");
+        if (empty) return empty;
+        return rows
+          .map((project) => {
+            const progress = Math.min(Math.max(Number(project.progress || 0), 0), 100);
+            return `
+          <tr>
+            <td>
+              ${displayPlain(project.name)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(project.project_code, "")}</div>
+            </td>
+            <td>${displayPlain(project.client_name)}</td>
+            <td><span class="badge status-${safeStatusClass(project.status)}">${displayStatus(project.status)}</span></td>
+            <td>${displayPlain(project.owner)}</td>
+            <td>${displayDate(project.due_date)}</td>
+            <td>
+              <div class="progress-mini"><span style="width:${progress}%"></span></div>
+              <div style="font-size:0.8rem;">${progress}%</div>
+            </td>
+            <td>${actionButtons("projects", project.id)}</td>
+          </tr>
+        `;
+          })
+          .join("");
+      }
+
+      function renderDocumentRows(rows) {
+        const empty = emptyRows(rows, 6, "documents");
+        if (empty) return empty;
+        return rows
+          .map(
+            (doc) => `
+          <tr>
+            <td>
+              ${doc.location_url ? `<a href="${escapeAttr(doc.location_url)}" target="_blank" rel="noopener">${displayPlain(doc.title)}</a>` : displayPlain(doc.title)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(doc.owner, "")}</div>
+            </td>
+            <td>${displayPlain(doc.category)}</td>
+            <td>${displayPlain(doc.version, "1.0")}</td>
+            <td><span class="badge status-${safeStatusClass(doc.status)}">${displayStatus(doc.status)}</span></td>
+            <td>${displayDate(doc.review_date)}</td>
+            <td>${actionButtons("documents", doc.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function renderTeamRows(rows) {
+        const empty = emptyRows(rows, 6, "team members");
+        if (empty) return empty;
+        return rows
+          .map(
+            (member) => `
+          <tr>
+            <td>
+              ${displayPlain(member.name)}
+              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(member.email, "")}</div>
+            </td>
+            <td>${displayPlain(member.role)}</td>
+            <td>${displayPlain(member.department)}</td>
+            <td>${displayList(member.permissions)}</td>
+            <td><span class="badge status-${member.active ? "won" : "archived"}">${member.active ? "Active" : "Inactive"}</span></td>
+            <td>${actionButtons("team", member.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      async function openModuleModal(moduleName, id = null) {
+        const config = MODULES[moduleName];
+        if (!config) {
+          return;
+        }
+        currentModuleName = moduleName;
+        currentModuleRecordId = id;
+        const record = id ? await apiCall(config.endpoint + "/" + id) : {};
+        if (!record) {
+          return;
+        }
+
+        document.getElementById("module-modal-title").textContent =
+          (id ? "Edit " : "New ") + config.singular;
+        document.getElementById("module-form-grid").innerHTML = config.fields
+          .map((field) => moduleFieldHtml(field, record || {}))
+          .join("");
+        document.getElementById("moduleModal").classList.add("show");
+      }
+
+      function moduleFieldValue(field, record) {
+        const value = record[field.name];
+        if (field.type === "checkbox") {
+          return value === undefined ? Boolean(field.defaultValue) : Boolean(value);
+        }
+        if (Array.isArray(value)) {
+          return value.join(", ");
+        }
+        if (value !== undefined && value !== null) {
+          return value;
+        }
+        return field.defaultValue || "";
+      }
+
+      function moduleFieldHtml(field, record) {
+        const value = moduleFieldValue(field, record);
+        const required = field.required ? "required" : "";
+        const fullSpan = field.fullSpan ? " full-span" : "";
+        const placeholder = field.placeholder
+          ? ` placeholder="${escapeAttr(field.placeholder)}"`
+          : "";
+        const common = `class="form-control" id="module_${field.name}" ${required}${placeholder}`;
+        let control = "";
+        if (field.type === "select") {
+          control = `
+            <select ${common}>
+              ${field.options
+                .map(
+                  (option) =>
+                    `<option value="${escapeAttr(option)}" ${option === value ? "selected" : ""}>${displayStatus(option)}</option>`,
+                )
+                .join("")}
+            </select>
+          `;
+        } else if (field.type === "textarea") {
+          control = `<textarea ${common} rows="4">${escapeHtml(value)}</textarea>`;
+        } else if (field.type === "checkbox") {
+          control = `
+            <div style="padding-top:0.4rem;">
+              <label style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="checkbox" id="module_${field.name}" ${value ? "checked" : ""} />
+                Active
+              </label>
+            </div>
+          `;
+        } else {
+          const attrs = [
+            `type="${field.type || "text"}"`,
+            common,
+            `value="${escapeAttr(value)}"`,
+            field.step ? `step="${escapeAttr(field.step)}"` : "",
+            field.min ? `min="${escapeAttr(field.min)}"` : "",
+            field.max ? `max="${escapeAttr(field.max)}"` : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          control = `<input ${attrs} />`;
+        }
+        return `
+          <div class="form-group${fullSpan}">
+            <label class="form-label">${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
+            ${control}
+          </div>
+        `;
+      }
+
+      function closeModuleModal() {
+        document.getElementById("moduleModal").classList.remove("show");
+        document.getElementById("moduleForm").reset();
+        currentModuleName = null;
+        currentModuleRecordId = null;
+      }
+
+      async function saveModuleItem() {
+        const config = MODULES[currentModuleName];
+        if (!config) {
+          return;
+        }
+        if (!document.getElementById("moduleForm").checkValidity()) {
+          showAlert("Please fill in all required fields", "danger");
+          return;
+        }
+        const data = {};
+        config.fields.forEach((field) => {
+          const input = document.getElementById("module_" + field.name);
+          if (!input) {
+            return;
+          }
+          if (field.type === "checkbox") {
+            data[field.name] = input.checked;
+          } else {
+            data[field.name] = input.value;
+          }
+        });
+        const endpoint = currentModuleRecordId
+          ? config.endpoint + "/" + currentModuleRecordId
+          : config.endpoint;
+        const method = currentModuleRecordId ? "PUT" : "POST";
+        const result = await apiCall(endpoint, method, data);
+        if (result && (result.id || result.success)) {
+          showAlert(config.singular + " saved", "success");
+          const moduleName = currentModuleName;
+          closeModuleModal();
+          loadModule(moduleName);
+          loadDashboard();
+        }
+      }
+
+      async function deleteModuleItem(moduleName, id) {
+        const config = MODULES[moduleName];
+        if (!config || !confirm("Delete this " + config.singular.toLowerCase() + "?")) {
+          return;
+        }
+        const result = await apiCall(config.endpoint + "/" + id, "DELETE");
+        if (result && result.success) {
+          showAlert(config.singular + " deleted", "success");
+          loadModule(moduleName);
+          loadDashboard();
+        }
       }
 
       // Invoices
