@@ -2312,6 +2312,39 @@
       </div>
     </div>
 
+    <!-- Addendum: a signed agreement is never edited, so additions are a new
+         versioned document rooted on the original -->
+    <div id="addendumModal" class="modal">
+      <div class="modal-content" style="max-width: 720px">
+        <div class="modal-header">
+          <h5 id="addendum-modal-title">New Addendum</h5>
+          <button type="button" onclick="closeAddendumModal()"
+            style="background:none;border:none;color:inherit;font-size:1.5rem;cursor:pointer;">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-meta" id="addendum-context"></div>
+          <div class="form-group">
+            <label class="form-label" for="addendum-title">Title</label>
+            <input class="form-control" id="addendum-title" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="addendum-body">What is being added</label>
+            <textarea class="form-control" id="addendum-body" rows="14"
+              style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.82rem;"></textarea>
+            <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);line-height:1.7;">
+              Markdown. Describe only what is changing — what is added, what it
+              costs, and what it does to the launch date. The original stays as
+              signed; this is sent for its own signature.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddendumModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" id="addendum-save">Create draft</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Client questionnaire: generate a link, or read what was submitted -->
     <div id="questionnaireModal" class="modal">
       <div class="modal-content" style="max-width: 720px">
@@ -3273,23 +3306,80 @@
 
       // Additions after signature become a new document, never an edit of the
       // signed one, so what was agreed at the time stays provable.
+      let addendumParent = null;
+
+      const ADDENDUM_TEMPLATE = [
+        "## Additional scope",
+        "",
+        "- ",
+        "",
+        "## Price",
+        "",
+        "Additional cost: R",
+        "",
+        "## Timeline",
+        "",
+        "Effect on the agreed launch date: ",
+      ].join("\n");
+
       async function addAddendum(id) {
         const parent = await apiCall("/admin/agreements/" + id);
         if (!parent) return;
-        const body = prompt(
-          "Describe the addition — what is being added, the price change, and the effect on the date.\n\nMarkdown is supported.",
-          "## Added\n\n- \n\nPrice: +R\nTimeline: ",
+        addendumParent = parent;
+        const nextVersion = Number(parent.version || 1) + 1;
+        document.getElementById("addendum-modal-title").textContent =
+          "Addendum " + nextVersion;
+        document.getElementById("addendum-context").innerHTML = [
+          `<span>Extends ${escapeHtml(parent.agreement_number || "")}</span>`,
+          `<span>${escapeHtml(parent.client_name || "")}</span>`,
+          parent.signed_name
+            ? `<span>Original signed by ${escapeHtml(parent.signed_name)}</span>`
+            : "",
+        ].filter(Boolean).join("");
+        document.getElementById("addendum-title").value =
+          `${parent.title} — addendum ${nextVersion}`;
+        document.getElementById("addendum-body").value = ADDENDUM_TEMPLATE;
+        document.getElementById("addendumModal").classList.add("show");
+        document.getElementById("addendum-body").focus();
+      }
+
+      function closeAddendumModal() {
+        document.getElementById("addendumModal").classList.remove("show");
+        addendumParent = null;
+      }
+
+      async function saveAddendum() {
+        if (!addendumParent) return;
+        const title = document.getElementById("addendum-title").value.trim();
+        const body = document.getElementById("addendum-body").value.trim();
+        if (!title) {
+          showAlert("Give the addendum a title", "danger");
+          return;
+        }
+        if (!body || body === ADDENDUM_TEMPLATE) {
+          showAlert("Describe what is being added", "danger");
+          return;
+        }
+        const btn = document.getElementById("addendum-save");
+        btn.disabled = true;
+        const r = await apiCall(
+          "/admin/agreements/" + addendumParent.id + "/addendum",
+          "POST",
+          {
+            title,
+            client_name: addendumParent.client_name,
+            client_email: addendumParent.client_email,
+            project_name: addendumParent.project_name || "",
+            body,
+          },
         );
-        if (body === null || !body.trim()) return;
-        const r = await apiCall("/admin/agreements/" + id + "/addendum", "POST", {
-          title: `${parent.title} — addendum`,
-          client_name: parent.client_name,
-          client_email: parent.client_email,
-          project_name: parent.project_name || "",
-          body,
-        });
+        btn.disabled = false;
         if (r && r.id) {
-          showAlert(`Addendum ${r.version} created as a draft`, "success");
+          showAlert(
+            "Addendum " + r.version + " created as a draft — send it when ready",
+            "success",
+          );
+          closeAddendumModal();
           loadModule("agreements");
         }
       }
@@ -3968,6 +4058,11 @@
               ? navigator.clipboard.writeText(input.value).then(() => showAlert("Link copied", "success"))
               : document.execCommand("copy");
           }
+          return;
+        }
+
+        if (event.target.closest("#addendum-save")) {
+          saveAddendum();
           return;
         }
 
