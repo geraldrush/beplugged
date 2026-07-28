@@ -8,13 +8,25 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <style>
       :root {
+        /* Brand */
         --primary: #f05023;
         --primary-dark: #d94119;
-        --success: #2c2d3f;
-        --danger: #f05023;
-        --warning: #f05023;
         --dark: #2c2d3f;
         --light: #ffffff;
+
+        /* Semantic. These were all the brand orange, which made a Delete
+           button look identical to a primary action. */
+        /* Values tuned to clear WCAG AA (4.5:1) at the sizes they are used. */
+        --success: #1e8750;
+        --danger: #c0392b;
+        --danger-dark: #a33227;
+        --warning: #a16a1b;
+
+        /* Neutrals */
+        --page: #f6f7f9;
+        --surface: #fafafb;
+        --border: #e5e6ea;
+        --muted: rgba(44, 45, 63, 0.66);
       }
 
       * {
@@ -24,20 +36,25 @@
       }
 
       body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background-color: var(--light);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--page);
         color: var(--dark);
+        font-size: 0.9rem;
+        -webkit-font-smoothing: antialiased;
       }
 
       .navbar {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--dark) 100%);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        padding: 1rem 2rem;
+        background: var(--dark);
+        border-bottom: 3px solid var(--primary);
+        box-shadow: none;
+        padding: 0.7rem 1.5rem;
       }
 
       .navbar-brand {
-        font-weight: 700;
-        font-size: 1.5rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+        letter-spacing: 0.01em;
         color: white !important;
       }
 
@@ -53,8 +70,8 @@
 
       .sidebar {
         background: #fff;
-        border-right: 1px solid rgba(44, 45, 63, 0.15);
-        padding: 2rem 1rem;
+        border-right: 1px solid var(--border);
+        padding: 1.25rem 0.75rem;
         min-height: 100vh;
         max-height: calc(100vh - 74px);
         overflow-y: auto;
@@ -62,18 +79,30 @@
         top: 0;
       }
 
+      /* A solid orange fill on every active nav item was the loudest thing on
+         the page. A tint plus an accent rule reads calmer and still scans. */
       .sidebar .nav-link {
-        color: rgba(44, 45, 63, 0.75);
-        margin-bottom: 0.5rem;
-        padding: 0.75rem 1rem;
-        border-radius: 0.25rem;
-        transition: all 0.3s;
+        color: rgba(44, 45, 63, 0.78);
+        margin-bottom: 0.15rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.845rem;
+        border-radius: 0.3rem;
+        border-left: 2px solid transparent;
+        transition: background-color 0.15s, color 0.15s;
       }
 
-      .sidebar .nav-link:hover,
+      .sidebar .nav-link:hover {
+        background-color: rgba(44, 45, 63, 0.05);
+        color: var(--dark);
+      }
+
+      /* Dark label rather than orange: orange-on-tint is only 3.2:1, and the
+         tint plus accent rule already signal the active item. */
       .sidebar .nav-link.active {
-        background-color: var(--primary);
-        color: white;
+        background-color: rgba(240, 80, 35, 0.09);
+        border-left-color: var(--primary);
+        color: var(--dark);
+        font-weight: 600;
       }
 
       .nav-section-title {
@@ -97,36 +126,58 @@
 
       .stat-card {
         background: white;
-        border-radius: 0.5rem;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        border-left: 4px solid var(--primary);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--primary);
+        border-radius: 0.375rem;
+        padding: 1rem 1.15rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
       }
 
       .stat-card h3 {
-        font-size: 0.875rem;
-        color: rgba(44, 45, 63, 0.65);
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--muted);
         text-transform: uppercase;
-        margin-bottom: 0.5rem;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.35rem;
       }
 
+      /* Figures in near-black rather than orange: on a dashboard the numbers
+         are the content, not an accent. */
       .stat-card .value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary);
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--dark);
+        letter-spacing: -0.01em;
       }
 
       .card {
-        border: none;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        margin-bottom: 2rem;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
+        margin-bottom: 1.25rem;
       }
 
       .card-header {
-        background-color: #fff5f1;
-        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
-        padding: 1.25rem;
+        background-color: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 0.85rem 1.15rem;
+        font-weight: 600;
+      }
+
+      /* Bootstrap's default .btn is 16px/12px-24px, which is oversized for a
+         dense admin table. One base rule fixes every button at once. */
+      .btn {
+        padding: 0.4rem 0.85rem;
+        font-size: 0.845rem;
+        font-weight: 500;
+        line-height: 1.45;
+        border-radius: 0.3rem;
+      }
+
+      .btn i {
+        font-size: 0.85em;
       }
 
       .btn-primary {
@@ -154,13 +205,13 @@
       }
 
       .btn-danger {
-        background-color: var(--primary);
-        border-color: var(--primary);
+        background-color: var(--danger);
+        border-color: var(--danger);
       }
 
       .btn-danger:hover {
-        background-color: var(--primary-dark);
-        border-color: var(--primary-dark);
+        background-color: var(--danger-dark);
+        border-color: var(--danger-dark);
       }
 
       .btn-success {
@@ -182,18 +233,52 @@
 
       .table-responsive {
         background: white;
-        border-radius: 0.5rem;
+        border-radius: 0.375rem;
         overflow: hidden;
       }
 
       .table {
         margin: 0;
+        font-size: 0.85rem;
+      }
+
+      .table thead th {
+        background-color: var(--surface);
+        border-bottom: 1px solid var(--border);
+        border-top: none;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 0.6rem 0.75rem;
+        white-space: nowrap;
+      }
+
+      .table tbody td {
+        border-top: 1px solid var(--border);
+        padding: 0.6rem 0.75rem;
+        vertical-align: middle;
+      }
+
+      .table tbody tr:hover {
+        background-color: rgba(44, 45, 63, 0.02);
+      }
+
+      .example-row {
+        background-color: #fbfbfc;
+        color: rgba(44, 45, 63, 0.72);
+      }
+
+      .example-row .btn {
+        pointer-events: none;
       }
 
       .badge {
-        padding: 0.35rem 0.65rem;
-        font-size: 0.75rem;
+        padding: 0.28rem 0.5rem;
+        font-size: 0.7rem;
         font-weight: 600;
+        border-radius: 0.25rem;
       }
 
       .status-draft {
@@ -294,22 +379,24 @@
       }
 
       .modal-header {
-        background-color: var(--primary);
-        color: white;
-        padding: 1.5rem;
-        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
+        background-color: var(--surface);
+        color: var(--dark);
+        padding: 0.9rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
         display: flex;
         justify-content: space-between;
         align-items: center;
       }
 
       .modal-body {
-        padding: 1.5rem;
+        padding: 1.25rem;
       }
 
       .modal-footer {
-        padding: 1rem 1.5rem;
-        border-top: 1px solid rgba(44, 45, 63, 0.15);
+        padding: 0.85rem 1.25rem;
+        background-color: var(--surface);
+        border-top: 1px solid var(--border);
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
@@ -320,20 +407,23 @@
       }
 
       .form-label {
+        font-size: 0.78rem;
         font-weight: 600;
-        margin-bottom: 0.5rem;
-        color: var(--dark);
+        letter-spacing: 0.02em;
+        margin-bottom: 0.3rem;
+        color: var(--muted);
       }
 
       .form-control {
-        border: 1px solid rgba(44, 45, 63, 0.2);
-        border-radius: 0.25rem;
-        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.3rem;
+        padding: 0.4rem 0.65rem;
+        font-size: 0.85rem;
       }
 
       .form-control:focus {
         border-color: var(--primary);
-        box-shadow: 0 0 0 0.2rem rgba(240, 80, 35, 0.25);
+        box-shadow: 0 0 0 0.15rem rgba(240, 80, 35, 0.15);
       }
 
       .action-buttons {
@@ -357,8 +447,8 @@
       }
 
       .btn-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
+        padding: 0.25rem 0.55rem;
+        font-size: 0.78rem;
       }
 
       .qr-code-display {
@@ -374,21 +464,24 @@
       }
 
       .alert {
-        padding: 0.75rem 1.25rem;
-        border-radius: 0.25rem;
+        padding: 0.65rem 1rem;
+        border-radius: 0.3rem;
         margin-bottom: 1rem;
+        font-size: 0.85rem;
       }
 
+      /* Both variants were the same orange, so "Saved" and "Error" were told
+         apart only by opacity. Green and red carry the meaning now. */
       .alert-success {
-        background-color: rgba(240, 80, 35, 0.12);
-        color: var(--dark);
-        border: 1px solid rgba(240, 80, 35, 0.35);
+        background-color: rgba(30, 135, 80, 0.1);
+        color: #14603a;
+        border: 1px solid rgba(30, 135, 80, 0.3);
       }
 
       .alert-danger {
-        background-color: rgba(240, 80, 35, 0.2);
-        color: var(--dark);
-        border: 1px solid rgba(240, 80, 35, 0.45);
+        background-color: rgba(192, 57, 43, 0.1);
+        color: #8f2b20;
+        border: 1px solid rgba(192, 57, 43, 0.3);
       }
 
       .hidden {
@@ -463,27 +556,31 @@
 
       .module-panel {
         background: #fff;
-        border: 1px solid rgba(44, 45, 63, 0.12);
-        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
         overflow: hidden;
       }
 
       .module-panel h4 {
-        background-color: #fff5f1;
-        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
-        font-size: 1rem;
+        background-color: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--muted);
         margin: 0;
-        padding: 0.9rem 1rem;
+        padding: 0.7rem 1rem;
       }
 
       .module-row {
         align-items: center;
-        border-bottom: 1px solid rgba(44, 45, 63, 0.08);
+        border-bottom: 1px solid var(--border);
         display: grid;
         gap: 0.75rem;
         grid-template-columns: minmax(0, 1fr) auto;
-        min-height: 44px;
-        padding: 0.75rem 1rem;
+        min-height: 38px;
+        padding: 0.55rem 1rem;
       }
 
       .module-row:last-child {
@@ -1010,13 +1107,16 @@
                     <th>Name</th>
                     <th>Email</th>
                     <th>Phone</th>
-                    <th>City</th>
+                    <th>Invoices</th>
+                    <th>Total Invoiced</th>
+                    <th>Paid</th>
+                    <th>Outstanding</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="clients-list">
                   <tr>
-                    <td colspan="5" class="text-center">Loading...</td>
+                    <td colspan="8" class="text-center">Loading...</td>
                   </tr>
                 </tbody>
               </table>
