@@ -544,9 +544,85 @@
         box-shadow: 0 0 0 0.15rem rgba(240, 80, 35, 0.15);
       }
 
+      /* Row actions collapse into a ⋮ menu. The group itself becomes the
+         dropdown panel, so renderers keep emitting the same buttons and the
+         enhancement is applied generically at runtime. */
+      .row-menu {
+        display: inline-flex;
+        justify-content: flex-end;
+        width: 100%;
+      }
+
+      .row-menu-toggle {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 0.3rem;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 0.25rem 0.5rem;
+      }
+
+      .row-menu-toggle:hover,
+      .row-menu-toggle[aria-expanded="true"] {
+        background: rgba(44, 45, 63, 0.06);
+        border-color: var(--border);
+        color: var(--dark);
+      }
+
       .action-buttons {
         display: flex;
         gap: 0.5rem;
+      }
+
+      /* Fixed rather than absolute: .table-responsive clips overflow, which
+         would cut the dropdown off inside the table. */
+      .row-menu .action-buttons {
+        display: none;
+        position: fixed;
+        z-index: 1100;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.1rem;
+        min-width: 168px;
+        padding: 0.25rem;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        box-shadow: 0 8px 24px rgba(16, 18, 40, 0.16);
+      }
+
+      .row-menu .action-buttons.open {
+        display: flex;
+      }
+
+      .row-menu .action-buttons .btn {
+        width: 100%;
+        text-align: left;
+        justify-content: flex-start;
+        background: transparent;
+        border-color: transparent;
+        color: var(--dark);
+        padding: 0.4rem 0.6rem;
+        font-size: 0.82rem;
+        font-weight: 500;
+      }
+
+      .row-menu .action-buttons .btn:hover:not(:disabled) {
+        background: var(--surface);
+        border-color: transparent;
+        color: var(--dark);
+      }
+
+      .row-menu .action-buttons .btn-danger,
+      .row-menu .action-buttons .btn-danger:hover:not(:disabled) {
+        color: var(--danger);
+      }
+
+      .row-menu .action-buttons .btn:disabled {
+        color: var(--muted);
+        opacity: 0.55;
       }
 
       .items-table th,
@@ -1500,6 +1576,21 @@
         </div>
         <div class="modal-body">
           <form id="invoiceForm">
+            <input type="hidden" id="invoice_lead_id" />
+            <input type="hidden" id="invoice_client_id" />
+            <input type="hidden" id="invoice_quote_id" />
+            <div class="form-group">
+              <label class="form-label">Source Quote</label>
+              <select class="form-control" id="invoice_quote_source"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Source Lead</label>
+              <select class="form-control" id="invoice_lead_source"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Source Client</label>
+              <select class="form-control" id="invoice_client_source"></select>
+            </div>
             <div class="form-group">
               <label class="form-label">Client Name *</label>
               <input
@@ -1632,6 +1723,16 @@
         </div>
         <div class="modal-body">
           <form id="quoteForm">
+            <input type="hidden" id="quote_lead_id" />
+            <input type="hidden" id="quote_client_id" />
+            <div class="form-group">
+              <label class="form-label">Source Lead</label>
+              <select class="form-control" id="quote_lead_source"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Source Client</label>
+              <select class="form-control" id="quote_client_source"></select>
+            </div>
             <div class="form-group">
               <label class="form-label">Client Name *</label>
               <input
@@ -1728,6 +1829,11 @@
         </div>
         <div class="modal-body">
           <form id="clientForm">
+            <input type="hidden" id="client_lead_id" />
+            <div class="form-group">
+              <label class="form-label">Source Lead</label>
+              <select class="form-control" id="client_lead_source"></select>
+            </div>
             <div class="form-group">
               <label class="form-label">Name *</label>
               <input
@@ -2040,6 +2146,10 @@
       let currentModuleName = null;
       let currentModuleRecordId = null;
       const clientCache = new Map();
+      let workflowSourcesPromise = null;
+      let workflowLeads = [];
+      let workflowClients = [];
+      let workflowQuotes = [];
 
       const MODULES = {
         leads: {
@@ -2572,6 +2682,110 @@
         return out.join("\n");
       }
 
+      // Turns every .action-buttons group into a ⋮ menu. Done generically at
+      // runtime rather than in each renderer, so tables added later are
+      // covered without touching them.
+      (function rowMenus() {
+        function closeAll() {
+          document
+            .querySelectorAll(".row-menu .action-buttons.open")
+            .forEach((menu) => {
+              menu.classList.remove("open");
+              const toggle = menu.previousElementSibling;
+              if (toggle) toggle.setAttribute("aria-expanded", "false");
+            });
+        }
+
+        function place(toggle, menu) {
+          const r = toggle.getBoundingClientRect();
+          menu.style.visibility = "hidden";
+          menu.classList.add("open");
+          const w = menu.offsetWidth;
+          const h = menu.offsetHeight;
+          let left = r.right - w;
+          let top = r.bottom + 4;
+          if (left < 8) left = 8;
+          if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+          // Flip above when there is no room below.
+          if (top + h > window.innerHeight - 8 && r.top - h - 4 > 8) {
+            top = r.top - h - 4;
+          }
+          menu.style.left = left + "px";
+          menu.style.top = top + "px";
+          menu.style.visibility = "";
+        }
+
+        function enhance(cell) {
+          const groups = cell.querySelectorAll(".action-buttons");
+          if (!groups.length) return;
+          // A cell may emit more than one group (View plus the shared
+          // actions); fold them into one menu.
+          const first = groups[0];
+          for (let i = 1; i < groups.length; i += 1) {
+            while (groups[i].firstChild) first.appendChild(groups[i].firstChild);
+            groups[i].remove();
+          }
+          if (first.parentElement && first.parentElement.classList.contains("row-menu")) {
+            return;
+          }
+          const wrap = document.createElement("div");
+          wrap.className = "row-menu";
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = "row-menu-toggle";
+          toggle.setAttribute("data-row-menu-toggle", "");
+          toggle.setAttribute("aria-haspopup", "true");
+          toggle.setAttribute("aria-expanded", "false");
+          toggle.setAttribute("aria-label", "Actions");
+          toggle.textContent = "⋮";
+          first.parentNode.insertBefore(wrap, first);
+          wrap.appendChild(toggle);
+          wrap.appendChild(first);
+        }
+
+        function scan(root) {
+          if (!root || root.nodeType !== 1) return;
+          const cells = root.matches && root.matches("td")
+            ? [root]
+            : Array.from(root.querySelectorAll ? root.querySelectorAll("td") : []);
+          cells.forEach(enhance);
+        }
+
+        document.addEventListener("click", (event) => {
+          const toggle = event.target.closest("[data-row-menu-toggle]");
+          if (toggle) {
+            event.stopPropagation();
+            const menu = toggle.nextElementSibling;
+            const wasOpen = menu.classList.contains("open");
+            closeAll();
+            if (!wasOpen) {
+              place(toggle, menu);
+              toggle.setAttribute("aria-expanded", "true");
+            }
+            return;
+          }
+          // Clicking an item runs its handler, then the menu closes.
+          if (event.target.closest(".row-menu .action-buttons")) {
+            setTimeout(closeAll, 0);
+            return;
+          }
+          closeAll();
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") closeAll();
+        });
+        window.addEventListener("resize", closeAll);
+        document.addEventListener("scroll", closeAll, true);
+
+        new MutationObserver((records) => {
+          records.forEach((r) => r.addedNodes.forEach(scan));
+        }).observe(document.body, { childList: true, subtree: true });
+
+        document.addEventListener("DOMContentLoaded", () => scan(document.body));
+        scan(document.body);
+      })();
+
       const QUESTIONNAIRE_LABELS = {
         site_type: "Type of website",
         purpose: "Main purpose",
@@ -2600,6 +2814,7 @@
         const r = await apiCall("/admin/quotes/" + id + "/send", "POST");
         if (r && r.success) {
           showAlert("Quote sent", "success");
+          resetWorkflowSourceCache();
           loadQuotes();
         }
       }
@@ -3214,11 +3429,27 @@
         return `
           <div class="action-buttons">
             <button class="btn btn-sm btn-info" data-client-action="edit" data-client-key="${safeKey}">${editLabel}</button>
+            <button class="btn btn-sm btn-primary" data-client-action="quote" data-client-key="${safeKey}">Quote</button>
+            <button class="btn btn-sm btn-secondary" data-client-action="invoice" data-client-key="${safeKey}">Invoice</button>
             ${
               client.derived_from_invoices
                 ? ""
                 : `<button class="btn btn-sm btn-danger" data-client-action="delete" data-client-key="${safeKey}">Delete</button>`
             }
+          </div>
+        `;
+      }
+
+      function leadWorkflowButtons(lead) {
+        if (lead.stage !== "won") {
+          return "";
+        }
+        const safeId = escapeAttr(lead.id);
+        return `
+          <div class="action-buttons" style="margin-top:0.25rem;">
+            <button class="btn btn-sm btn-success" data-lead-client="${safeId}">Client</button>
+            <button class="btn btn-sm btn-primary" data-lead-quote="${safeId}">Quote</button>
+            <button class="btn btn-sm btn-secondary" data-lead-invoice="${safeId}">Invoice</button>
           </div>
         `;
       }
@@ -3266,6 +3497,30 @@
           return;
         }
 
+        const leadClient = event.target.closest("[data-lead-client]");
+        if (leadClient) {
+          openClientModal({ leadId: leadClient.dataset.leadClient });
+          return;
+        }
+
+        const leadQuote = event.target.closest("[data-lead-quote]");
+        if (leadQuote) {
+          openQuoteModal({ leadId: leadQuote.dataset.leadQuote });
+          return;
+        }
+
+        const leadInvoice = event.target.closest("[data-lead-invoice]");
+        if (leadInvoice) {
+          openInvoiceModal({ leadId: leadInvoice.dataset.leadInvoice });
+          return;
+        }
+
+        const quoteInvoice = event.target.closest("[data-quote-invoice]");
+        if (quoteInvoice) {
+          openInvoiceModal({ quoteId: quoteInvoice.dataset.quoteInvoice });
+          return;
+        }
+
         const docBtn = event.target.closest("[data-doc-view]");
         if (docBtn) {
           viewDocument(docBtn.dataset.docView, docBtn.dataset.id);
@@ -3291,6 +3546,60 @@
           openClientModal(clientKey);
         } else if (clientAction === "delete") {
           deleteClient(clientKey);
+        } else if (clientAction === "quote") {
+          openQuoteModal({ clientKey });
+        } else if (clientAction === "invoice") {
+          openInvoiceModal({ clientKey });
+        }
+      });
+
+      document.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!target || !target.id) {
+          return;
+        }
+        if (target.id === "client_lead_source") {
+          const lead = selectedLead(target.value);
+          if (lead) {
+            applyLeadToClient(lead);
+          } else {
+            setField("client_lead_id", "");
+          }
+        } else if (target.id === "quote_lead_source") {
+          const lead = selectedLead(target.value);
+          if (lead) {
+            applyLeadToQuote(lead);
+          } else {
+            setField("quote_lead_id", "");
+          }
+        } else if (target.id === "quote_client_source") {
+          const client = selectedClient(target.value);
+          if (client) {
+            applyClientToQuote(client);
+          } else {
+            setField("quote_client_id", "");
+          }
+        } else if (target.id === "invoice_lead_source") {
+          const lead = selectedLead(target.value);
+          if (lead) {
+            applyLeadToInvoice(lead);
+          } else {
+            setField("invoice_lead_id", "");
+          }
+        } else if (target.id === "invoice_client_source") {
+          const client = selectedClient(target.value);
+          if (client) {
+            applyClientToInvoice(client);
+          } else {
+            setField("invoice_client_id", "");
+          }
+        } else if (target.id === "invoice_quote_source") {
+          const quote = selectedQuote(target.value);
+          if (quote) {
+            applyQuoteToInvoice(quote);
+          } else {
+            setField("invoice_quote_id", "");
+          }
         }
       });
 
@@ -3319,6 +3628,234 @@
         if (input) {
           input.value = value ?? "";
         }
+      }
+
+      function resetWorkflowSourceCache() {
+        workflowSourcesPromise = null;
+      }
+
+      function workflowClientKey(client) {
+        return client.id || `invoice:${client.email || client.name || ""}`;
+      }
+
+      function leadLabel(lead) {
+        const marker = lead.stage === "won" ? "Won - " : "";
+        const contact = lead.contact_name ? ` / ${lead.contact_name}` : "";
+        const email = lead.email ? ` (${lead.email})` : "";
+        return `${marker}${lead.company_name || lead.contact_name || "Lead"}${contact}${email}`;
+      }
+
+      function clientLabel(client) {
+        const marker = client.derived_from_invoices ? "Invoice - " : "";
+        const email = client.email ? ` (${client.email})` : "";
+        return `${marker}${client.name || client.email || "Client"}${email}`;
+      }
+
+      function quoteLabel(quote) {
+        return `${quote.quote_number || "Quote"} - ${quote.client_name || "Client"} - ${money(Number(quote.amount || 0) + Number(quote.tax || 0))} - ${displayStatus(quote.status)}`;
+      }
+
+      async function loadWorkflowSources() {
+        if (!workflowSourcesPromise) {
+          workflowSourcesPromise = Promise.all([
+            apiCall("/admin/leads"),
+            apiCall("/admin/clients"),
+            apiCall("/admin/quotes"),
+          ]).then(([leads, clients, quotes]) => {
+            workflowLeads = Array.isArray(leads)
+              ? leads.sort((a, b) => {
+                  const stageScore = (lead) => (lead.stage === "won" ? 0 : 1);
+                  return (
+                    stageScore(a) - stageScore(b) ||
+                    String(a.company_name || "").localeCompare(String(b.company_name || ""))
+                  );
+                })
+              : [];
+            workflowClients = Array.isArray(clients) ? clients : [];
+            workflowQuotes = Array.isArray(quotes)
+              ? quotes.sort((a, b) => {
+                  const statusScore = (quote) => (quote.status === "accepted" ? 0 : 1);
+                  return (
+                    statusScore(a) - statusScore(b) ||
+                    String(b.created_at || "").localeCompare(String(a.created_at || ""))
+                  );
+                })
+              : [];
+          });
+        }
+        await workflowSourcesPromise;
+      }
+
+      function populateSourceSelect(id, rows, selectedValue, labelFn, emptyLabel) {
+        const select = document.getElementById(id);
+        if (!select) {
+          return;
+        }
+        select.innerHTML =
+          `<option value="">${escapeHtml(emptyLabel)}</option>` +
+          rows
+            .map((row) => {
+              const value = row.id || workflowClientKey(row);
+              return `<option value="${escapeAttr(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(labelFn(row))}</option>`;
+            })
+            .join("");
+      }
+
+      function selectedLead(id) {
+        return workflowLeads.find((lead) => lead.id === id);
+      }
+
+      function selectedClient(key) {
+        return workflowClients.find((client) => workflowClientKey(client) === key);
+      }
+
+      function selectedQuote(id) {
+        return workflowQuotes.find((quote) => quote.id === id);
+      }
+
+      async function prepareClientSources(selectedLeadId = "") {
+        await loadWorkflowSources();
+        populateSourceSelect(
+          "client_lead_source",
+          workflowLeads,
+          selectedLeadId,
+          leadLabel,
+          "Manual client",
+        );
+        setField("client_lead_id", selectedLeadId || "");
+      }
+
+      async function prepareQuoteSources({ leadId = "", clientId = "" } = {}) {
+        await loadWorkflowSources();
+        populateSourceSelect(
+          "quote_lead_source",
+          workflowLeads,
+          leadId,
+          leadLabel,
+          "Manual lead",
+        );
+        populateSourceSelect(
+          "quote_client_source",
+          workflowClients,
+          clientId,
+          clientLabel,
+          "Manual client",
+        );
+        setField("quote_lead_id", leadId || "");
+        setField("quote_client_id", clientId || "");
+      }
+
+      async function prepareInvoiceSources({
+        leadId = "",
+        clientId = "",
+        quoteId = "",
+      } = {}) {
+        await loadWorkflowSources();
+        populateSourceSelect(
+          "invoice_quote_source",
+          workflowQuotes,
+          quoteId,
+          quoteLabel,
+          "Manual invoice",
+        );
+        populateSourceSelect(
+          "invoice_lead_source",
+          workflowLeads,
+          leadId,
+          leadLabel,
+          "Manual lead",
+        );
+        populateSourceSelect(
+          "invoice_client_source",
+          workflowClients,
+          clientId,
+          clientLabel,
+          "Manual client",
+        );
+        setField("invoice_lead_id", leadId || "");
+        setField("invoice_client_id", clientId || "");
+        setField("invoice_quote_id", quoteId || "");
+      }
+
+      function applyLeadToClient(lead) {
+        if (!lead) return;
+        setField("client_lead_id", lead.id);
+        setField("client_lead_source", lead.id);
+        setField("client_name", lead.company_name || lead.contact_name || "");
+        setField("client_email", lead.email || "");
+        setField("client_phone", lead.phone || "");
+      }
+
+      function applyLeadToQuote(lead) {
+        if (!lead) return;
+        setField("quote_lead_id", lead.id);
+        setField("quote_client_id", "");
+        setField("quote_lead_source", lead.id);
+        setField("quote_client_source", "");
+        setField("quote_client_name", lead.company_name || lead.contact_name || "");
+        setField("quote_client_email", lead.email || "");
+        setField("quote_client_address", "");
+      }
+
+      function applyClientToQuote(client) {
+        if (!client) return;
+        const key = workflowClientKey(client);
+        setField("quote_client_id", client.derived_from_invoices ? "" : client.id);
+        setField("quote_lead_id", client.lead_id || "");
+        setField("quote_client_source", key);
+        setField("quote_lead_source", client.lead_id || "");
+        setField("quote_client_name", client.name || "");
+        setField("quote_client_email", client.email || "");
+        setField("quote_client_address", client.address || "");
+      }
+
+      function applyLeadToInvoice(lead) {
+        if (!lead) return;
+        setField("invoice_lead_id", lead.id);
+        setField("invoice_client_id", "");
+        setField("invoice_quote_id", "");
+        setField("invoice_lead_source", lead.id);
+        setField("invoice_client_source", "");
+        setField("invoice_quote_source", "");
+        setField("invoice_client_name", lead.company_name || lead.contact_name || "");
+        setField("invoice_client_email", lead.email || "");
+        setField("invoice_client_address", "");
+      }
+
+      function applyClientToInvoice(client) {
+        if (!client) return;
+        const key = workflowClientKey(client);
+        setField("invoice_client_id", client.derived_from_invoices ? "" : client.id);
+        setField("invoice_lead_id", client.lead_id || "");
+        setField("invoice_quote_id", "");
+        setField("invoice_client_source", key);
+        setField("invoice_lead_source", client.lead_id || "");
+        setField("invoice_quote_source", "");
+        setField("invoice_client_name", client.name || "");
+        setField("invoice_client_email", client.email || "");
+        setField("invoice_client_address", client.address || "");
+      }
+
+      function applyQuoteToInvoice(quote) {
+        if (!quote) return;
+        setField("invoice_quote_id", quote.id);
+        setField("invoice_lead_id", quote.lead_id || "");
+        setField("invoice_client_id", quote.client_id || "");
+        setField("invoice_quote_source", quote.id);
+        setField("invoice_lead_source", quote.lead_id || "");
+        setField("invoice_client_source", quote.client_id || "");
+        setField("invoice_client_name", quote.client_name || "");
+        setField("invoice_client_email", quote.client_email || "");
+        setField("invoice_client_address", quote.client_address || "");
+        setField("invoice_tax", quote.tax || 0);
+        document.getElementById("invoice-items-body").innerHTML = "";
+        addInvoiceItem({
+          description: `Converted from ${quote.quote_number || "quote"}`,
+          quantity: 1,
+          rate: Number(quote.amount || 0),
+          discount: 0,
+        });
+        recalcInvoiceSubtotal();
       }
 
       function moduleListEndpoint(config) {
@@ -3395,7 +3932,13 @@
             <td><span class="badge status-${safeStatusClass(lead.stage)}">${displayStatus(lead.stage)}</span></td>
             <td>${money(lead.estimated_value)}</td>
             <td>${displayDate(lead.next_follow_up)}</td>
-            <td><div class="action-buttons"><button class="btn btn-sm btn-secondary" data-lead-q="${escapeAttr(lead.id)}">Questionnaire</button></div>${actionButtons("leads", lead.id)}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-secondary" data-lead-q="${escapeAttr(lead.id)}">Questionnaire</button>
+              </div>
+              ${leadWorkflowButtons(lead)}
+              ${actionButtons("leads", lead.id)}
+            </td>
           </tr>
         `,
           )
@@ -3995,6 +4538,9 @@
           showAlert(config.singular + " saved", "success");
           const moduleName = currentModuleName;
           closeModuleModal();
+          if (["leads", "clients", "quotes"].includes(moduleName)) {
+            resetWorkflowSourceCache();
+          }
           loadModule(moduleName);
           loadDashboard();
         }
@@ -4170,6 +4716,9 @@
         }
 
         const data = {
+          lead_id: document.getElementById("invoice_lead_id").value,
+          client_id: document.getElementById("invoice_client_id").value,
+          quote_id: document.getElementById("invoice_quote_id").value,
           client_name: document.getElementById("invoice_client_name").value,
           client_email: document.getElementById("invoice_client_email").value,
           client_address: document.getElementById("invoice_client_address")
@@ -4195,8 +4744,10 @@
             isEditing ? "Invoice updated successfully!" : "Invoice created successfully!",
             "success",
           );
+          resetWorkflowSourceCache();
           closeInvoiceModal();
           loadInvoices();
+          loadQuotes();
           loadDashboard();
         }
       }
@@ -4218,6 +4769,11 @@
         document.getElementById("invoice-items-body").innerHTML = "";
         document.getElementById("invoice-modal-title").textContent =
           "Edit Invoice";
+        await prepareInvoiceSources({
+          leadId: invoice.lead_id || "",
+          clientId: invoice.client_id || "",
+          quoteId: invoice.quote_id || "",
+        });
 
         document.getElementById("invoice_client_name").value =
           invoice.client_name || "";
@@ -4629,6 +5185,7 @@
                 <button class="btn btn-sm btn-secondary" onclick="editQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadQuote('${escapeAttr(q.id)}', '${safeStatusClass(q.status)}')">Download</button>
                 <button class="btn btn-sm btn-primary" data-quote-send="${escapeAttr(q.id)}">Send</button>
+                <button class="btn btn-sm btn-success" data-quote-invoice="${escapeAttr(q.id)}" ${q.status !== "accepted" ? "disabled" : ""}>Invoice</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Delete</button>
               </div>
             </td>
@@ -4680,6 +5237,8 @@
         }
 
         const data = {
+          lead_id: document.getElementById("quote_lead_id").value,
+          client_id: document.getElementById("quote_client_id").value,
           client_name: document.getElementById("quote_client_name").value,
           client_email: document.getElementById("quote_client_email").value,
           client_address: document.getElementById("quote_client_address").value,
@@ -4702,6 +5261,7 @@
             isEditing ? "Quote updated successfully!" : "Quote created successfully!",
             "success",
           );
+          resetWorkflowSourceCache();
           closeQuoteModal();
           loadQuotes();
           loadDashboard();
@@ -4721,6 +5281,10 @@
         currentEditQuoteId = id;
         document.getElementById("quoteForm").reset();
         document.getElementById("quote-modal-title").textContent = "Edit Quote";
+        await prepareQuoteSources({
+          leadId: quote.lead_id || "",
+          clientId: quote.client_id || "",
+        });
         document.getElementById("quote_client_name").value =
           quote.client_name || "";
         document.getElementById("quote_client_email").value =
@@ -4792,6 +5356,7 @@
             return;
           }
           currentViewQuoteStatus = result.status || "sent";
+          resetWorkflowSourceCache();
           loadQuotes();
           loadDashboard();
         }
@@ -4803,6 +5368,7 @@
           const result = await apiCall("/admin/quotes/" + id, "DELETE");
           if (result && result.success) {
             showAlert("Quote deleted", "success");
+            resetWorkflowSourceCache();
             loadQuotes();
             loadDashboard();
           }
@@ -4878,6 +5444,7 @@
         }
 
         const data = {
+          lead_id: document.getElementById("client_lead_id").value,
           name: document.getElementById("client_name").value,
           email: document.getElementById("client_email").value,
           phone: document.getElementById("client_phone").value,
@@ -4895,6 +5462,7 @@
         const result = await apiCall(endpoint, method, data);
         if (result && (result.id || result.success)) {
           showAlert("Client saved successfully!", "success");
+          resetWorkflowSourceCache();
           closeClientModal();
           loadClients();
         }
@@ -4914,12 +5482,14 @@
         );
         if (result && result.success) {
           showAlert("Client deleted successfully!", "success");
+          resetWorkflowSourceCache();
           loadClients();
         }
       }
 
       // Modals
-      function openInvoiceModal() {
+      async function openInvoiceModal(prefill = {}) {
+        const prefillClientKey = prefill?.clientKey || prefill?.clientId || "";
         document.getElementById("invoiceForm").reset();
         document.getElementById("invoice-items-body").innerHTML = "";
         document.getElementById("invoice-modal-title").textContent =
@@ -4928,6 +5498,18 @@
         currentEditInvoiceStatus = "draft";
         addInvoiceItem();
         recalcInvoiceSubtotal();
+        await prepareInvoiceSources({
+          leadId: prefill?.leadId || "",
+          clientId: prefillClientKey,
+          quoteId: prefill?.quoteId || "",
+        });
+        if (prefill?.quoteId) {
+          applyQuoteToInvoice(selectedQuote(prefill.quoteId));
+        } else if (prefillClientKey) {
+          applyClientToInvoice(selectedClient(prefillClientKey));
+        } else if (prefill?.leadId) {
+          applyLeadToInvoice(selectedLead(prefill.leadId));
+        }
         document.getElementById("invoiceModal").classList.add("show");
       }
 
@@ -4937,11 +5519,21 @@
         currentEditInvoiceStatus = "draft";
       }
 
-      function openQuoteModal() {
+      async function openQuoteModal(prefill = {}) {
+        const prefillClientKey = prefill?.clientKey || prefill?.clientId || "";
         document.getElementById("quoteForm").reset();
         currentEditQuoteId = null;
         document.getElementById("quote-modal-title").textContent =
           "Create Quote";
+        await prepareQuoteSources({
+          leadId: prefill?.leadId || "",
+          clientId: prefillClientKey,
+        });
+        if (prefillClientKey) {
+          applyClientToQuote(selectedClient(prefillClientKey));
+        } else if (prefill?.leadId) {
+          applyLeadToQuote(selectedLead(prefill.leadId));
+        }
         document.getElementById("quoteModal").classList.add("show");
       }
 
@@ -4950,15 +5542,19 @@
         currentEditQuoteId = null;
       }
 
-      function openClientModal(clientKey = null) {
+      async function openClientModal(source = null) {
         document.getElementById("clientForm").reset();
         currentEditClientId = null;
+        const clientKey = typeof source === "string" ? source : null;
+        const sourceLeadId =
+          source && typeof source === "object" ? source.leadId || "" : "";
         const client = clientKey ? clientCache.get(clientKey) : null;
         document.getElementById("client-modal-title").textContent = client
           ? client.derived_from_invoices
             ? "Create Client Profile"
             : "Edit Client"
           : "Add Client";
+        await prepareClientSources(client?.lead_id || sourceLeadId || "");
         if (client) {
           currentEditClientId = client.derived_from_invoices ? null : client.id;
           setField("client_name", client.name);
@@ -4969,6 +5565,8 @@
           setField("client_state", client.state);
           setField("client_postal_code", client.postal_code);
           setField("client_country", client.country);
+        } else if (sourceLeadId) {
+          applyLeadToClient(selectedLead(sourceLeadId));
         }
         document.getElementById("clientModal").classList.add("show");
       }

@@ -596,6 +596,9 @@ function normalizeInvoicePayload(data) {
   const amountCents = calculateItemsTotalCents(items);
   const taxCents = amountToCents(data.tax || 0, "Tax");
   return {
+    lead_id: trimText(data.lead_id, "Lead id", { maxLength: 160 }),
+    client_id: trimText(data.client_id, "Client id", { maxLength: 160 }),
+    quote_id: trimText(data.quote_id, "Quote id", { maxLength: 160 }),
     client_name: trimText(data.client_name, "Client name", {
       required: true,
       maxLength: 200,
@@ -626,6 +629,8 @@ function normalizeQuotePayload(data) {
     : amountToCents(data.amount, "Amount", { allowZero: false });
   const taxCents = amountToCents(data.tax || 0, "Tax");
   return {
+    lead_id: trimText(data.lead_id, "Lead id", { maxLength: 160 }),
+    client_id: trimText(data.client_id, "Client id", { maxLength: 160 }),
     client_name: trimText(data.client_name, "Client name", {
       required: true,
       maxLength: 200,
@@ -844,6 +849,7 @@ function normalizeSecurityPayload(raw) {
 
 function normalizeClientPayload(raw) {
   return {
+    lead_id: trimText(raw.lead_id, "Lead id", { maxLength: 160 }),
     name: trimText(raw.name, "Client name", { required: true, maxLength: 200 }),
     email: validateEmail(raw.email, "Client email"),
     phone: trimText(raw.phone, "Client phone", { maxLength: 100 }),
@@ -907,6 +913,65 @@ function ensurePaymentsTable(env) {
 }
 
 async function runSchemaSetup(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      invoice_number TEXT NOT NULL UNIQUE,
+      lead_id TEXT,
+      client_id TEXT,
+      quote_id TEXT,
+      client_name TEXT NOT NULL,
+      client_email TEXT NOT NULL,
+      client_address TEXT,
+      amount REAL NOT NULL,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      tax REAL DEFAULT 0,
+      tax_cents INTEGER NOT NULL DEFAULT 0,
+      status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'viewed', 'partially_paid', 'paid')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      due_date DATE,
+      payment_terms TEXT,
+      items TEXT,
+      notes TEXT,
+      qr_code_url TEXT
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS quotes (
+      id TEXT PRIMARY KEY,
+      quote_number TEXT NOT NULL UNIQUE,
+      lead_id TEXT,
+      client_id TEXT,
+      client_name TEXT NOT NULL,
+      client_email TEXT NOT NULL,
+      client_address TEXT,
+      amount REAL NOT NULL,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      tax REAL DEFAULT 0,
+      tax_cents INTEGER NOT NULL DEFAULT 0,
+      status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'viewed', 'accepted', 'rejected', 'converted_to_invoice')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expiry_date DATE,
+      items TEXT,
+      notes TEXT,
+      qr_code_url TEXT
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      phone TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      postal_code TEXT,
+      country TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS payments (
       id TEXT PRIMARY KEY,
@@ -1134,10 +1199,34 @@ async function runSchemaSetup(env) {
   await ensureColumn(env, "quotes", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "quotes", "tax_cents", "tax_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "payments", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
+  await ensureColumn(env, "clients", "lead_id", "lead_id TEXT");
+  await ensureColumn(env, "quotes", "lead_id", "lead_id TEXT");
+  await ensureColumn(env, "quotes", "client_id", "client_id TEXT");
+  await ensureColumn(env, "invoices", "lead_id", "lead_id TEXT");
+  await ensureColumn(env, "invoices", "client_id", "client_id TEXT");
+  await ensureColumn(env, "invoices", "quote_id", "quote_id TEXT");
   // Holds the document itself as Markdown. Policies and SOPs are internal, so
   // they live behind the admin login rather than as public files.
   await ensureColumn(env, "quality_records", "body", "body TEXT");
   await ensureColumn(env, "security_records", "body", "body TEXT");
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_clients_lead_id ON clients (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_quotes_lead_id ON quotes (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes (client_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_invoices_lead_id ON invoices (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON invoices (client_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_invoices_quote_id ON invoices (quote_id)",
+  ).run();
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS lead_questionnaires (
       id TEXT PRIMARY KEY,
@@ -1416,6 +1505,7 @@ async function insertSecuritySeed(env, seed) {
 
 async function ensureColumn(env, tableName, columnName, columnDefinition) {
   const allowedTables = new Set([
+    "clients",
     "invoices",
     "quotes",
     "payments",
@@ -1878,7 +1968,7 @@ async function handleInvoices(request, env, path, method) {
 
   if (method === "GET" && !invoiceId) {
     const result = await env.DB.prepare(
-      "SELECT id, invoice_number, client_name, client_email, client_address, amount, tax, status, created_at, due_date FROM invoices ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, invoice_number, lead_id, client_id, quote_id, client_name, client_email, client_address, amount, tax, status, created_at, due_date FROM invoices ORDER BY created_at DESC LIMIT 100",
     ).all();
     return json(result.results);
   }
@@ -1922,12 +2012,19 @@ async function handleInvoices(request, env, path, method) {
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     await env.DB.prepare(
-      `INSERT INTO invoices (id, invoice_number, client_name, client_email, client_address, amount, amount_cents, tax, tax_cents, status, due_date, payment_terms, items, notes, qr_code_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO invoices (
+         id, invoice_number, lead_id, client_id, quote_id, client_name,
+         client_email, client_address, amount, amount_cents, tax, tax_cents,
+         status, due_date, payment_terms, items, notes, qr_code_url
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
         invoiceNumber,
+        data.lead_id,
+        data.client_id,
+        data.quote_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -1952,6 +2049,21 @@ async function handleInvoices(request, env, path, method) {
       details: { amount: data.amount, tax: data.tax },
     });
 
+    if (data.quote_id) {
+      await env.DB.prepare(
+        "UPDATE quotes SET status = ? WHERE id = ? AND status = ?",
+      )
+        .bind("converted_to_invoice", data.quote_id, "accepted")
+        .run();
+      await recordAudit(env, {
+        action: "converted_to_invoice",
+        entity_type: "quote",
+        entity_id: data.quote_id,
+        entity_number: invoiceNumber,
+        details: { invoice_id: id },
+      });
+    }
+
     return json({ id, invoiceNumber, qr_code_url: qrCode }, { status: 201 });
   }
 
@@ -1973,9 +2085,17 @@ async function handleInvoices(request, env, path, method) {
     // Preserve the current status so editing a sent/viewed invoice does not
     // silently un-issue it.
     await env.DB.prepare(
-      `UPDATE invoices SET client_name = ?, client_email = ?, client_address = ?, amount = ?, amount_cents = ?, tax = ?, tax_cents = ?, status = ?, items = ?, notes = ?, due_date = ?, payment_terms = ? WHERE id = ?`,
+      `UPDATE invoices SET
+         lead_id = ?, client_id = ?, quote_id = ?, client_name = ?,
+         client_email = ?, client_address = ?, amount = ?, amount_cents = ?,
+         tax = ?, tax_cents = ?, status = ?, items = ?, notes = ?,
+         due_date = ?, payment_terms = ?
+       WHERE id = ?`,
     )
       .bind(
+        data.lead_id,
+        data.client_id,
+        data.quote_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -2967,7 +3087,102 @@ async function handlePublicQuestionnaire(request, env, token, method) {
     details: { requirement_id: requirementId },
   });
 
+  // Notify the business inbox. The client has already submitted successfully,
+  // so a failure here must never surface to them as an error.
+  try {
+    await notifyQuestionnaireSubmitted(request, env, lead, answers);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "questionnaire_notification_failed",
+        lead_id: row.lead_id,
+        error: String(error?.message || error),
+      }),
+    );
+  }
+
   return json({ success: true });
+}
+
+// Answers worth seeing at a glance, in the order they are asked.
+const QUESTIONNAIRE_PREVIEW = [
+  ["site_type", "Type of website"],
+  ["purpose", "Main purpose"],
+  ["pages", "Pages needed"],
+  ["has_logo", "Has a logo"],
+  ["logo_files", "Logo source files"],
+  ["brand", "Brand colours"],
+  ["domain_owned", "Owns a domain"],
+  ["domain_name", "Domain name"],
+  ["domain_access", "Access to domain"],
+  ["hosting", "Hosting"],
+  ["email_needed", "Email on domain"],
+  ["content_by", "Content supplied by"],
+  ["deadline", "Deadline"],
+  ["budget", "Budget"],
+  ["contact_phone", "Phone"],
+  ["contact_email", "Email"],
+  ["contact_whatsapp", "WhatsApp"],
+  ["contact_address", "Address"],
+  ["socials", "Social links"],
+  ["anything_else", "Anything else"],
+];
+
+async function notifyQuestionnaireSubmitted(request, env, lead, answers) {
+  const recipient = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+  if (!recipient) return;
+
+  const rows = QUESTIONNAIRE_PREVIEW.filter(([key]) =>
+    String(answers[key] || "").trim(),
+  )
+    .map(
+      ([key, label], i) => `<tr style="background:${i % 2 ? "#ffffff" : "#fbfbfc"};">
+        <td style="padding:9px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;width:38%;vertical-align:top;">${escapeHtml(label)}</td>
+        <td style="padding:9px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtmlWithBreaks(answers[key])}</td>
+      </tr>`,
+    )
+    .join("");
+
+  // Things that reliably cost money later if missed.
+  const flags = [];
+  if (/no/i.test(answers.has_logo || "")) flags.push("No logo — design cost likely");
+  if (answers.has_logo && /yes/i.test(answers.has_logo) && !answers.logo_files)
+    flags.push("Logo source files not confirmed");
+  if (/yes/i.test(answers.domain_owned || "") && !/yes/i.test(answers.domain_access || ""))
+    flags.push("Owns a domain but access is unclear — start recovery early");
+  if (/web app/i.test(answers.site_type || ""))
+    flags.push("Web app — do not quote without discovery");
+  if (!String(answers.budget || "").trim()) flags.push("No budget indicated");
+  if (/beplugged|copywriting|mixture/i.test(answers.content_by || ""))
+    flags.push("Content not fully client-supplied — price it");
+
+  const adminUrl = `${new URL(request.url).origin}/admin/`;
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(lead?.company_name || "A client")}</strong> has completed the questionnaire.</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">${escapeHtml(lead?.contact_name || "")}${lead?.contact_name && lead?.email ? " · " : ""}${escapeHtml(lead?.email || "")}</p>
+    ${
+      flags.length
+        ? `<table role="presentation" width="100%" style="margin:0 0 22px;"><tr><td style="background:#FFF5F1;border-left:3px solid #F05023;border-radius:4px;padding:12px 16px;font-size:13px;color:#555555;line-height:1.8;"><strong style="color:#2C2D3F;">Worth checking</strong><br>${flags.map((f) => `&bull; ${escapeHtml(f)}`).join("<br>")}</td></tr></table>`
+        : ""
+    }
+    ${emailButton(adminUrl, "Open the dashboard")}
+    ${emailSectionLabel("Their answers")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;">
+      <tbody>${rows || `<tr><td style="padding:10px 14px;font-size:13px;">No answers recorded.</td></tr>`}</tbody>
+    </table>
+    <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">The lead has moved to <strong>qualified</strong> and a requirements record has been created.</p>
+  `;
+
+  await sendBrevoEmail(env, {
+    to: recipient,
+    toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    subject: `Questionnaire completed — ${lead?.company_name || "new client"}`,
+    htmlContent: emailShell({
+      label: "Questionnaire Completed",
+      accent: "#1f8a52",
+      bodyHtml,
+    }),
+  });
 }
 
 // Shared Brevo send. Invoices and receipts predate this and keep their own
@@ -4125,7 +4340,7 @@ async function handleQuotes(request, env, path, method) {
 
   if (method === "GET" && !quoteId) {
     const result = await env.DB.prepare(
-      "SELECT id, quote_number, client_name, client_email, client_address, amount, tax, status, created_at, expiry_date FROM quotes ORDER BY created_at DESC LIMIT 100",
+      "SELECT id, quote_number, lead_id, client_id, client_name, client_email, client_address, amount, tax, status, created_at, expiry_date FROM quotes ORDER BY created_at DESC LIMIT 100",
     ).all();
     return json(result.results);
   }
@@ -4160,12 +4375,18 @@ async function handleQuotes(request, env, path, method) {
     const qrCode = await generateQrCodeDataUrl(qrUrl);
 
     await env.DB.prepare(
-      `INSERT INTO quotes (id, quote_number, client_name, client_email, client_address, amount, amount_cents, tax, tax_cents, status, expiry_date, items, notes, qr_code_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO quotes (
+         id, quote_number, lead_id, client_id, client_name, client_email,
+         client_address, amount, amount_cents, tax, tax_cents, status,
+         expiry_date, items, notes, qr_code_url
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
         quoteNumber,
+        data.lead_id,
+        data.client_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -4200,9 +4421,15 @@ async function handleQuotes(request, env, path, method) {
     const raw = await parseRequestJson(request);
     const data = normalizeQuotePayload(raw);
     await env.DB.prepare(
-      `UPDATE quotes SET client_name = ?, client_email = ?, client_address = ?, amount = ?, amount_cents = ?, tax = ?, tax_cents = ?, status = ?, items = ?, notes = ?, expiry_date = ? WHERE id = ?`,
+      `UPDATE quotes SET
+         lead_id = ?, client_id = ?, client_name = ?, client_email = ?,
+         client_address = ?, amount = ?, amount_cents = ?, tax = ?,
+         tax_cents = ?, status = ?, items = ?, notes = ?, expiry_date = ?
+       WHERE id = ?`,
     )
       .bind(
+        data.lead_id,
+        data.client_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -4267,6 +4494,8 @@ async function handleClients(request, env, path, method) {
       `WITH invoice_balances AS (
          SELECT
            LOWER(TRIM(i.client_email)) as client_key,
+           i.lead_id,
+           i.client_id,
            i.client_email,
            i.client_name,
            i.status,
@@ -4302,6 +4531,8 @@ async function handleClients(request, env, path, method) {
            client_key,
            MAX(client_email) as invoice_email,
            MAX(client_name) as invoice_name,
+           MAX(lead_id) as invoice_lead_id,
+           MAX(client_id) as invoice_client_id,
            COUNT(*) as invoice_count,
            SUM(CASE WHEN status != 'draft' THEN total_cents ELSE 0 END) as invoiced_cents,
            SUM(CASE WHEN status != 'draft' THEN paid_cents ELSE 0 END) as paid_cents,
@@ -4331,6 +4562,7 @@ async function handleClients(request, env, path, method) {
          COALESCE(c.name, ir.invoice_name, ir.invoice_email) as name,
          COALESCE(c.email, ir.invoice_email) as email,
          COALESCE(c.phone, '') as phone,
+         COALESCE(c.lead_id, ir.invoice_lead_id, '') as lead_id,
          COALESCE(c.address, '') as address,
          COALESCE(c.city, '') as city,
          COALESCE(c.state, '') as state,
@@ -4367,10 +4599,11 @@ async function handleClients(request, env, path, method) {
 
     await runOrConflict(
       env.DB.prepare(
-        `INSERT INTO clients (id, name, email, phone, address, city, state, postal_code, country)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO clients (id, lead_id, name, email, phone, address, city, state, postal_code, country)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         id,
+        data.lead_id || "",
         data.name,
         data.email,
         data.phone || "",
@@ -4405,10 +4638,11 @@ async function handleClients(request, env, path, method) {
     await runOrConflict(
       env.DB.prepare(
         `UPDATE clients SET
-           name = ?, email = ?, phone = ?, address = ?, city = ?, state = ?,
-           postal_code = ?, country = ?
+           lead_id = ?, name = ?, email = ?, phone = ?, address = ?, city = ?,
+           state = ?, postal_code = ?, country = ?
          WHERE id = ?`,
       ).bind(
+        data.lead_id || "",
         data.name,
         data.email,
         data.phone || "",

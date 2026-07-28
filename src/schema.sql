@@ -2,6 +2,9 @@
 CREATE TABLE IF NOT EXISTS invoices (
     id TEXT PRIMARY KEY,
     invoice_number TEXT NOT NULL UNIQUE,
+    lead_id TEXT,
+    client_id TEXT,
+    quote_id TEXT,
     client_name TEXT NOT NULL,
     client_email TEXT NOT NULL,
     client_address TEXT,
@@ -22,6 +25,8 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE TABLE IF NOT EXISTS quotes (
     id TEXT PRIMARY KEY,
     quote_number TEXT NOT NULL UNIQUE,
+    lead_id TEXT,
+    client_id TEXT,
     client_name TEXT NOT NULL,
     client_email TEXT NOT NULL,
     client_address TEXT,
@@ -40,6 +45,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 -- Clients table
 CREATE TABLE IF NOT EXISTS clients (
     id TEXT PRIMARY KEY,
+    lead_id TEXT,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT,
@@ -267,6 +273,18 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads (stage);
 
 CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up);
+
+CREATE INDEX IF NOT EXISTS idx_clients_lead_id ON clients (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_lead_id ON quotes (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_client_id ON quotes (client_id);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_lead_id ON invoices (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON invoices (client_id);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_quote_id ON invoices (quote_id);
 
 CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements (status);
 
