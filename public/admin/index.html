@@ -378,6 +378,98 @@
         color: rgba(44, 45, 63, 0.72);
       }
 
+      .status-register {
+        background-color: rgba(47, 111, 159, 0.14);
+        color: #245a82;
+      }
+
+      /* Rendered policy / SOP body */
+      .doc-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+
+      .doc-body {
+        font-size: 0.875rem;
+        line-height: 1.65;
+        color: var(--dark);
+      }
+
+      .doc-body h1,
+      .doc-body h2,
+      .doc-body h3,
+      .doc-body h4 {
+        margin: 1.4rem 0 0.6rem;
+        line-height: 1.3;
+      }
+
+      .doc-body h1 { font-size: 1.25rem; }
+      .doc-body h2 { font-size: 1.05rem; }
+      .doc-body h3 { font-size: 0.95rem; }
+      .doc-body h4 { font-size: 0.88rem; }
+      .doc-body p { margin: 0 0 0.85rem; }
+      .doc-body ul,
+      .doc-body ol { margin: 0 0 0.85rem 1.15rem; }
+      .doc-body li { margin-bottom: 0.3rem; }
+
+      .doc-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 1rem;
+        font-size: 0.82rem;
+        display: block;
+        overflow-x: auto;
+      }
+
+      .doc-body th,
+      .doc-body td {
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.6rem;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .doc-body th {
+        background: var(--surface);
+        font-weight: 600;
+      }
+
+      .doc-body blockquote {
+        margin: 0 0 0.85rem;
+        padding: 0.6rem 0.9rem;
+        background: var(--surface);
+        border-left: 3px solid var(--primary);
+        color: var(--muted);
+      }
+
+      .doc-body pre {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 0.3rem;
+        padding: 0.7rem 0.9rem;
+        overflow-x: auto;
+        font-size: 0.8rem;
+        margin: 0 0 0.85rem;
+      }
+
+      .doc-body code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.86em;
+      }
+
+      .doc-body hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 1.2rem 0;
+      }
+
       .modal {
         display: none;
         position: fixed;
@@ -864,19 +956,30 @@
               margin-bottom: 1.5rem;
             "
           >
-            <div class="stat-card" style="border-left-color: #1f8a52">
-              <h3>Live Modules</h3>
-              <div class="value" id="map-live-count" style="color: #1f8a52">0</div>
+            <div class="stat-card" style="border-left-color: #1e8750">
+              <h3>Dedicated Modules</h3>
+              <div class="value" id="map-live-count">0</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #2f6f9f">
+              <h3>Via Register</h3>
+              <div class="value" id="map-register-count">0</div>
             </div>
             <div class="stat-card">
-              <h3>Next Modules</h3>
+              <h3>Next</h3>
               <div class="value" id="map-next-count">0</div>
             </div>
             <div class="stat-card" style="border-left-color: #2c2d3f">
-              <h3>Later Modules</h3>
-              <div class="value" id="map-later-count" style="color: #2c2d3f">0</div>
+              <h3>Later</h3>
+              <div class="value" id="map-later-count">0</div>
             </div>
           </div>
+
+          <p style="margin: 0 0 1.25rem; font-size: 0.85rem; color: var(--muted);">
+            <strong>Dedicated</strong> means the item has its own screen.
+            <strong>Via register</strong> means it is recorded as a typed entry
+            in the Quality or Security register rather than a purpose-built
+            module.
+          </p>
 
           <div id="enterprise-map" class="module-map"></div>
         </div>
@@ -1835,6 +1938,37 @@
       </div>
     </div>
 
+    <!-- Document viewer: renders the Markdown body of a policy or SOP -->
+    <div id="documentModal" class="modal">
+      <div class="modal-content" style="max-width: 860px">
+        <div class="modal-header">
+          <h5 id="document-modal-title">Document</h5>
+          <button
+            type="button"
+            onclick="closeDocumentModal()"
+            style="
+              background: none;
+              border: none;
+              color: inherit;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="document-meta" class="doc-meta"></div>
+          <div id="document-body" class="doc-body"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeDocumentModal()">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- EBMS Module Modal -->
     <div id="moduleModal" class="modal">
       <div class="modal-content">
@@ -2070,6 +2204,7 @@
             { name: "evidence_url", label: "Policy URL", type: "url", fullSpan: true },
             { name: "description", label: "Policy Statement / Purpose", type: "textarea", fullSpan: true },
             { name: "notes", label: "Review Notes", type: "textarea", fullSpan: true },
+              { name: "body", label: "Document (Markdown)", type: "textarea", fullSpan: true },
           ],
           render: renderPolicyRows,
         },
@@ -2095,6 +2230,7 @@
             { name: "evidence_url", label: "SOP URL", type: "url", fullSpan: true },
             { name: "description", label: "Procedure Summary", type: "textarea", fullSpan: true },
             { name: "notes", label: "Steps / Notes", type: "textarea", fullSpan: true },
+              { name: "body", label: "Document (Markdown)", type: "textarea", fullSpan: true },
           ],
           render: renderSopRows,
         },
@@ -2253,7 +2389,7 @@
             { name: "Document Control", status: "live", tab: "documents" },
             { name: "Tasks", status: "next" },
             { name: "Milestones", status: "next" },
-            { name: "Risks", status: "next" },
+            { name: "Project Risks", status: "next" },
             { name: "Issues", status: "later" },
             { name: "Change Requests", status: "later" },
             { name: "Testing & Deployment", status: "later" },
@@ -2277,35 +2413,35 @@
           modules: [
             { name: "Policies", status: "live", tab: "policies" },
             { name: "SOPs", status: "live", tab: "sops" },
-            { name: "Work Instructions", status: "live", tab: "quality" },
-            { name: "Templates", status: "live", tab: "quality" },
-            { name: "Records", status: "live", tab: "quality" },
-            { name: "Registers", status: "live", tab: "quality" },
-            { name: "Internal Audits", status: "live", tab: "quality" },
-            { name: "External Audits", status: "live", tab: "quality" },
-            { name: "Corrective Actions", status: "live", tab: "quality" },
-            { name: "Preventive Actions", status: "live", tab: "quality" },
-            { name: "Non-Conformities", status: "live", tab: "quality" },
-            { name: "Customer Feedback", status: "live", tab: "quality" },
-            { name: "Management Reviews", status: "live", tab: "quality" },
-            { name: "KPIs", status: "live", tab: "quality" },
-            { name: "Continuous Improvement", status: "live", tab: "quality" },
-            { name: "Lessons Learned", status: "live", tab: "quality" },
-            { name: "Assets", status: "live", tab: "security" },
-            { name: "Asset Register", status: "live", tab: "security" },
-            { name: "Risks", status: "live", tab: "security" },
-            { name: "Risk Register", status: "live", tab: "security" },
-            { name: "Risk Assessments", status: "live", tab: "security" },
-            { name: "Access Control", status: "live", tab: "security" },
-            { name: "Password Management / Passwords", status: "live", tab: "security" },
-            { name: "Security Incidents", status: "live", tab: "security" },
-            { name: "Vulnerabilities", status: "live", tab: "security" },
-            { name: "Business Continuity", status: "live", tab: "security" },
-            { name: "Disaster Recovery", status: "live", tab: "security" },
-            { name: "Backups", status: "live", tab: "security" },
-            { name: "Recovery Tests", status: "live", tab: "security" },
-            { name: "Security Awareness", status: "live", tab: "security" },
-            { name: "Access Reviews", status: "live", tab: "security" },
+            { name: "Work Instructions", status: "register", tab: "quality" },
+            { name: "Templates", status: "register", tab: "quality" },
+            { name: "Records", status: "register", tab: "quality" },
+            { name: "Registers", status: "register", tab: "quality" },
+            { name: "Internal Audits", status: "register", tab: "quality" },
+            { name: "External Audits", status: "register", tab: "quality" },
+            { name: "Corrective Actions", status: "register", tab: "quality" },
+            { name: "Preventive Actions", status: "register", tab: "quality" },
+            { name: "Non-Conformities", status: "register", tab: "quality" },
+            { name: "Customer Feedback", status: "register", tab: "quality" },
+            { name: "Management Reviews", status: "register", tab: "quality" },
+            { name: "KPIs", status: "register", tab: "quality" },
+            { name: "Continuous Improvement", status: "register", tab: "quality" },
+            { name: "Lessons Learned", status: "register", tab: "quality" },
+            { name: "Assets", status: "register", tab: "security" },
+            { name: "Asset Register", status: "register", tab: "security" },
+            { name: "Risks", status: "register", tab: "security" },
+            { name: "Risk Register", status: "register", tab: "security" },
+            { name: "Risk Assessments", status: "register", tab: "security" },
+            { name: "Access Control", status: "register", tab: "security" },
+            { name: "Password Management / Passwords", status: "register", tab: "security" },
+            { name: "Security Incidents", status: "register", tab: "security" },
+            { name: "Vulnerabilities", status: "register", tab: "security" },
+            { name: "Business Continuity", status: "register", tab: "security" },
+            { name: "Disaster Recovery", status: "register", tab: "security" },
+            { name: "Backups", status: "register", tab: "security" },
+            { name: "Recovery Tests", status: "register", tab: "security" },
+            { name: "Security Awareness", status: "register", tab: "security" },
+            { name: "Access Reviews", status: "register", tab: "security" },
           ],
         },
         {
@@ -2333,6 +2469,118 @@
         }
         loadDashboard();
       });
+
+      // Minimal Markdown renderer for the policy and SOP bodies. The whole
+      // source is HTML-escaped first, so nothing in a stored document can
+      // inject markup; only the tags generated below reach the page.
+      function renderMarkdown(src) {
+        const lines = escapeHtml(src).replace(/\r\n/g, "\n").split("\n");
+        const out = [];
+        let i = 0;
+        const inline = (t) =>
+          t
+            .replace(/`([^`]+)`/g, "<code>$1</code>")
+            .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+            .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+            .replace(
+              /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+              '<a href="$2" target="_blank" rel="noopener">$1</a>',
+            );
+        const cells = (row) =>
+          row.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        while (i < lines.length) {
+          const line = lines[i];
+          if (!line.trim()) { i++; continue; }
+          if (/^```/.test(line)) {
+            const buf = []; i++;
+            while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+            i++;
+            out.push(`<pre><code>${buf.join("\n")}</code></pre>`);
+            continue;
+          }
+          if (/^\s*(---|===)\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+          const h = line.match(/^(#{1,6})\s+(.*)$/);
+          if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+          if (
+            /^\s*\|.*\|\s*$/.test(line) &&
+            i + 1 < lines.length &&
+            /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])
+          ) {
+            const head = cells(line.trim());
+            i += 2;
+            const rows = [];
+            while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+              rows.push(cells(lines[i++].trim()));
+            }
+            out.push(
+              `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${rows
+                .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`)
+                .join("")}</tbody></table>`,
+            );
+            continue;
+          }
+          if (/^\s*&gt;\s?/.test(line)) {
+            const buf = [];
+            while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) {
+              buf.push(lines[i++].replace(/^\s*&gt;\s?/, ""));
+            }
+            out.push(`<blockquote>${inline(buf.join(" "))}</blockquote>`);
+            continue;
+          }
+          if (/^\s*(?:[-*]|\d+\.)\s+/.test(line)) {
+            const ordered = /^\s*\d+\./.test(line);
+            const items = [];
+            while (i < lines.length && /^\s*(?:[-*]|\d+\.)\s+/.test(lines[i])) {
+              items.push(
+                inline(
+                  lines[i++]
+                    .replace(/^\s*(?:[-*]|\d+\.)\s+/, "")
+                    .replace(/^\[( |x)\]\s*/, (m, c) => (c === "x" ? "☑ " : "☐ ")),
+                ),
+              );
+            }
+            out.push(
+              `<${ordered ? "ol" : "ul"}>${items.map((t) => `<li>${t}</li>`).join("")}</${ordered ? "ol" : "ul"}>`,
+            );
+            continue;
+          }
+          const buf = [];
+          while (
+            i < lines.length &&
+            lines[i].trim() &&
+            !/^(#{1,6}\s|\s*\||\s*&gt;|```|\s*(?:[-*]|\d+\.)\s)/.test(lines[i])
+          ) {
+            buf.push(lines[i++]);
+          }
+          out.push(`<p>${inline(buf.join(" "))}</p>`);
+        }
+        return out.join("\n");
+      }
+
+      async function viewDocument(moduleName, id) {
+        const config = MODULES[moduleName];
+        if (!config) return;
+        const record = await apiCall(config.endpoint + "/" + id);
+        if (!record) return;
+        document.getElementById("document-modal-title").textContent =
+          record.title || "Document";
+        document.getElementById("document-meta").innerHTML = [
+          record.record_number ? `<span>${escapeHtml(record.record_number)}</span>` : "",
+          record.status ? `<span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span>` : "",
+          record.owner ? `<span>Owner: ${escapeHtml(record.owner)}</span>` : "",
+          record.review_date ? `<span>Review: ${displayDate(record.review_date)}</span>` : "",
+        ]
+          .filter(Boolean)
+          .join("");
+        document.getElementById("document-body").innerHTML = record.body
+          ? renderMarkdown(record.body)
+          : `<p style="color:var(--muted);">No document text stored yet. Use Edit to paste the document in.</p>`;
+        document.getElementById("documentModal").classList.add("show");
+      }
+
+      function closeDocumentModal() {
+        document.getElementById("documentModal").classList.remove("show");
+      }
 
       function escapeHtml(value) {
         return String(value || "")
@@ -2770,15 +3018,13 @@
           return;
         }
         const modules = allEnterpriseModules();
-        document.getElementById("map-live-count").textContent = modules.filter(
-          (module) => module.status === "live",
-        ).length;
-        document.getElementById("map-next-count").textContent = modules.filter(
-          (module) => module.status === "next",
-        ).length;
-        document.getElementById("map-later-count").textContent = modules.filter(
-          (module) => module.status === "later",
-        ).length;
+        const countOf = (status) =>
+          modules.filter((module) => module.status === status).length;
+        document.getElementById("map-live-count").textContent = countOf("live");
+        document.getElementById("map-register-count").textContent =
+          countOf("register");
+        document.getElementById("map-next-count").textContent = countOf("next");
+        document.getElementById("map-later-count").textContent = countOf("later");
         container.innerHTML = ENTERPRISE_MODULES.map(
           (group) => `
             <div class="module-panel">
@@ -2789,12 +3035,19 @@
         ).join("");
       }
 
+      // "Dedicated" means the item has its own screen. "Via register" means it
+      // is a typed entry in the Quality or Security register — recordable, but
+      // not a purpose-built module. Labelling those as Live overstated what is
+      // actually built.
+      const MODULE_STATUS_LABELS = {
+        live: "Dedicated",
+        register: "Via register",
+        next: "Next",
+        later: "Later",
+      };
+
       function renderEnterpriseModuleRow(module) {
-        const statusLabel = module.status === "live"
-          ? "Live"
-          : module.status === "next"
-            ? "Next"
-            : "Later";
+        const statusLabel = MODULE_STATUS_LABELS[module.status] || "Later";
         const title = module.tab
           ? `<button class="btn btn-sm btn-secondary" onclick="showTab('${escapeAttr(module.tab)}')">${escapeHtml(module.name)}</button>`
           : `<span>${escapeHtml(module.name)}</span>`;
@@ -2858,6 +3111,12 @@
       }
 
       document.addEventListener("click", (event) => {
+        const docBtn = event.target.closest("[data-doc-view]");
+        if (docBtn) {
+          viewDocument(docBtn.dataset.docView, docBtn.dataset.id);
+          return;
+        }
+
         const button = event.target.closest("[data-module-action]");
         if (button) {
           const { moduleAction, module: moduleName, id } = button.dataset;
@@ -3074,7 +3333,7 @@
             <td>${displayPlain(record.owner)}</td>
             <td>${displayPlain(record.project_name)}</td>
             <td>${displayDate(record.review_date || record.due_date)}</td>
-            <td>${actionButtons("policies", record.id)}</td>
+            <td><div class="action-buttons"><button class="btn btn-sm btn-secondary" data-doc-view="policies" data-id="${escapeAttr(record.id)}">View</button></div>${actionButtons("policies", record.id)}</td>
           </tr>
         `,
           )
@@ -3095,7 +3354,7 @@
             <td>${displayPlain(record.owner)}</td>
             <td>${displayPlain(record.project_name)}</td>
             <td>${displayDate(record.review_date || record.due_date)}</td>
-            <td>${actionButtons("sops", record.id)}</td>
+            <td><div class="action-buttons"><button class="btn btn-sm btn-secondary" data-doc-view="sops" data-id="${escapeAttr(record.id)}">View</button></div>${actionButtons("sops", record.id)}</td>
           </tr>
         `,
           )

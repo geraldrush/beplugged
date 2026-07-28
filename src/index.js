@@ -802,6 +802,9 @@ function normalizeQualityPayload(raw) {
     evidence_url: normalizeOptionalUrl(raw.evidence_url, "Evidence URL"),
     description: trimText(raw.description, "Description", { maxLength: 4000 }),
     notes: trimText(raw.notes, "Quality notes", { maxLength: 3000 }),
+    // The document body, in Markdown. Generous limit: a full SOP runs to
+    // several thousand words.
+    body: trimText(raw.body, "Document body", { maxLength: 100000 }),
   };
 }
 
@@ -1122,6 +1125,9 @@ async function runSchemaSetup(env) {
   await ensureColumn(env, "quotes", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "quotes", "tax_cents", "tax_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "payments", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
+  // Holds the document itself as Markdown. Policies and SOPs are internal, so
+  // they live behind the admin login rather than as public files.
+  await ensureColumn(env, "quality_records", "body", "body TEXT");
   await seedEditableReferenceData(env);
 }
 
@@ -1384,7 +1390,12 @@ async function insertSecuritySeed(env, seed) {
 }
 
 async function ensureColumn(env, tableName, columnName, columnDefinition) {
-  const allowedTables = new Set(["invoices", "quotes", "payments"]);
+  const allowedTables = new Set([
+    "invoices",
+    "quotes",
+    "payments",
+    "quality_records",
+  ]);
   if (!allowedTables.has(tableName)) {
     throw new Error("Invalid schema table");
   }
@@ -3223,9 +3234,9 @@ async function handleQualityRecords(request, env, path, method) {
     await env.DB.prepare(
       `INSERT INTO quality_records (
          id, record_number, title, record_type, status, owner, project_name,
-         due_date, review_date, evidence_url, description, notes
+         due_date, review_date, evidence_url, description, notes, body
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -3240,6 +3251,7 @@ async function handleQualityRecords(request, env, path, method) {
         data.evidence_url,
         data.description,
         data.notes,
+        data.body,
       )
       .run();
     await recordAudit(env, {
@@ -3266,7 +3278,7 @@ async function handleQualityRecords(request, env, path, method) {
       `UPDATE quality_records SET
          title = ?, record_type = ?, status = ?, owner = ?, project_name = ?,
          due_date = ?, review_date = ?, evidence_url = ?, description = ?,
-         notes = ?, updated_at = CURRENT_TIMESTAMP
+         notes = ?, body = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
       .bind(
@@ -3280,6 +3292,7 @@ async function handleQualityRecords(request, env, path, method) {
         data.evidence_url,
         data.description,
         data.notes,
+        data.body,
         recordId,
       )
       .run();

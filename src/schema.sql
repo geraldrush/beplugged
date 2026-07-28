@@ -196,6 +196,7 @@ CREATE TABLE IF NOT EXISTS quality_records (
     evidence_url TEXT,
     description TEXT,
     notes TEXT,
+    body TEXT, -- the document itself, in Markdown
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
