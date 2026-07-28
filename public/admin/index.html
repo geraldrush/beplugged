@@ -81,14 +81,29 @@
 
       /* A solid orange fill on every active nav item was the loudest thing on
          the page. A tint plus an accent rule reads calmer and still scans. */
+      /* Thin text rows rather than button chrome: with sixteen items the
+         sidebar should read as a list, not a stack of controls. */
       .sidebar .nav-link {
-        color: rgba(44, 45, 63, 0.78);
-        margin-bottom: 0.15rem;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.845rem;
-        border-radius: 0.3rem;
+        background: none;
+        border: 0;
         border-left: 2px solid transparent;
-        transition: background-color 0.15s, color 0.15s;
+        border-radius: 0.25rem;
+        color: rgba(44, 45, 63, 0.78);
+        display: block;
+        font-size: 0.82rem;
+        margin-bottom: 0;
+        padding: 0.3rem 0.6rem 0.3rem 0.7rem;
+        text-align: left;
+        width: 100%;
+        transition: background-color 0.12s, color 0.12s;
+      }
+
+      .sidebar .nav-link i {
+        width: 1.1rem;
+        margin-right: 0.15rem;
+        font-size: 0.78rem;
+        opacity: 0.75;
+        text-align: center;
       }
 
       .sidebar .nav-link:hover {
@@ -105,13 +120,57 @@
         font-weight: 600;
       }
 
+      /* Section headers double as collapse toggles. */
       .nav-section-title {
+        align-items: center;
+        background: none;
+        border: 0;
+        border-radius: 0.25rem;
         color: rgba(44, 45, 63, 0.45);
-        font-size: 0.72rem;
+        cursor: pointer;
+        display: flex;
+        font-size: 0.68rem;
         font-weight: 700;
+        gap: 0.4rem;
+        justify-content: space-between;
         letter-spacing: 0.08em;
-        margin: 1.35rem 1rem 0.55rem;
+        margin: 0.75rem 0 0.2rem;
+        padding: 0.25rem 0.6rem 0.25rem 0.7rem;
+        text-align: left;
         text-transform: uppercase;
+        width: 100%;
+      }
+
+      .nav-section:first-child .nav-section-title {
+        margin-top: 0;
+      }
+
+      .nav-section-title:hover {
+        background-color: rgba(44, 45, 63, 0.04);
+        color: rgba(44, 45, 63, 0.7);
+      }
+
+      .nav-section-title .chev {
+        font-size: 0.6rem;
+        opacity: 0.7;
+        transition: transform 0.15s;
+      }
+
+      .nav-section.collapsed .nav-section-title .chev {
+        transform: rotate(-90deg);
+      }
+
+      /* A collapsed section still shows where you are. */
+      .nav-section.collapsed.has-active .nav-section-title {
+        color: var(--primary);
+      }
+
+      .nav-section-body {
+        overflow: hidden;
+      }
+
+      .nav-section.collapsed .nav-section-body {
+        display: none;
       }
 
       .admin-layout {
@@ -2681,6 +2740,114 @@
         }
         return out.join("\n");
       }
+
+      // Groups the flat sidebar into collapsible sections. Built at runtime
+      // from the existing markup so the nav can be regenerated without having
+      // to keep this structure in the HTML.
+      (function sidebarSections() {
+        const STORAGE_KEY = "sidebarCollapsedSections";
+
+        function readCollapsed() {
+          try {
+            const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+            return Array.isArray(raw) ? raw : [];
+          } catch {
+            return [];
+          }
+        }
+
+        function writeCollapsed(list) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+          } catch {
+            /* private browsing, non-fatal */
+          }
+        }
+
+        function build() {
+          const nav = document.querySelector(".sidebar nav");
+          if (!nav || nav.querySelector(".nav-section")) return;
+
+          const groups = [];
+          let current = null;
+          Array.from(nav.children).forEach((el) => {
+            if (el.classList.contains("nav-section-title")) {
+              current = { title: el, items: [] };
+              groups.push(current);
+            } else if (current) {
+              current.items.push(el);
+            }
+          });
+          if (!groups.length) return;
+
+          const collapsed = readCollapsed();
+
+          groups.forEach((group) => {
+            const name = (group.title.textContent || "").trim();
+            const section = document.createElement("div");
+            section.className = "nav-section";
+            section.dataset.section = name;
+
+            const header = document.createElement("button");
+            header.type = "button";
+            header.className = "nav-section-title";
+            header.setAttribute("aria-expanded", "true");
+            const label = document.createElement("span");
+            label.textContent = name;
+            const chev = document.createElement("span");
+            chev.className = "chev";
+            chev.textContent = "▾";
+            header.appendChild(label);
+            header.appendChild(chev);
+
+            const bodyEl = document.createElement("div");
+            bodyEl.className = "nav-section-body";
+
+            nav.insertBefore(section, group.title);
+            section.appendChild(header);
+            section.appendChild(bodyEl);
+            group.title.remove();
+            group.items.forEach((item) => bodyEl.appendChild(item));
+
+            if (collapsed.includes(name)) {
+              section.classList.add("collapsed");
+              header.setAttribute("aria-expanded", "false");
+            }
+
+            header.addEventListener("click", () => {
+              const nowCollapsed = section.classList.toggle("collapsed");
+              header.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
+              const list = readCollapsed().filter((n) => n !== name);
+              if (nowCollapsed) list.push(name);
+              writeCollapsed(list);
+            });
+          });
+
+          markActive();
+        }
+
+        // Keeps the marker on a collapsed section that holds the current tab.
+        function markActive() {
+          document.querySelectorAll(".nav-section").forEach((section) => {
+            section.classList.toggle(
+              "has-active",
+              !!section.querySelector(".nav-link.active"),
+            );
+          });
+        }
+
+        document.addEventListener("click", (event) => {
+          if (event.target.closest(".sidebar .nav-link")) {
+            setTimeout(markActive, 0);
+          }
+        });
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", build);
+        } else {
+          build();
+        }
+      })();
 
       // Turns every .action-buttons group into a ⋮ menu. Done generically at
       // runtime rather than in each renderer, so tables added later are
