@@ -2777,12 +2777,39 @@ function summariseAnswers(answers) {
   return { goals, scope, constraints, notes };
 }
 
-async function handleLeadQuestionnaire(request, env, leadId, method) {
+async function handleLeadQuestionnaire(request, env, leadId, method, action) {
   const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
     .bind(leadId)
     .first();
   if (!lead) {
     throw new RequestError("Lead not found", 404);
+  }
+
+  if (method === "POST" && action === "send") {
+    let row = await env.DB.prepare(
+      "SELECT * FROM lead_questionnaires WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+    )
+      .bind(leadId)
+      .first();
+    // Sending without an existing link mints one, so the admin never has to
+    // remember to generate first.
+    if (!row || row.status === "submitted") {
+      const token = createQuestionnaireToken();
+      const expires = new Date(
+        Date.now() + QUESTIONNAIRE_TTL_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      await env.DB.prepare("DELETE FROM lead_questionnaires WHERE lead_id = ?")
+        .bind(leadId)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO lead_questionnaires (id, lead_id, token, status, expires_at)
+         VALUES (?, ?, ?, 'sent', ?)`,
+      )
+        .bind(createEntityId("lq"), leadId, token, expires)
+        .run();
+      row = { token };
+    }
+    return handleSendQuestionnaire(request, env, lead, row.token);
   }
 
   if (method === "GET") {
@@ -2943,13 +2970,192 @@ async function handlePublicQuestionnaire(request, env, token, method) {
   return json({ success: true });
 }
 
+// Shared Brevo send. Invoices and receipts predate this and keep their own
+// copies; quotes and questionnaires route through here.
+async function sendBrevoEmail(env, { to, toName, subject, htmlContent }) {
+  if (!env.BREVO_API_KEY) {
+    throw new RequestError("Missing BREVO_API_KEY secret", 500);
+  }
+  if (!env.BREVO_SENDER_EMAIL) {
+    throw new RequestError("Missing BREVO_SENDER_EMAIL variable", 500);
+  }
+  if (!to) {
+    throw new RequestError("No email address on file for this recipient", 400);
+  }
+
+  const senderName = env.BREVO_SENDER_NAME || "Beplugged Tech";
+  const payload = {
+    sender: { name: senderName, email: env.BREVO_SENDER_EMAIL },
+    to: [{ email: to, name: toName || "" }],
+    subject,
+    htmlContent,
+  };
+
+  // Keep a copy on file, as invoices and receipts already do.
+  const bccEmail = env.BREVO_BCC_EMAIL || "info@beplugged.co.za";
+  if (bccEmail && bccEmail !== to) {
+    payload.bcc = [{ email: bccEmail, name: senderName }];
+  }
+  if (env.BREVO_REPLY_TO) {
+    payload.replyTo = { email: env.BREVO_REPLY_TO, name: senderName };
+  }
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    console.error(
+      JSON.stringify({ message: "brevo_send_failed", status: response.status, details }),
+    );
+    throw new RequestError("Email could not be sent", 502);
+  }
+  return response.json().catch(() => ({}));
+}
+
+async function handleSendQuestionnaire(request, env, lead, token) {
+  const url = questionnaireUrl(request, token);
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(lead.contact_name || lead.company_name || "there")},</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Thank you for your interest in working with us. So that we can quote accurately and build what you actually need, please answer a few questions about your project. It takes about five minutes.</p>
+    ${emailButton(url, "Answer the questions")}
+    <p style="margin:0 0 8px;font-size:13px;color:#7a7a80;line-height:1.7;">If the button does not work, copy this link into your browser:</p>
+    <p style="margin:0 0 22px;font-size:12px;color:#7a7a80;word-break:break-all;">${escapeHtml(url)}</p>
+    ${emailSectionLabel("What we will ask")}
+    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;">
+      <tr><td style="padding:16px 18px;font-size:13px;color:#2C2D3F;line-height:1.9;">
+        The type of site you need &middot; what it is for &middot; pages &middot; logo and branding &middot;
+        domain, hosting and email &middot; who supplies the content &middot; contact details to display &middot;
+        timeline and budget
+      </td></tr>
+    </table>
+    <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">This link is personal to you and expires in 30 days.</p>
+  `;
+
+  await sendBrevoEmail(env, {
+    to: lead.email,
+    toName: lead.contact_name || lead.company_name || "",
+    subject: "A few questions about your project — Beplugged Tech",
+    htmlContent: emailShell({
+      label: "Project Questionnaire",
+      accent: "#F05023",
+      bodyHtml,
+    }),
+  });
+
+  await recordAudit(env, {
+    action: "questionnaire_sent",
+    entity_type: "lead",
+    entity_id: lead.id,
+    entity_number: lead.company_name,
+    details: { recipient: lead.email },
+  });
+
+  return json({ success: true, url });
+}
+
+async function handleSendQuote(request, env, quoteId) {
+  await ensureOperationalSchema(env);
+  const quote = await requireQuote(env, quoteId);
+
+  const items = parseStoredItems(quote.items);
+  const itemsRows = items.length
+    ? items
+        .map((item, i) => {
+          const quantity = Number(item.quantity || 1);
+          const rate = Number(item.rate || 0);
+          const discount = Number(item.discount || 0);
+          const lineTotal = Math.max(quantity * rate - discount, 0);
+          const bg = i % 2 ? "#ffffff" : "#fbfbfc";
+          return `<tr style="background:${bg};">
+            <td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(item.description || "Item")}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#555555;text-align:center;border-bottom:1px solid #eeeeee;">${escapeHtml(quantity)}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#555555;text-align:right;border-bottom:1px solid #eeeeee;">${formatMoney(rate)}</td>
+            <td style="padding:10px 14px;font-size:13px;color:#2C2D3F;text-align:right;border-bottom:1px solid #eeeeee;">${formatMoney(lineTotal)}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" style="padding:10px 14px;font-size:13px;color:#2C2D3F;">${escapeHtml(quote.notes || "As discussed")}</td></tr>`;
+
+  const total = Number(quote.amount || 0) + Number(quote.tax || 0);
+  const expiry = quote.expiry_date
+    ? new Date(quote.expiry_date).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+  const quoteUrl = quotePublicUrl(request, quote.id);
+
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(quote.client_name || "there")},</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Thank you for the opportunity. Here is your quote <strong>${escapeHtml(quote.quote_number)}</strong>. Use the button below to view the full breakdown.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF5F1;border-radius:8px;margin:0 0 24px;">
+      <tr><td style="padding:20px 24px;">
+        <div style="font-size:11px;color:#a06a58;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Quoted Total</div>
+        <div style="font-size:30px;font-weight:bold;color:#F05023;margin-top:6px;">${formatMoney(total)}</div>
+        ${expiry ? `<div style="font-size:13px;color:#7a7a80;margin-top:6px;">Valid until ${escapeHtml(expiry)}</div>` : ""}
+      </td></tr>
+    </table>
+    ${emailButton(quoteUrl, "View Quote")}
+    ${emailSectionLabel("Quote Summary")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 20px;">
+      <thead><tr style="background:#2C2D3F;">
+        <th align="left" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Description</th>
+        <th align="center" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Qty</th>
+        <th align="right" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Rate</th>
+        <th align="right" style="padding:11px 14px;font-size:11px;color:#ffffff;text-transform:uppercase;letter-spacing:1px;">Amount</th>
+      </tr></thead>
+      <tbody>${itemsRows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" align="right" style="padding:12px 14px;font-size:14px;font-weight:bold;color:#2C2D3F;border-top:2px solid #eeeeee;">Total</td>
+        <td align="right" style="padding:12px 14px;font-size:15px;font-weight:bold;color:#F05023;border-top:2px solid #eeeeee;">${formatMoney(total)}</td>
+      </tr></tfoot>
+    </table>
+    ${quote.notes ? `${emailSectionLabel("Notes")}<table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;"><tr><td style="padding:16px 18px;font-size:13px;color:#2C2D3F;line-height:1.9;">${escapeHtmlWithBreaks(quote.notes)}</td></tr></table>` : ""}
+  `;
+
+  await sendBrevoEmail(env, {
+    to: quote.client_email,
+    toName: quote.client_name || "",
+    subject: `Quote ${quote.quote_number} from Beplugged Tech`,
+    htmlContent: emailShell({
+      label: `Quote ${quote.quote_number}`,
+      accent: "#F05023",
+      bodyHtml,
+    }),
+  });
+
+  const issued = await issueQuote(env, request, quote);
+  await recordAudit(env, {
+    action: "sent",
+    entity_type: "quote",
+    entity_id: quote.id,
+    entity_number: quote.quote_number,
+    details: { recipient: quote.client_email },
+  });
+
+  return json({
+    success: true,
+    status: issued.status,
+    public_url: issued.public_url,
+  });
+}
+
 async function handleLeads(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
   const leadId = segments[4];
 
   if (leadId && segments[5] === "questionnaire") {
-    return handleLeadQuestionnaire(request, env, leadId, method);
+    return handleLeadQuestionnaire(request, env, leadId, method, segments[6]);
   }
 
   if (method === "GET" && !leadId) {
@@ -3929,6 +4135,10 @@ async function handleQuotes(request, env, path, method) {
       .bind(quoteId)
       .first();
     return json(result || { error: "Not found" }, result ? {} : { status: 404 });
+  }
+
+  if (method === "POST" && quoteId && action === "send") {
+    return handleSendQuote(request, env, quoteId);
   }
 
   if (method === "POST" && quoteId && action === "issue") {

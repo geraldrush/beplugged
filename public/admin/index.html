@@ -2595,6 +2595,27 @@
         anything_else: "Anything else",
       };
 
+      async function sendQuoteEmail(id) {
+        if (!confirm("Email this quote to the client?")) return;
+        const r = await apiCall("/admin/quotes/" + id + "/send", "POST");
+        if (r && r.success) {
+          showAlert("Quote sent", "success");
+          loadQuotes();
+        }
+      }
+
+      async function sendQuestionnaireEmail(leadId) {
+        if (!confirm("Email the questionnaire link to this lead?")) return;
+        const r = await apiCall(
+          "/admin/leads/" + leadId + "/questionnaire/send",
+          "POST",
+        );
+        if (r && r.success) {
+          showAlert("Questionnaire sent", "success");
+          openQuestionnaire(leadId);
+        }
+      }
+
       async function openQuestionnaire(leadId) {
         const body = document.getElementById("questionnaire-body");
         body.innerHTML = "<p>Loading…</p>";
@@ -2605,7 +2626,8 @@
         if (!data.exists) {
           body.innerHTML = `
             <p style="margin-bottom:1rem;">No questionnaire has been sent to this lead yet.</p>
-            <button class="btn btn-primary" data-q-generate="${escapeAttr(leadId)}">Generate link</button>`;
+            <button class="btn btn-primary" data-q-generate="${escapeAttr(leadId)}">Generate link</button>
+            <button class="btn btn-secondary" data-q-send="${escapeAttr(leadId)}">Send by email</button>`;
           return;
         }
 
@@ -2629,6 +2651,7 @@
             <input class="form-control" id="questionnaire-url" readonly value="${escapeAttr(data.url)}">
             <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
               <button class="btn btn-sm btn-secondary" data-q-copy="1">Copy link</button>
+              <button class="btn btn-sm btn-primary" data-q-send="${escapeAttr(leadId)}">Send by email</button>
               <button class="btn btn-sm btn-danger" data-q-generate="${escapeAttr(leadId)}">Regenerate</button>
             </div>
             <div class="hint" style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);">
@@ -3222,6 +3245,18 @@
               ? navigator.clipboard.writeText(input.value).then(() => showAlert("Link copied", "success"))
               : document.execCommand("copy");
           }
+          return;
+        }
+
+        const quoteSend = event.target.closest("[data-quote-send]");
+        if (quoteSend) {
+          sendQuoteEmail(quoteSend.dataset.quoteSend);
+          return;
+        }
+
+        const qSend = event.target.closest("[data-q-send]");
+        if (qSend) {
+          sendQuestionnaireEmail(qSend.dataset.qSend);
           return;
         }
 
@@ -4593,6 +4628,7 @@
                 <button class="btn btn-sm btn-info" onclick="viewQuote('${escapeAttr(q.id)}')">View</button>
                 <button class="btn btn-sm btn-secondary" onclick="editQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadQuote('${escapeAttr(q.id)}', '${safeStatusClass(q.status)}')">Download</button>
+                <button class="btn btn-sm btn-primary" data-quote-send="${escapeAttr(q.id)}">Send</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Delete</button>
               </div>
             </td>
