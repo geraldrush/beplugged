@@ -1842,6 +1842,22 @@ async function handleLogin(request, env) {
   if (!env.SESSION_SECRET) {
     return json({ error: "SESSION_SECRET is not configured" }, { status: 500 });
   }
+  // Unauthenticated endpoint guarding a single password, so throttle it before
+  // the comparison runs. Checked first rather than only on failure: an attacker
+  // who guesses correctly should already have been stopped.
+  if (env.LOGIN_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.LOGIN_LIMITER.limit({ key: clientIp });
+    if (!success) {
+      return json(
+        { error: "Too many login attempts. Please try again shortly." },
+        { status: 429 },
+      );
+    }
+  } else {
+    console.error(JSON.stringify({ message: "login_rate_limiter_missing" }));
+  }
+
   const { password } = await parseRequestJson(request);
   if (await safeCompareText(String(password || ""), env.ADMIN_PASSWORD)) {
     return json(await createSessionToken(env));

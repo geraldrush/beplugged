@@ -29,3 +29,13 @@ namespace_id = "1001"
   [ratelimits.simple]
   limit = 5
   period = 60
+
+# Separate namespace for admin login, so contact-form traffic can never
+# exhaust the budget that protects the password check, or vice versa.
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
