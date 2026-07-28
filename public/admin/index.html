@@ -56,6 +56,10 @@
         border-right: 1px solid rgba(44, 45, 63, 0.15);
         padding: 2rem 1rem;
         min-height: 100vh;
+        max-height: calc(100vh - 74px);
+        overflow-y: auto;
+        position: sticky;
+        top: 0;
       }
 
       .sidebar .nav-link {
@@ -72,8 +76,23 @@
         color: white;
       }
 
+      .nav-section-title {
+        color: rgba(44, 45, 63, 0.45);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        margin: 1.35rem 1rem 0.55rem;
+        text-transform: uppercase;
+      }
+
+      .admin-layout {
+        display: flex;
+        align-items: flex-start;
+      }
+
       .main-content {
         padding: 2rem;
+        min-width: 0;
       }
 
       .stat-card {
@@ -231,6 +250,21 @@
       .status-archived {
         background-color: rgba(44, 45, 63, 0.15);
         color: var(--dark);
+      }
+
+      .status-live {
+        background-color: rgba(31, 138, 82, 0.18);
+        color: #176b3f;
+      }
+
+      .status-next {
+        background-color: rgba(240, 80, 35, 0.18);
+        color: var(--primary);
+      }
+
+      .status-later {
+        background-color: rgba(44, 45, 63, 0.12);
+        color: rgba(44, 45, 63, 0.72);
       }
 
       .modal {
@@ -421,6 +455,45 @@
         height: 100%;
       }
 
+      .module-map {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1rem;
+      }
+
+      .module-panel {
+        background: #fff;
+        border: 1px solid rgba(44, 45, 63, 0.12);
+        border-radius: 0.5rem;
+        overflow: hidden;
+      }
+
+      .module-panel h4 {
+        background-color: #fff5f1;
+        border-bottom: 1px solid rgba(240, 80, 35, 0.2);
+        font-size: 1rem;
+        margin: 0;
+        padding: 0.9rem 1rem;
+      }
+
+      .module-row {
+        align-items: center;
+        border-bottom: 1px solid rgba(44, 45, 63, 0.08);
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: minmax(0, 1fr) auto;
+        min-height: 44px;
+        padding: 0.75rem 1rem;
+      }
+
+      .module-row:last-child {
+        border-bottom: 0;
+      }
+
+      .module-row button {
+        justify-self: start;
+      }
+
       @media (max-width: 768px) {
         .sidebar {
           display: none;
@@ -452,40 +525,49 @@
       </div>
     </nav>
 
-    <div style="display: flex">
+    <div class="admin-layout">
       <!-- Sidebar -->
       <div class="sidebar" style="width: 250px">
         <nav class="nav flex-column">
+          <div class="nav-section-title">Home</div>
           <button class="nav-link active" onclick="showTab('dashboard')">
             <i class="fas fa-th-large"></i> Dashboard
           </button>
+          <button class="nav-link" onclick="showTab('map')">
+            <i class="fas fa-sitemap"></i> Enterprise Map
+          </button>
+          <div class="nav-section-title">Administration</div>
           <button class="nav-link" onclick="showTab('company')">
             <i class="fas fa-building"></i> Company
           </button>
           <button class="nav-link" onclick="showTab('team')">
             <i class="fas fa-user-shield"></i> Team
           </button>
+          <div class="nav-section-title">Sales</div>
           <button class="nav-link" onclick="showTab('leads')">
             <i class="fas fa-bullseye"></i> Leads
           </button>
           <button class="nav-link" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
           </button>
+          <button class="nav-link" onclick="showTab('quotes')">
+            <i class="fas fa-quote-left"></i> Quotes
+          </button>
+          <div class="nav-section-title">Delivery</div>
           <button class="nav-link" onclick="showTab('projects')">
             <i class="fas fa-diagram-project"></i> Projects
           </button>
           <button class="nav-link" onclick="showTab('documents')">
             <i class="fas fa-folder-open"></i> Documents
           </button>
+          <div class="nav-section-title">Finance</div>
           <button class="nav-link" onclick="showTab('invoices')">
             <i class="fas fa-file-invoice"></i> Invoices
-          </button>
-          <button class="nav-link" onclick="showTab('quotes')">
-            <i class="fas fa-quote-left"></i> Quotes
           </button>
           <button class="nav-link" onclick="showTab('receipts')">
             <i class="fas fa-receipt"></i> Receipts
           </button>
+          <div class="nav-section-title">Session</div>
           <button class="nav-link" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> Logout
           </button>
@@ -613,6 +695,37 @@
               </table>
             </div>
           </div>
+        </div>
+
+        <!-- Enterprise Map Tab -->
+        <div id="map-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Enterprise Map</h2>
+          </div>
+
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              gap: 1rem;
+              margin-bottom: 1.5rem;
+            "
+          >
+            <div class="stat-card" style="border-left-color: #1f8a52">
+              <h3>Live Modules</h3>
+              <div class="value" id="map-live-count" style="color: #1f8a52">0</div>
+            </div>
+            <div class="stat-card">
+              <h3>Next Modules</h3>
+              <div class="value" id="map-next-count">0</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #2c2d3f">
+              <h3>Later Modules</h3>
+              <div class="value" id="map-later-count" style="color: #2c2d3f">0</div>
+            </div>
+          </div>
+
+          <div id="enterprise-map" class="module-map"></div>
         </div>
 
         <!-- Company Tab -->
@@ -1586,6 +1699,85 @@
         },
       };
 
+      const ENTERPRISE_MODULES = [
+        {
+          group: "Administration",
+          modules: [
+            { name: "Company Profile", status: "live", tab: "company" },
+            { name: "Team & Roles", status: "live", tab: "team" },
+            { name: "Branches", status: "next" },
+            { name: "Departments", status: "next" },
+            { name: "Cost Centres", status: "later" },
+            { name: "System Logs", status: "later" },
+          ],
+        },
+        {
+          group: "CRM & Sales",
+          modules: [
+            { name: "Leads", status: "live", tab: "leads" },
+            { name: "Clients", status: "live", tab: "clients" },
+            { name: "Quotations", status: "live", tab: "quotes" },
+            { name: "Requirements", status: "next" },
+            { name: "Proposals", status: "next" },
+            { name: "Contracts", status: "later" },
+            { name: "Meetings", status: "later" },
+            { name: "Communication History", status: "later" },
+          ],
+        },
+        {
+          group: "Projects & Delivery",
+          modules: [
+            { name: "Projects", status: "live", tab: "projects" },
+            { name: "Document Control", status: "live", tab: "documents" },
+            { name: "Tasks", status: "next" },
+            { name: "Milestones", status: "next" },
+            { name: "Risks", status: "next" },
+            { name: "Issues", status: "later" },
+            { name: "Change Requests", status: "later" },
+            { name: "Testing & Deployment", status: "later" },
+          ],
+        },
+        {
+          group: "Finance",
+          modules: [
+            { name: "Invoices", status: "live", tab: "invoices" },
+            { name: "Receipts", status: "live", tab: "receipts" },
+            { name: "Payments", status: "live", tab: "invoices" },
+            { name: "Expenses", status: "next" },
+            { name: "Credit Notes", status: "next" },
+            { name: "Purchase Orders", status: "later" },
+            { name: "Suppliers", status: "later" },
+            { name: "VAT & Reports", status: "later" },
+          ],
+        },
+        {
+          group: "Quality & Security",
+          modules: [
+            { name: "Policies", status: "next" },
+            { name: "SOPs", status: "next" },
+            { name: "Internal Audits", status: "later" },
+            { name: "Corrective Actions", status: "later" },
+            { name: "Asset Register", status: "later" },
+            { name: "Security Risks", status: "later" },
+            { name: "Incidents", status: "later" },
+            { name: "Backups", status: "later" },
+          ],
+        },
+        {
+          group: "Growth",
+          modules: [
+            { name: "Support Tickets", status: "later" },
+            { name: "Tender Management", status: "later" },
+            { name: "Partner Management", status: "later" },
+            { name: "Cloud Management", status: "later" },
+            { name: "Training", status: "later" },
+            { name: "Knowledge Base", status: "later" },
+            { name: "AI Assistant", status: "later" },
+            { name: "Executive Reports", status: "later" },
+          ],
+        },
+      ];
+
       // Initialize
       document.addEventListener("DOMContentLoaded", function () {
         localStorage.removeItem("authToken");
@@ -1653,6 +1845,8 @@
 
         if (tabName === "dashboard") {
           loadDashboard();
+        } else if (tabName === "map") {
+          renderEnterpriseMap();
         } else if (tabName === "company") {
           loadCompany();
         } else if (tabName === "team") {
@@ -1948,6 +2142,52 @@
       }
 
       // Company + EBMS v1 modules
+      function allEnterpriseModules() {
+        return ENTERPRISE_MODULES.flatMap((group) => group.modules);
+      }
+
+      function renderEnterpriseMap() {
+        const container = document.getElementById("enterprise-map");
+        if (!container) {
+          return;
+        }
+        const modules = allEnterpriseModules();
+        document.getElementById("map-live-count").textContent = modules.filter(
+          (module) => module.status === "live",
+        ).length;
+        document.getElementById("map-next-count").textContent = modules.filter(
+          (module) => module.status === "next",
+        ).length;
+        document.getElementById("map-later-count").textContent = modules.filter(
+          (module) => module.status === "later",
+        ).length;
+        container.innerHTML = ENTERPRISE_MODULES.map(
+          (group) => `
+            <div class="module-panel">
+              <h4>${escapeHtml(group.group)}</h4>
+              ${group.modules.map(renderEnterpriseModuleRow).join("")}
+            </div>
+          `,
+        ).join("");
+      }
+
+      function renderEnterpriseModuleRow(module) {
+        const statusLabel = module.status === "live"
+          ? "Live"
+          : module.status === "next"
+            ? "Next"
+            : "Later";
+        const title = module.tab
+          ? `<button class="btn btn-sm btn-secondary" onclick="showTab('${escapeAttr(module.tab)}')">${escapeHtml(module.name)}</button>`
+          : `<span>${escapeHtml(module.name)}</span>`;
+        return `
+          <div class="module-row">
+            ${title}
+            <span class="badge status-${safeStatusClass(module.status)}">${statusLabel}</span>
+          </div>
+        `;
+      }
+
       function displayDate(value) {
         return value ? new Date(value).toLocaleDateString() : "N/A";
       }
