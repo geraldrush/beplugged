@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Project Questionnaire — Beplugged Tech</title>
+    <link rel="icon" href="/img/favicon.ico" />
+    <style>
+      :root {
+        --primary: #f05023;
+        --primary-dark: #d94119;
+        --dark: #2c2d3f;
+        --page: #f6f7f9;
+        --surface: #fafafb;
+        --border: #e5e6ea;
+        --muted: rgba(44, 45, 63, 0.66);
+        --success: #1e8750;
+        --danger: #c0392b;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: var(--page);
+        color: var(--dark);
+        font-size: 0.9rem;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+      header {
+        background: var(--dark);
+        border-bottom: 3px solid var(--primary);
+        padding: 0.9rem 0;
+        margin-bottom: 1.5rem;
+      }
+      header .wrap { padding-top: 0; padding-bottom: 0; }
+      header img { height: 34px; display: block; }
+      h1 { font-size: 1.3rem; margin-bottom: 0.4rem; letter-spacing: -0.01em; }
+      .lede { color: var(--muted); margin-bottom: 1.5rem; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+      }
+      .q { margin-bottom: 1.25rem; }
+      .q:last-child { margin-bottom: 0; }
+      .q > label,
+      .q > .qlabel {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+      }
+      .hint { color: var(--muted); font-size: 0.82rem; margin-bottom: 0.45rem; }
+      input[type="text"],
+      input[type="email"],
+      input[type="tel"],
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 0.3rem;
+        padding: 0.45rem 0.65rem;
+        font: inherit;
+        font-size: 0.875rem;
+        background: #fff;
+        color: var(--dark);
+      }
+      textarea { min-height: 76px; resize: vertical; }
+      input:focus, textarea:focus, select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 0.15rem rgba(240, 80, 35, 0.15);
+      }
+      .choices { display: grid; gap: 0.4rem; }
+      .choice {
+        display: flex;
+        gap: 0.55rem;
+        align-items: flex-start;
+        border: 1px solid var(--border);
+        border-radius: 0.3rem;
+        padding: 0.5rem 0.7rem;
+        cursor: pointer;
+      }
+      .choice:hover { background: var(--surface); }
+      .choice input { margin-top: 0.28rem; flex: none; }
+      .choice span strong { display: block; }
+      .choice span small { color: var(--muted); }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+      @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+      .section-title {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        font-weight: 600;
+        margin-bottom: 0.9rem;
+      }
+      button {
+        background: var(--primary);
+        border: 1px solid var(--primary);
+        color: #fff;
+        font: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.6rem 1.4rem;
+        border-radius: 0.3rem;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { background: var(--primary-dark); border-color: var(--primary-dark); }
+      button:disabled { opacity: 0.6; cursor: default; }
+      .status { margin-top: 0.9rem; font-weight: 600; }
+      .msg {
+        text-align: center;
+        padding: 2.5rem 1.25rem;
+      }
+      .msg h2 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+      .msg p { color: var(--muted); }
+      .tick {
+        width: 46px; height: 46px; border-radius: 50%;
+        background: rgba(30, 135, 80, 0.12); color: var(--success);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.5rem; margin: 0 auto 0.9rem;
+      }
+      footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 1.5rem; }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap"><img src="/img/logo.png" alt="Beplugged Tech" /></div>
+    </header>
+
+    <div class="wrap">
+      <div id="loading" class="card msg"><p>Loading…</p></div>
+
+      <div id="invalid" class="card msg hidden">
+        <h2>This link is no longer valid</h2>
+        <p>
+          It may have expired or already been used. Please contact
+          <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> and
+          we will send you a new one.
+        </p>
+      </div>
+
+      <div id="done" class="card msg hidden">
+        <div class="tick">✓</div>
+        <h2>Thank you — we have your answers</h2>
+        <p>We will review them and come back to you shortly with a quote.</p>
+      </div>
+
+      <form id="form" class="hidden">
+        <h1>Project questionnaire</h1>
+        <p class="lede" id="lede">
+          A few questions so we can quote accurately and build what you
+          actually need. It takes about five minutes.
+        </p>
+
+        <div class="card">
+          <div class="section-title">The website</div>
+
+          <div class="q">
+            <span class="qlabel">1. What type of website do you need?</span>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="site_type" value="Static — information only" required /><span><strong>Static</strong><small>Information only, a few simple pages</small></span></label>
+              <label class="choice"><input type="radio" name="site_type" value="Dynamic — blog or CMS" /><span><strong>Dynamic</strong><small>Blog or CMS, you update the content yourself</small></span></label>
+              <label class="choice"><input type="radio" name="site_type" value="Web app — logins, payments, dashboards" /><span><strong>Web app</strong><small>Logins, payments, dashboards, bookings</small></span></label>
+              <label class="choice"><input type="radio" name="site_type" value="Not sure" /><span><strong>Not sure</strong><small>Happy for you to advise</small></span></label>
+            </div>
+          </div>
+
+          <div class="q">
+            <label for="purpose">2. What is the main purpose of the site?</label>
+            <div class="hint">For example: sell products, show a portfolio, generate leads, company information</div>
+            <textarea id="purpose" name="purpose" required></textarea>
+          </div>
+
+          <div class="q">
+            <label for="pages">3. Roughly what pages do you need?</label>
+            <div class="hint">For example: Home, About, Services, Contact</div>
+            <textarea id="pages" name="pages"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Branding</div>
+
+          <div class="q">
+            <span class="qlabel">4. Do you have a logo?</span>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="has_logo" value="Yes" /><span>Yes</span></label>
+              <label class="choice"><input type="radio" name="has_logo" value="No" /><span>No — I need one designed</span></label>
+            </div>
+          </div>
+
+          <div class="q">
+            <label for="logo_files">If yes, do you have the original design files?</label>
+            <div class="hint">.ai, .svg, .eps, or a high-resolution PNG. A small or blurry logo usually needs redrawing.</div>
+            <input type="text" id="logo_files" name="logo_files" />
+          </div>
+
+          <div class="q">
+            <label for="brand">5. Do you have brand colours or a look in mind?</label>
+            <div class="hint">Share them, or say you would like us to suggest</div>
+            <textarea id="brand" name="brand"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Domain, hosting and email</div>
+
+          <div class="q">
+            <span class="qlabel">6. Do you already own a domain name?</span>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="domain_owned" value="Yes" /><span>Yes</span></label>
+              <label class="choice"><input type="radio" name="domain_owned" value="No" /><span>No</span></label>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="q">
+              <label for="domain_name">If yes, what is it?</label>
+              <input type="text" id="domain_name" name="domain_name" placeholder="yourbusiness.co.za" />
+            </div>
+            <div class="q">
+              <label for="domain_access">Do you have login access to it?</label>
+              <div class="hint">Where it was registered</div>
+              <input type="text" id="domain_access" name="domain_access" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="q">
+              <label for="hosting">7. Do you already have hosting?</label>
+              <input type="text" id="hosting" name="hosting" placeholder="Yes / No / Not sure" />
+            </div>
+            <div class="q">
+              <label for="email_needed">Do you need email on your domain?</label>
+              <div class="hint">e.g. info@yourbusiness.co.za</div>
+              <input type="text" id="email_needed" name="email_needed" placeholder="Yes / No" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Content and contact details</div>
+
+          <div class="q">
+            <span class="qlabel">8. Who will supply the text and images?</span>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="content_by" value="Client supplies content" /><span><strong>I will supply them</strong></span></label>
+              <label class="choice"><input type="radio" name="content_by" value="Beplugged to quote for content" /><span><strong>Please include copywriting and images in the quote</strong></span></label>
+              <label class="choice"><input type="radio" name="content_by" value="Mixture" /><span><strong>A mixture</strong></span></label>
+            </div>
+          </div>
+
+          <div class="q">
+            <span class="qlabel">9. Contact details to show on the site</span>
+            <div class="row">
+              <div><div class="hint">Phone</div><input type="tel" name="contact_phone" /></div>
+              <div><div class="hint">Email</div><input type="email" name="contact_email" /></div>
+            </div>
+            <div class="row" style="margin-top: 0.6rem">
+              <div><div class="hint">WhatsApp</div><input type="tel" name="contact_whatsapp" /></div>
+              <div><div class="hint">Address (if you want it shown)</div><input type="text" name="contact_address" /></div>
+            </div>
+            <div style="margin-top: 0.6rem">
+              <div class="hint">Social media links</div>
+              <input type="text" name="socials" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Timeline and budget</div>
+
+          <div class="row">
+            <div class="q">
+              <label for="deadline">10. Is there a date this needs to be live by?</label>
+              <input type="text" id="deadline" name="deadline" />
+            </div>
+            <div class="q">
+              <label for="budget">What budget range do you have in mind?</label>
+              <div class="hint">A range is fine — it helps us recommend the right approach</div>
+              <input type="text" id="budget" name="budget" />
+            </div>
+          </div>
+
+          <div class="q">
+            <label for="anything_else">11. Anything else we should know?</label>
+            <div class="hint">Sites you like, features you have in mind, anything to avoid</div>
+            <textarea id="anything_else" name="anything_else"></textarea>
+          </div>
+        </div>
+
+        <button type="submit" id="submit">Send my answers</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+
+      <footer>Beplugged Tech · info@beplugged.co.za</footer>
+    </div>
+
+    <script>
+      (function () {
+        var token = new URLSearchParams(location.search).get("t") || "";
+        var $ = function (id) { return document.getElementById(id); };
+        var show = function (id) {
+          ["loading", "invalid", "done", "form"].forEach(function (k) {
+            $(k).classList.toggle("hidden", k !== id);
+          });
+        };
+
+        if (!token) { show("invalid"); return; }
+
+        fetch("/api/questionnaire/" + encodeURIComponent(token))
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+          .then(function (res) {
+            if (!res.ok) { show("invalid"); return; }
+            if (res.b.status === "submitted") { show("done"); return; }
+            if (res.b.company_name) {
+              $("lede").textContent =
+                "A few questions about the website for " + res.b.company_name +
+                ", so we can quote accurately and build what you actually need. It takes about five minutes.";
+            }
+            show("form");
+          })
+          .catch(function () { show("invalid"); });
+
+        $("form").addEventListener("submit", function (e) {
+          e.preventDefault();
+          var btn = $("submit");
+          var status = $("status");
+          status.textContent = "";
+          btn.disabled = true;
+          btn.textContent = "Sending…";
+
+          var data = {};
+          new FormData($("form")).forEach(function (v, k) { data[k] = v; });
+
+          fetch("/api/questionnaire/" + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          })
+            .then(function (r) {
+              return r.json().then(function (b) {
+                if (!r.ok || !b.success) {
+                  throw new Error(b.error || "Could not send your answers");
+                }
+              });
+            })
+            .then(function () { show("done"); window.scrollTo(0, 0); })
+            .catch(function (err) {
+              status.style.color = "#c0392b";
+              status.textContent = err.message;
+            })
+            .finally(function () {
+              btn.disabled = false;
+              btn.textContent = "Send my answers";
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS security_records (
     description TEXT,
     mitigation TEXT,
     notes TEXT,
+    body TEXT, -- the document itself, in Markdown
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -233,6 +234,19 @@ CREATE TABLE IF NOT EXISTS team_members (
     active INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Client intake questionnaires, reached by an unguessable per-lead token
+CREATE TABLE IF NOT EXISTS lead_questionnaires (
+    id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'submitted')),
+    answers TEXT, -- JSON of the submitted answers
+    submitted_at DATETIME,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lead_id) REFERENCES leads (id)
 );
 
 -- Indexes for performance
@@ -281,3 +295,5 @@ CREATE INDEX IF NOT EXISTS idx_security_records_risk_level ON security_records (
 CREATE INDEX IF NOT EXISTS idx_security_records_review_date ON security_records (review_date);
 
 CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email);
+
+CREATE INDEX IF NOT EXISTS idx_lead_questionnaires_lead ON lead_questionnaires (lead_id);

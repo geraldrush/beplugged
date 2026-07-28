@@ -231,6 +231,14 @@ export default {
         return await handlePublicReceiptView(paymentId, env);
       }
 
+      // Client-facing intake questionnaire. Reached by an unguessable token
+      // rather than a login, so it must never expose anything beyond the one
+      // lead the token belongs to.
+      if (path.startsWith("/api/questionnaire/")) {
+        const token = path.split("/")[3];
+        return await handlePublicQuestionnaire(request, env, token, method);
+      }
+
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
@@ -830,6 +838,7 @@ function normalizeSecurityPayload(raw) {
     description: trimText(raw.description, "Description", { maxLength: 4000 }),
     mitigation: trimText(raw.mitigation, "Mitigation", { maxLength: 4000 }),
     notes: trimText(raw.notes, "Security notes", { maxLength: 3000 }),
+    body: trimText(raw.body, "Document body", { maxLength: 100000 }),
   };
 }
 
@@ -1128,6 +1137,22 @@ async function runSchemaSetup(env) {
   // Holds the document itself as Markdown. Policies and SOPs are internal, so
   // they live behind the admin login rather than as public files.
   await ensureColumn(env, "quality_records", "body", "body TEXT");
+  await ensureColumn(env, "security_records", "body", "body TEXT");
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS lead_questionnaires (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'sent',
+      answers TEXT,
+      submitted_at DATETIME,
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_lead_questionnaires_lead ON lead_questionnaires (lead_id)",
+  ).run();
   await seedEditableReferenceData(env);
 }
 
@@ -1395,6 +1420,7 @@ async function ensureColumn(env, tableName, columnName, columnDefinition) {
     "quotes",
     "payments",
     "quality_records",
+    "security_records",
   ]);
   if (!allowedTables.has(tableName)) {
     throw new Error("Invalid schema table");
@@ -2645,10 +2671,270 @@ async function handleCompanyProfile(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+const QUESTIONNAIRE_TTL_DAYS = 30;
+
+// The questions mirror SOP-CLI-001 Appendix A. Kept server-side so the stored
+// answers stay meaningful even if the public page changes.
+const QUESTIONNAIRE_FIELDS = [
+  { name: "site_type", label: "Type of website", max: 40 },
+  { name: "purpose", label: "Main purpose", max: 500 },
+  { name: "pages", label: "Pages needed", max: 500 },
+  { name: "has_logo", label: "Has logo", max: 40 },
+  { name: "logo_files", label: "Logo source files", max: 200 },
+  { name: "brand", label: "Brand colours", max: 500 },
+  { name: "domain_owned", label: "Owns domain", max: 40 },
+  { name: "domain_name", label: "Domain name", max: 253 },
+  { name: "domain_access", label: "Has domain access", max: 200 },
+  { name: "hosting", label: "Hosting", max: 200 },
+  { name: "email_needed", label: "Email on domain", max: 40 },
+  { name: "content_by", label: "Who supplies content", max: 200 },
+  { name: "contact_phone", label: "Phone", max: 100 },
+  { name: "contact_email", label: "Email", max: 254 },
+  { name: "contact_whatsapp", label: "WhatsApp", max: 100 },
+  { name: "contact_address", label: "Address", max: 500 },
+  { name: "socials", label: "Social links", max: 500 },
+  { name: "deadline", label: "Deadline", max: 200 },
+  { name: "budget", label: "Budget range", max: 200 },
+  { name: "anything_else", label: "Anything else", max: 3000 },
+];
+
+function createQuestionnaireToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64Url(bytes);
+}
+
+function questionnaireUrl(request, token) {
+  return `${new URL(request.url).origin}/start/?t=${encodeURIComponent(token)}`;
+}
+
+function normalizeQuestionnaireAnswers(raw) {
+  const answers = {};
+  for (const field of QUESTIONNAIRE_FIELDS) {
+    answers[field.name] = trimText(raw?.[field.name], field.label, {
+      maxLength: field.max,
+    });
+  }
+  return answers;
+}
+
+function parseAnswers(value) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+// Turns the raw answers into the prose the requirements record expects.
+function summariseAnswers(answers) {
+  const line = (label, value) => (value ? `${label}: ${value}` : "");
+  const goals = [
+    line("Purpose", answers.purpose),
+    line("Site type", answers.site_type),
+    line("Pages", answers.pages),
+  ].filter(Boolean).join("\n");
+  const scope = [
+    line("Content supplied by", answers.content_by),
+    line("Logo", answers.has_logo),
+    line("Logo source files", answers.logo_files),
+    line("Brand", answers.brand),
+    line("Email on domain", answers.email_needed),
+  ].filter(Boolean).join("\n");
+  const constraints = [
+    line("Deadline", answers.deadline),
+    line("Budget", answers.budget),
+    line("Domain owned", answers.domain_owned),
+    line("Domain", answers.domain_name),
+    line("Domain access", answers.domain_access),
+    line("Hosting", answers.hosting),
+  ].filter(Boolean).join("\n");
+  const notes = [
+    line("Anything else", answers.anything_else),
+    line("Phone", answers.contact_phone),
+    line("Email", answers.contact_email),
+    line("WhatsApp", answers.contact_whatsapp),
+    line("Address", answers.contact_address),
+    line("Socials", answers.socials),
+  ].filter(Boolean).join("\n");
+  return { goals, scope, constraints, notes };
+}
+
+async function handleLeadQuestionnaire(request, env, leadId, method) {
+  const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+    .bind(leadId)
+    .first();
+  if (!lead) {
+    throw new RequestError("Lead not found", 404);
+  }
+
+  if (method === "GET") {
+    const row = await env.DB.prepare(
+      "SELECT * FROM lead_questionnaires WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+    )
+      .bind(leadId)
+      .first();
+    if (!row) {
+      return json({ exists: false });
+    }
+    return json({
+      exists: true,
+      status: row.status,
+      url: questionnaireUrl(request, row.token),
+      sent_at: row.created_at,
+      submitted_at: row.submitted_at,
+      expires_at: row.expires_at,
+      answers: parseAnswers(row.answers),
+    });
+  }
+
+  if (method === "POST") {
+    // Regenerating invalidates the previous link, which is the desired
+    // behaviour if a link was sent to the wrong address.
+    await env.DB.prepare("DELETE FROM lead_questionnaires WHERE lead_id = ?")
+      .bind(leadId)
+      .run();
+    const token = createQuestionnaireToken();
+    const expires = new Date(
+      Date.now() + QUESTIONNAIRE_TTL_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO lead_questionnaires (id, lead_id, token, status, expires_at)
+       VALUES (?, ?, ?, 'sent', ?)`,
+    )
+      .bind(createEntityId("lq"), leadId, token, expires)
+      .run();
+    await recordAudit(env, {
+      action: "questionnaire_link_created",
+      entity_type: "lead",
+      entity_id: leadId,
+      entity_number: lead.company_name,
+    });
+    return json({
+      success: true,
+      url: questionnaireUrl(request, token),
+      expires_at: expires,
+    });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handlePublicQuestionnaire(request, env, token, method) {
+  await ensureSchema(env);
+  if (!token) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT * FROM lead_questionnaires WHERE token = ?",
+  )
+    .bind(token)
+    .first();
+
+  // Same response for a bad token and an expired one, so the endpoint cannot
+  // be used to test whether a token exists.
+  if (!row || (row.expires_at && new Date(row.expires_at) < new Date())) {
+    return json({ error: "This link is no longer valid" }, { status: 404 });
+  }
+
+  const lead = await env.DB.prepare(
+    "SELECT company_name, contact_name FROM leads WHERE id = ?",
+  )
+    .bind(row.lead_id)
+    .first();
+
+  if (method === "GET") {
+    return json({
+      status: row.status,
+      company_name: lead?.company_name || "",
+      contact_name: lead?.contact_name || "",
+    });
+  }
+
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (row.status === "submitted") {
+    return json(
+      { error: "This questionnaire has already been submitted" },
+      { status: 409 },
+    );
+  }
+
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({
+      key: `q:${clientIp}`,
+    });
+    if (!success) {
+      return json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const answers = normalizeQuestionnaireAnswers(await parseRequestJson(request));
+  const submittedAt = new Date().toISOString();
+
+  await env.DB.prepare(
+    `UPDATE lead_questionnaires
+     SET status = 'submitted', answers = ?, submitted_at = ?
+     WHERE id = ? AND status != 'submitted'`,
+  )
+    .bind(JSON.stringify(answers), submittedAt, row.id)
+    .run();
+
+  // Move the lead along and record a requirements entry from the answers.
+  const summary = summariseAnswers(answers);
+  await env.DB.prepare(
+    `UPDATE leads SET stage = CASE WHEN stage = 'new' THEN 'qualified' ELSE stage END,
+       updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+  )
+    .bind(row.lead_id)
+    .run();
+
+  const requirementId = createEntityId("req");
+  await env.DB.prepare(
+    `INSERT INTO requirements (
+       id, requirement_number, title, client_name, contact_name, template,
+       status, goals, scope, constraints, notes
+     )
+     VALUES (?, ?, ?, ?, ?, 'website', 'discovery', ?, ?, ?, ?)`,
+  )
+    .bind(
+      requirementId,
+      generateDocumentNumber("REQ"),
+      `Intake — ${lead?.company_name || "Client"}`,
+      lead?.company_name || "Client",
+      lead?.contact_name || "",
+      summary.goals,
+      summary.scope,
+      summary.constraints,
+      summary.notes,
+    )
+    .run();
+
+  await recordAudit(env, {
+    actor: "client",
+    action: "questionnaire_submitted",
+    entity_type: "lead",
+    entity_id: row.lead_id,
+    entity_number: lead?.company_name || "",
+    details: { requirement_id: requirementId },
+  });
+
+  return json({ success: true });
+}
+
 async function handleLeads(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
   const leadId = segments[4];
+
+  if (leadId && segments[5] === "questionnaire") {
+    return handleLeadQuestionnaire(request, env, leadId, method);
+  }
 
   if (method === "GET" && !leadId) {
     const result = await env.DB.prepare(
@@ -3382,9 +3668,9 @@ async function handleSecurityRecords(request, env, path, method) {
       `INSERT INTO security_records (
          id, record_number, title, record_type, status, risk_level, owner,
          asset_name, due_date, review_date, evidence_url, description,
-         mitigation, notes
+         mitigation, notes, body
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -3401,6 +3687,7 @@ async function handleSecurityRecords(request, env, path, method) {
         data.description,
         data.mitigation,
         data.notes,
+        data.body,
       )
       .run();
     await recordAudit(env, {
@@ -3431,7 +3718,7 @@ async function handleSecurityRecords(request, env, path, method) {
       `UPDATE security_records SET
          title = ?, record_type = ?, status = ?, risk_level = ?, owner = ?,
          asset_name = ?, due_date = ?, review_date = ?, evidence_url = ?,
-         description = ?, mitigation = ?, notes = ?,
+         description = ?, mitigation = ?, notes = ?, body = ?,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
@@ -3448,6 +3735,7 @@ async function handleSecurityRecords(request, env, path, method) {
         data.description,
         data.mitigation,
         data.notes,
+        data.body,
         recordId,
       )
       .run();
