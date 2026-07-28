@@ -21,6 +21,9 @@ build/
 *.swp
 *.swo
 
+# Agent tooling
+.codex
+
 # OS
 .DS_Store
 Thumbs.db
