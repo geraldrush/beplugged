@@ -255,6 +255,33 @@ CREATE TABLE IF NOT EXISTS lead_questionnaires (
     FOREIGN KEY (lead_id) REFERENCES leads (id)
 );
 
+-- Scope confirmations signed by the client. A signed row is never edited;
+-- later changes are issued as an addendum referencing the original.
+CREATE TABLE IF NOT EXISTS scope_agreements (
+    id TEXT PRIMARY KEY,
+    agreement_number TEXT NOT NULL UNIQUE,
+    parent_id TEXT,                -- the original, for addenda
+    version INTEGER NOT NULL DEFAULT 1,
+    title TEXT NOT NULL,
+    client_name TEXT NOT NULL,
+    client_email TEXT NOT NULL,
+    project_name TEXT,
+    linked_type TEXT,
+    linked_id TEXT,
+    body TEXT NOT NULL,            -- the document, in Markdown
+    body_hash TEXT,                -- sha256 of body at the moment it was sent
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'signed', 'declined', 'void')),
+    token TEXT UNIQUE,
+    sent_at DATETIME,
+    signed_name TEXT,
+    signed_at DATETIME,
+    signed_ip TEXT,
+    signed_user_agent TEXT,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 
@@ -315,3 +342,5 @@ CREATE INDEX IF NOT EXISTS idx_security_records_review_date ON security_records 
 CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email);
 
 CREATE INDEX IF NOT EXISTS idx_lead_questionnaires_lead ON lead_questionnaires (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id);

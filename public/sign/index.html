@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Scope Confirmation — Beplugged Tech</title>
+    <link rel="icon" href="/img/favicon.ico" />
+    <style>
+      :root {
+        --primary: #f05023;
+        --primary-dark: #d94119;
+        --dark: #2c2d3f;
+        --page: #f6f7f9;
+        --surface: #fafafb;
+        --border: #e5e6ea;
+        --muted: rgba(44, 45, 63, 0.66);
+        --success: #1e8750;
+        --danger: #c0392b;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: var(--page);
+        color: var(--dark);
+        font-size: 0.9rem;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+      header {
+        background: #fff;
+        border-bottom: 3px solid var(--primary);
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.05);
+        padding: 0.85rem 0;
+        margin-bottom: 1.5rem;
+      }
+      header .wrap { padding-top: 0; padding-bottom: 0; }
+      header img { height: 34px; display: block; }
+      h1 { font-size: 1.3rem; margin-bottom: 0.3rem; letter-spacing: -0.01em; }
+      .meta {
+        display: flex; flex-wrap: wrap; gap: 0.75rem;
+        color: var(--muted); font-size: 0.8rem; margin-bottom: 1.25rem;
+      }
+      .card {
+        background: #fff; border: 1px solid var(--border);
+        border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
+        padding: 1.5rem; margin-bottom: 1rem;
+      }
+      .doc h1, .doc h2, .doc h3 { margin: 1.35rem 0 0.55rem; line-height: 1.3; }
+      .doc h1 { font-size: 1.15rem; }
+      .doc h2 { font-size: 1rem; }
+      .doc h3 { font-size: 0.92rem; }
+      .doc > :first-child { margin-top: 0; }
+      .doc p { margin: 0 0 0.8rem; }
+      .doc ul, .doc ol { margin: 0 0 0.8rem 1.15rem; }
+      .doc li { margin-bottom: 0.28rem; }
+      .doc table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.85rem; display: block; overflow-x: auto; }
+      .doc th, .doc td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+      .doc th { background: var(--surface); font-weight: 600; }
+      .doc blockquote { margin: 0 0 0.8rem; padding: 0.6rem 0.9rem; background: var(--surface); border-left: 3px solid var(--primary); color: var(--muted); }
+      .doc pre { background: var(--surface); border: 1px solid var(--border); border-radius: 0.3rem; padding: 0.7rem 0.9rem; overflow-x: auto; font-size: 0.8rem; margin: 0 0 0.8rem; }
+      .doc code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+      .doc hr { border: 0; border-top: 1px solid var(--border); margin: 1.2rem 0; }
+      .confirm-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; margin-bottom: 0.9rem; }
+      .tickrow { display: flex; gap: 0.6rem; align-items: flex-start; margin-bottom: 1.1rem; cursor: pointer; }
+      .tickrow input { margin-top: 0.3rem; flex: none; width: 1rem; height: 1rem; }
+      label.field { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+      input[type="text"] {
+        width: 100%; border: 1px solid var(--border); border-radius: 0.3rem;
+        padding: 0.5rem 0.7rem; font: inherit; font-size: 0.9rem; background: #fff; color: var(--dark);
+      }
+      input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 0.15rem rgba(240, 80, 35, 0.15); }
+      .sigpreview {
+        margin-top: 0.8rem; padding: 0.9rem 1rem; min-height: 62px;
+        border: 1px dashed var(--border); border-radius: 0.3rem; background: var(--surface);
+      }
+      .sigpreview .sig {
+        font-family: Georgia, "Times New Roman", serif; font-style: italic;
+        font-size: 1.5rem; color: var(--dark); line-height: 1.3;
+      }
+      .sigpreview .placeholder { color: var(--muted); font-size: 0.82rem; }
+      .sigpreview .stamp { margin-top: 0.35rem; font-size: 0.72rem; color: var(--muted); }
+      button {
+        background: var(--primary); border: 1px solid var(--primary); color: #fff;
+        font: inherit; font-size: 0.9rem; font-weight: 600;
+        padding: 0.6rem 1.4rem; border-radius: 0.3rem; cursor: pointer; margin-top: 1.1rem;
+      }
+      button:hover:not(:disabled) { background: var(--primary-dark); border-color: var(--primary-dark); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .status { margin-top: 0.9rem; font-weight: 600; }
+      .msg { text-align: center; padding: 2.5rem 1.25rem; }
+      .msg h2 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+      .msg p { color: var(--muted); }
+      .tick { width: 46px; height: 46px; border-radius: 50%; background: rgba(30, 135, 80, 0.12); color: var(--success); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 0.9rem; }
+      .note { font-size: 0.78rem; color: var(--muted); margin-top: 0.8rem; line-height: 1.7; }
+      footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 1.5rem; }
+      .hidden { display: none !important; }
+      .badge-addendum { background: rgba(240,80,35,.12); color: var(--primary); border-radius: 0.25rem; padding: 0.1rem 0.4rem; font-size: 0.72rem; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <header><div class="wrap"><img src="/img/logo.png" alt="Beplugged Tech" /></div></header>
+
+    <div class="wrap">
+      <div id="loading" class="card msg"><p>Loading…</p></div>
+
+      <div id="invalid" class="card msg hidden">
+        <h2>This link is no longer valid</h2>
+        <p>It may have expired or already been used. Please contact
+          <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a>.</p>
+      </div>
+
+      <div id="done" class="card msg hidden">
+        <div class="tick">✓</div>
+        <h2>Confirmed — thank you</h2>
+        <p id="done-detail">A copy has been emailed to you for your records.</p>
+      </div>
+
+      <div id="main" class="hidden">
+        <h1 id="title">Scope confirmation</h1>
+        <div class="meta" id="meta"></div>
+
+        <div class="card"><div class="doc" id="doc"></div></div>
+
+        <div class="card">
+          <div class="confirm-title">Confirmation</div>
+          <label class="tickrow">
+            <input type="checkbox" id="confirmed" />
+            <span id="ticklabel">I confirm this is an accurate description of what will be built, and I am authorised to approve it on behalf of the client.</span>
+          </label>
+
+          <label class="field" for="signed_name">Full name</label>
+          <input type="text" id="signed_name" autocomplete="name" placeholder="Type your full name" />
+
+          <div class="sigpreview">
+            <div class="sig" id="sig"></div>
+            <div class="placeholder" id="sigplaceholder">Your signature will appear here as you type.</div>
+            <div class="stamp" id="stamp"></div>
+          </div>
+
+          <button id="submit" disabled>Confirm and sign</button>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+
+          <p class="note">
+            Typing your name and confirming acts as your electronic signature.
+            We record the date, time and a fingerprint of this exact document so
+            that what was agreed stays verifiable. If anything below is wrong,
+            do not sign — reply to the email and we will correct it and resend.
+          </p>
+        </div>
+      </div>
+
+      <footer>Beplugged Tech · info@beplugged.co.za</footer>
+    </div>
+
+    <script>
+      (function () {
+        var token = new URLSearchParams(location.search).get("t") || "";
+        var $ = function (id) { return document.getElementById(id); };
+        var show = function (id) {
+          ["loading", "invalid", "done", "main"].forEach(function (k) {
+            $(k).classList.toggle("hidden", k !== id);
+          });
+        };
+        function esc(v) {
+          return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
+        // Escapes first, so nothing in the stored document can inject markup.
+        function md(src) {
+          var lines = esc(src).replace(/\r\n/g, "\n").split("\n"), out = [], i = 0;
+          function inline(t) {
+            return t.replace(/`([^`]+)`/g, "<code>$1</code>")
+              .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+              .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+              .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+                '<a href="$2" target="_blank" rel="noopener">$1</a>');
+          }
+          function cells(r) { return r.replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); }); }
+          while (i < lines.length) {
+            var line = lines[i];
+            if (!line.trim()) { i++; continue; }
+            if (/^```/.test(line)) { var buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; out.push("<pre><code>" + buf.join("\n") + "</code></pre>"); continue; }
+            if (/^\s*(---|===)\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+            var h = line.match(/^(#{1,6})\s+(.*)$/);
+            if (h) { out.push("<h" + h[1].length + ">" + inline(h[2]) + "</h" + h[1].length + ">"); i++; continue; }
+            if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+              var head = cells(line.trim()); i += 2; var rows = [];
+              while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(cells(lines[i++].trim()));
+              out.push("<table><thead><tr>" + head.map(function (c) { return "<th>" + inline(c) + "</th>"; }).join("") +
+                "</tr></thead><tbody>" + rows.map(function (r) {
+                  return "<tr>" + r.map(function (c) { return "<td>" + inline(c) + "</td>"; }).join("") + "</tr>";
+                }).join("") + "</tbody></table>");
+              continue;
+            }
+            if (/^\s*&gt;\s?/.test(line)) { var b = []; while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) b.push(lines[i++].replace(/^\s*&gt;\s?/, "")); out.push("<blockquote>" + inline(b.join(" ")) + "</blockquote>"); continue; }
+            if (/^\s*(?:[-*]|\d+\.)\s+/.test(line)) {
+              var ordered = /^\s*\d+\./.test(line), items = [];
+              while (i < lines.length && /^\s*(?:[-*]|\d+\.)\s+/.test(lines[i])) {
+                items.push(inline(lines[i++].replace(/^\s*(?:[-*]|\d+\.)\s+/, "")
+                  .replace(/^\[( |x)\]\s*/, function (m, c) { return c === "x" ? "☑ " : "☐ "; })));
+              }
+              out.push("<" + (ordered ? "ol" : "ul") + ">" + items.map(function (x) { return "<li>" + x + "</li>"; }).join("") + "</" + (ordered ? "ol" : "ul") + ">");
+              continue;
+            }
+            var p = [];
+            while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*\||\s*&gt;|```|\s*(?:[-*]|\d+\.)\s)/.test(lines[i])) p.push(lines[i++]);
+            out.push("<p>" + inline(p.join(" ")) + "</p>");
+          }
+          return out.join("\n");
+        }
+
+        if (!token) { show("invalid"); return; }
+
+        fetch("/api/agreement/" + encodeURIComponent(token))
+          .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+          .then(function (res) {
+            if (!res.ok) { show("invalid"); return; }
+            var a = res.b;
+            if (a.status === "signed") {
+              $("done-detail").textContent =
+                "Confirmed by " + (a.signed_name || "the client") + ". A copy was emailed for your records.";
+              show("done"); return;
+            }
+            $("title").textContent = a.title || "Scope confirmation";
+            var bits = [];
+            if (a.agreement_number) bits.push("<span>" + esc(a.agreement_number) + "</span>");
+            if (Number(a.version) > 1) bits.push('<span class="badge-addendum">Addendum ' + esc(a.version) + "</span>");
+            if (a.client_name) bits.push("<span>" + esc(a.client_name) + "</span>");
+            if (a.project_name) bits.push("<span>" + esc(a.project_name) + "</span>");
+            $("meta").innerHTML = bits.join("");
+            if (Number(a.version) > 1) {
+              $("ticklabel").textContent =
+                "I confirm this addendum is an accurate description of the additional work, and I am authorised to approve it on behalf of the client.";
+            }
+            $("doc").innerHTML = md(a.body || "");
+            show("main");
+          })
+          .catch(function () { show("invalid"); });
+
+        function refresh() {
+          var name = $("signed_name").value.trim();
+          var ok = $("confirmed").checked && name.length >= 3;
+          $("submit").disabled = !ok;
+          $("sig").textContent = name;
+          $("sigplaceholder").classList.toggle("hidden", name.length > 0);
+          $("stamp").textContent = name
+            ? new Date().toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+            : "";
+        }
+        $("confirmed").addEventListener("change", refresh);
+        $("signed_name").addEventListener("input", refresh);
+
+        $("submit").addEventListener("click", function () {
+          var btn = $("submit"), status = $("status");
+          status.textContent = ""; btn.disabled = true; btn.textContent = "Confirming…";
+          fetch("/api/agreement/" + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmed: true, signed_name: $("signed_name").value.trim() }),
+          })
+            .then(function (r) {
+              return r.json().then(function (b) {
+                if (!r.ok || !b.success) throw new Error(b.error || "Could not confirm");
+                return b;
+              });
+            })
+            .then(function (b) {
+              $("done-detail").textContent =
+                "Confirmed by " + b.signed_name + ". A copy has been emailed to you for your records.";
+              show("done"); window.scrollTo(0, 0);
+            })
+            .catch(function (err) {
+              status.style.color = "#c0392b";
+              status.textContent = err.message;
+              btn.disabled = false; btn.textContent = "Confirm and sign";
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -844,6 +844,57 @@
         justify-self: start;
       }
 
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+      }
+
+      .detail-panel {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .detail-panel h4 {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        margin: 0;
+        padding: 0.7rem 1rem;
+        text-transform: uppercase;
+      }
+
+      .detail-panel-body {
+        display: grid;
+        gap: 0.65rem;
+        padding: 1rem;
+      }
+
+      .detail-line {
+        display: grid;
+        gap: 0.25rem;
+      }
+
+      .detail-line span {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .detail-line strong {
+        color: var(--dark);
+        font-size: 0.9rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
       @media (max-width: 768px) {
         .sidebar {
           display: none;
@@ -912,6 +963,9 @@
           </button>
           <button class="nav-link" onclick="showTab('documents')">
             <i class="fas fa-folder-open"></i> Documents
+          </button>
+          <button class="nav-link" onclick="showTab('agreements')">
+            <i class="fas fa-file-signature"></i> Agreements
           </button>
           <div class="nav-section-title">Quality & Security</div>
           <button class="nav-link" onclick="showTab('policies')">
@@ -1354,6 +1408,27 @@
         </div>
 
         <!-- Policies Tab -->
+        <div id="agreements-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Scope Agreements</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('agreements')">
+              <i class="fas fa-plus"></i> New Agreement
+            </button>
+          </div>
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr><th>Title</th><th>Client</th><th>Version</th><th>Status</th><th>Signed</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="agreements-list">
+                  <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div id="policies-tab" class="tab-content hidden">
           <div class="header-actions">
             <h2>Policies</h2>
@@ -1576,6 +1651,140 @@
                   <tr>
                     <td colspan="8" class="text-center">Loading...</td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client 360 Tab -->
+        <div id="client360-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <div>
+              <button class="btn btn-sm btn-secondary" onclick="showTab('clients')">
+                <i class="fas fa-arrow-left"></i> Clients
+              </button>
+              <h2 id="client360-title" style="margin-top:0.75rem;">Client 360</h2>
+            </div>
+            <div class="action-buttons">
+              <button class="btn btn-info" onclick="editClient360()">
+                <i class="fas fa-pen"></i> Edit Client
+              </button>
+              <button class="btn btn-primary" onclick="quoteClient360()">
+                <i class="fas fa-file-signature"></i> New Quote
+              </button>
+              <button class="btn btn-secondary" onclick="invoiceClient360()">
+                <i class="fas fa-file-invoice"></i> New Invoice
+              </button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Outstanding</h3>
+                <div class="value" id="client360-outstanding">R0.00</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Total Invoiced</h3>
+                <div class="value" id="client360-invoiced">R0.00</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Paid</h3>
+                <div class="value" id="client360-paid">R0.00</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Quotes</h3>
+                <div class="value" id="client360-quotes-count">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-panel">
+              <h4>Client Profile</h4>
+              <div class="detail-panel-body" id="client360-profile">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <h4>Linked Lead</h4>
+              <div class="detail-panel-body" id="client360-lead">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Quotes</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Quote #</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Expiry</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="client360-quotes">
+                  <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Invoices</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Due</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="client360-invoices">
+                  <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Receipts</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Receipt #</th>
+                    <th>Invoice #</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="client360-receipts">
+                  <tr><td colspan="6" class="text-center">Loading...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -2202,6 +2411,7 @@
       let currentEditInvoiceStatus = "draft";
       let currentEditQuoteId = null;
       let currentEditClientId = null;
+      let currentClient360 = null;
       let currentModuleName = null;
       let currentModuleRecordId = null;
       const clientCache = new Map();
@@ -2342,7 +2552,20 @@
           ],
           render: renderProjectRows,
         },
-        documents: {
+        agreements: {
+          endpoint: "/admin/agreements",
+          listId: "agreements-list",
+          singular: "Agreement",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            { name: "client_name", label: "Client Name", required: true },
+            { name: "client_email", label: "Client Email", type: "email", required: true },
+            { name: "project_name", label: "Project" },
+            { name: "body", label: "Scope (Markdown — paste from your minutes)", type: "textarea", fullSpan: true },
+          ],
+          render: renderAgreementRows,
+        },
+                documents: {
           endpoint: "/admin/documents",
           listId: "documents-list",
           singular: "Document",
@@ -2976,6 +3199,101 @@
         anything_else: "Anything else",
       };
 
+      function renderAgreementRows(rows) {
+        if (!rows.length) {
+          return `<tr><td colspan="6" class="text-center">No agreements yet</td></tr>`;
+        }
+        return rows
+          .map((a) => {
+            const signed = a.status === "signed";
+            const locked = signed || a.status === "sent";
+            return `
+          <tr>
+            <td>
+              ${displayPlain(a.title)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.agreement_number, "")}</div>
+            </td>
+            <td>
+              ${displayPlain(a.client_name)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.client_email, "")}</div>
+            </td>
+            <td>${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}</td>
+            <td><span class="badge status-${safeStatusClass(a.status)}">${displayStatus(a.status)}</span></td>
+            <td>
+              ${signed ? `<span style="font-family:Georgia,serif;font-style:italic;">${displayPlain(a.signed_name, "")}</span>
+                 <div style="font-size:0.8rem;color:var(--muted);">${displayDate(a.signed_at)}</div>` : "—"}
+            </td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-secondary" data-agr-view="${escapeAttr(a.id)}">View</button>
+                <button class="btn btn-sm btn-primary" data-agr-send="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>${a.status === "sent" ? "Resend" : "Send for signature"}</button>
+                <button class="btn btn-sm btn-secondary" data-agr-addendum="${escapeAttr(a.id)}" ${signed ? "" : "disabled"}>Add addendum</button>
+                <button class="btn btn-sm btn-info" data-module-action="edit" data-module="agreements" data-id="${escapeAttr(a.id)}" ${locked ? "disabled" : ""}>Edit</button>
+                <button class="btn btn-sm btn-danger" data-module-action="delete" data-module="agreements" data-id="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>Delete</button>
+              </div>
+            </td>
+          </tr>`;
+          })
+          .join("");
+      }
+
+      async function viewAgreement(id) {
+        const a = await apiCall("/admin/agreements/" + id);
+        if (!a) return;
+        document.getElementById("document-modal-title").textContent = a.title || "Agreement";
+        document.getElementById("document-meta").innerHTML = [
+          `<span>${escapeHtml(a.agreement_number || "")}</span>`,
+          Number(a.version) > 1 ? `<span class="badge status-next">Addendum ${escapeHtml(a.version)}</span>` : "",
+          `<span class="badge status-${safeStatusClass(a.status)}">${displayStatus(a.status)}</span>`,
+          a.client_name ? `<span>${escapeHtml(a.client_name)}</span>` : "",
+        ].filter(Boolean).join("");
+        const evidence = a.status === "signed"
+          ? `<div style="margin-top:1.25rem;padding:1rem;border:1px solid var(--border);border-radius:0.375rem;background:var(--surface);">
+               <div style="font-family:Georgia,serif;font-style:italic;font-size:1.35rem;">${escapeHtml(a.signed_name || "")}</div>
+               <div style="margin-top:0.4rem;font-size:0.75rem;color:var(--muted);line-height:1.8;">
+                 Signed ${escapeHtml(a.signed_at || "")}<br>
+                 IP ${escapeHtml(a.signed_ip || "—")}<br>
+                 Document fingerprint ${escapeHtml(String(a.body_hash || "").slice(0, 32))}…
+               </div>
+             </div>`
+          : "";
+        document.getElementById("document-body").innerHTML =
+          renderMarkdown(a.body || "") + evidence;
+        document.getElementById("documentModal").classList.add("show");
+      }
+
+      async function sendAgreement(id) {
+        if (!confirm("Email this to the client for signature?")) return;
+        const r = await apiCall("/admin/agreements/" + id + "/send", "POST");
+        if (r && r.success) {
+          showAlert("Sent for signature", "success");
+          loadModule("agreements");
+        }
+      }
+
+      // Additions after signature become a new document, never an edit of the
+      // signed one, so what was agreed at the time stays provable.
+      async function addAddendum(id) {
+        const parent = await apiCall("/admin/agreements/" + id);
+        if (!parent) return;
+        const body = prompt(
+          "Describe the addition — what is being added, the price change, and the effect on the date.\n\nMarkdown is supported.",
+          "## Added\n\n- \n\nPrice: +R\nTimeline: ",
+        );
+        if (body === null || !body.trim()) return;
+        const r = await apiCall("/admin/agreements/" + id + "/addendum", "POST", {
+          title: `${parent.title} — addendum`,
+          client_name: parent.client_name,
+          client_email: parent.client_email,
+          project_name: parent.project_name || "",
+          body,
+        });
+        if (r && r.id) {
+          showAlert(`Addendum ${r.version} created as a draft`, "success");
+          loadModule("agreements");
+        }
+      }
+
       async function sendQuoteEmail(id) {
         if (!confirm("Email this quote to the client?")) return;
         const r = await apiCall("/admin/quotes/" + id + "/send", "POST");
@@ -2983,6 +3301,8 @@
           showAlert("Quote sent", "success");
           resetWorkflowSourceCache();
           loadQuotes();
+          loadDashboard();
+          await refreshClient360IfVisible();
         }
       }
 
@@ -3183,6 +3503,8 @@
           loadModule("projects");
         } else if (tabName === "documents") {
           loadModule("documents");
+        } else if (tabName === "agreements") {
+          loadModule("agreements");
         } else if (tabName === "policies") {
           loadModule("policies");
         } else if (tabName === "sops") {
@@ -3197,6 +3519,8 @@
           loadQuotes();
         } else if (tabName === "clients") {
           loadClients();
+        } else if (tabName === "client360" && currentClient360) {
+          renderClient360(currentClient360);
         } else if (tabName === "receipts") {
           loadReceipts();
         }
@@ -3595,6 +3919,7 @@
         const editLabel = client.derived_from_invoices ? "Create Profile" : "Edit";
         return `
           <div class="action-buttons">
+            <button class="btn btn-sm btn-info" data-client-action="view" data-client-key="${safeKey}">View</button>
             <button class="btn btn-sm btn-info" data-client-action="edit" data-client-key="${safeKey}">${editLabel}</button>
             <button class="btn btn-sm btn-primary" data-client-action="quote" data-client-key="${safeKey}">Quote</button>
             <button class="btn btn-sm btn-secondary" data-client-action="invoice" data-client-key="${safeKey}">Invoice</button>
@@ -3645,6 +3970,15 @@
           }
           return;
         }
+
+        const agrView = event.target.closest("[data-agr-view]");
+        if (agrView) { viewAgreement(agrView.dataset.agrView); return; }
+
+        const agrSend = event.target.closest("[data-agr-send]");
+        if (agrSend) { sendAgreement(agrSend.dataset.agrSend); return; }
+
+        const agrAdd = event.target.closest("[data-agr-addendum]");
+        if (agrAdd) { addAddendum(agrAdd.dataset.agrAddendum); return; }
 
         const quoteSend = event.target.closest("[data-quote-send]");
         if (quoteSend) {
@@ -3709,7 +4043,9 @@
           return;
         }
         const { clientAction, clientKey } = clientButton.dataset;
-        if (clientAction === "edit") {
+        if (clientAction === "view") {
+          viewClient360(clientKey);
+        } else if (clientAction === "edit") {
           openClientModal(clientKey);
         } else if (clientAction === "delete") {
           deleteClient(clientKey);
@@ -4916,6 +5252,7 @@
           loadInvoices();
           loadQuotes();
           loadDashboard();
+          await refreshClient360IfVisible();
         }
       }
 
@@ -5076,6 +5413,7 @@
           currentViewInvoiceStatus = result.status || "sent";
           loadInvoices();
           loadDashboard();
+          await refreshClient360IfVisible();
         }
         window.open(`/invoices/index.html?id=${encodeURIComponent(id)}&download=1`, "_blank");
       }
@@ -5087,6 +5425,7 @@
             showAlert("Invoice deleted", "success");
             loadInvoices();
             loadDashboard();
+            await refreshClient360IfVisible();
           }
         }
       }
@@ -5209,6 +5548,7 @@
           await loadPayments(currentPaymentInvoiceId);
           loadInvoices();
           loadDashboard();
+          await refreshClient360IfVisible();
           if (result.payment && result.payment.id) {
             downloadReceipt(result.payment.id);
           }
@@ -5231,6 +5571,7 @@
           await loadPayments(currentPaymentInvoiceId);
           loadInvoices();
           loadDashboard();
+          await refreshClient360IfVisible();
         }
       }
 
@@ -5432,6 +5773,7 @@
           closeQuoteModal();
           loadQuotes();
           loadDashboard();
+          await refreshClient360IfVisible();
         }
       }
 
@@ -5526,6 +5868,7 @@
           resetWorkflowSourceCache();
           loadQuotes();
           loadDashboard();
+          await refreshClient360IfVisible();
         }
         window.open(`/invoices/quote.html?id=${encodeURIComponent(id)}&download=1`, "_blank");
       }
@@ -5538,6 +5881,7 @@
             resetWorkflowSourceCache();
             loadQuotes();
             loadDashboard();
+            await refreshClient360IfVisible();
           }
         }
       }
@@ -5604,6 +5948,211 @@
         `;
       }
 
+      function client360Endpoint(client) {
+        if (client?.id) {
+          return "/admin/clients/" + encodeURIComponent(client.id) + "/overview";
+        }
+        if (client?.email) {
+          return "/admin/clients/overview?email=" + encodeURIComponent(client.email);
+        }
+        return "";
+      }
+
+      function isClient360Visible() {
+        const tab = document.getElementById("client360-tab");
+        return !!(tab && currentClient360?.key && !tab.classList.contains("hidden"));
+      }
+
+      async function refreshClient360IfVisible() {
+        if (isClient360Visible()) {
+          await viewClient360(currentClient360.key, { keepTab: true });
+        }
+      }
+
+      async function viewClient360(clientKey, options = {}) {
+        const cached =
+          clientCache.get(clientKey) ||
+          (currentClient360?.key === clientKey ? currentClient360.profile : null);
+        if (!cached) {
+          showAlert("Client details are not loaded yet", "danger");
+          return;
+        }
+
+        const endpoint = client360Endpoint(cached);
+        if (!endpoint) {
+          showAlert("This client does not have enough information to open", "danger");
+          return;
+        }
+
+        const data = await apiCall(endpoint);
+        if (!data || !data.profile) {
+          return;
+        }
+
+        const key = workflowClientKey(data.profile);
+        currentClient360 = { ...data, key };
+        clientCache.set(key, data.profile);
+        renderClient360(currentClient360);
+        if (!options.keepTab) {
+          showTab("client360");
+        }
+      }
+
+      function client360Detail(label, value, fallback = "N/A") {
+        return `
+          <div class="detail-line">
+            <span>${escapeHtml(label)}</span>
+            <strong>${displayPlain(value, fallback)}</strong>
+          </div>
+        `;
+      }
+
+      function renderClient360(data) {
+        const profile = data.profile || {};
+        const lead = data.lead || null;
+        const kpis = data.kpis || {};
+        const key = data.key || workflowClientKey(profile);
+        currentClient360 = { ...data, key };
+        clientCache.set(key, profile);
+
+        document.getElementById("client360-title").textContent =
+          profile.name || profile.email || "Client 360";
+        document.getElementById("client360-outstanding").textContent = money(
+          kpis.outstanding,
+        );
+        document.getElementById("client360-invoiced").textContent = money(
+          kpis.total_invoiced,
+        );
+        document.getElementById("client360-paid").textContent = money(
+          kpis.total_paid,
+        );
+        document.getElementById("client360-quotes-count").textContent =
+          Number(kpis.quote_count || 0);
+
+        document.getElementById("client360-profile").innerHTML = `
+          ${client360Detail("Name", profile.name)}
+          ${client360Detail("Email", profile.email)}
+          ${client360Detail("Phone", profile.phone)}
+          ${client360Detail("Address", profile.address)}
+          ${client360Detail("City", profile.city)}
+          ${client360Detail("Status", profile.derived_from_invoices ? "From invoices" : "Saved client")}
+        `;
+
+        document.getElementById("client360-lead").innerHTML = lead
+          ? `
+            ${client360Detail("Company", lead.company_name)}
+            ${client360Detail("Contact", lead.contact_name)}
+            ${client360Detail("Email", lead.email)}
+            ${client360Detail("Stage", displayStatus(lead.stage))}
+            ${client360Detail("Priority", displayStatus(lead.priority))}
+            ${client360Detail("Estimated Value", money(lead.estimated_value))}
+          `
+          : `<div class="text-center" style="color:var(--muted);">No linked lead yet</div>`;
+
+        renderClient360Quotes(data.quotes || []);
+        renderClient360Invoices(data.invoices || []);
+        renderClient360Receipts(data.receipts || []);
+      }
+
+      function renderClient360Quotes(quotes) {
+        const list = document.getElementById("client360-quotes");
+        list.innerHTML = quotes.length
+          ? quotes
+              .map(
+                (q) => `
+          <tr>
+            <td>${escapeHtml(q.quote_number || "-")}</td>
+            <td>${money(q.total_due ?? Number(q.amount || 0) + Number(q.tax || 0))}</td>
+            <td><span class="badge status-${safeStatusClass(q.status)}">${displayStatus(q.status)}</span></td>
+            <td>${q.expiry_date ? new Date(q.expiry_date).toLocaleDateString() : "N/A"}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="viewQuote('${escapeAttr(q.id)}')">View</button>
+                <button class="btn btn-sm btn-secondary" onclick="editQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Edit</button>
+                <button class="btn btn-sm btn-secondary" onclick="downloadQuote('${escapeAttr(q.id)}', '${safeStatusClass(q.status)}')">Download</button>
+                <button class="btn btn-sm btn-primary" data-quote-send="${escapeAttr(q.id)}">Send</button>
+                <button class="btn btn-sm btn-success" data-quote-invoice="${escapeAttr(q.id)}" ${q.status !== "accepted" ? "disabled" : ""}>Invoice</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Delete</button>
+              </div>
+            </td>
+          </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="5" class="text-center">No linked quotes yet</td></tr>`;
+      }
+
+      function renderClient360Invoices(invoices) {
+        const list = document.getElementById("client360-invoices");
+        list.innerHTML = invoices.length
+          ? invoices
+              .map(
+                (inv) => `
+          <tr>
+            <td>${escapeHtml(inv.invoice_number || "-")}</td>
+            <td>${money(inv.total_due ?? Number(inv.amount || 0) + Number(inv.tax || 0))}</td>
+            <td>${money(inv.total_paid)}</td>
+            <td style="font-weight:600;color:${Number(inv.balance_due || 0) > 0 ? "var(--danger)" : "var(--success)"};">${money(inv.balance_due)}</td>
+            <td><span class="badge status-${safeStatusClass(inv.status)}">${displayStatus(inv.status)}</span></td>
+            <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "N/A"}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="viewInvoice('${escapeAttr(inv.id)}')">View</button>
+                <button class="btn btn-sm btn-secondary" onclick="editInvoice('${escapeAttr(inv.id)}')" ${inv.status === "paid" || inv.status === "partially_paid" ? "disabled" : ""}>Edit</button>
+                <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')">Download</button>
+                <button class="btn btn-sm btn-primary" onclick="sendInvoice('${escapeAttr(inv.id)}')">Send</button>
+                <button class="btn btn-sm btn-success" onclick="openPaymentModal('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')" ${inv.status === "draft" || inv.status === "paid" ? "disabled" : ""}>Pay</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')" ${inv.status === "paid" || inv.status === "partially_paid" ? "disabled" : ""}>Delete</button>
+              </div>
+            </td>
+          </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="7" class="text-center">No linked invoices yet</td></tr>`;
+      }
+
+      function renderClient360Receipts(receipts) {
+        const list = document.getElementById("client360-receipts");
+        list.innerHTML = receipts.length
+          ? receipts
+              .map(
+                (r) => `
+          <tr>
+            <td>${escapeHtml(r.receipt_number || "-")}</td>
+            <td>${escapeHtml(r.invoice_number || "-")}</td>
+            <td>${money(r.amount)}</td>
+            <td>${escapeHtml(r.payment_date || (r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"))}</td>
+            <td>${escapeHtml(r.payment_method || "-")}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" onclick="viewReceipt('${escapeAttr(r.id)}')">View</button>
+                <button class="btn btn-sm btn-secondary" onclick="downloadReceipt('${escapeAttr(r.id)}')">Download</button>
+                <button class="btn btn-sm btn-primary" onclick="sendReceipt('${escapeAttr(r.id)}')">Send</button>
+              </div>
+            </td>
+          </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="6" class="text-center">No receipts recorded yet</td></tr>`;
+      }
+
+      function editClient360() {
+        if (currentClient360?.key) {
+          openClientModal(currentClient360.key);
+        }
+      }
+
+      function quoteClient360() {
+        if (currentClient360?.key) {
+          openQuoteModal({ clientKey: currentClient360.key });
+        }
+      }
+
+      function invoiceClient360() {
+        if (currentClient360?.key) {
+          openInvoiceModal({ clientKey: currentClient360.key });
+        }
+      }
+
       async function saveClient() {
         if (!document.getElementById("clientForm").checkValidity()) {
           showAlert("Please fill in all required fields", "danger");
@@ -5629,9 +6178,14 @@
         const result = await apiCall(endpoint, method, data);
         if (result && (result.id || result.success)) {
           showAlert("Client saved successfully!", "success");
+          const reopenClient360 = isClient360Visible();
+          const nextClientKey = result.id || currentClient360?.key || "";
           resetWorkflowSourceCache();
           closeClientModal();
-          loadClients();
+          await loadClients();
+          if (reopenClient360 && nextClientKey) {
+            await viewClient360(nextClientKey, { keepTab: true });
+          }
         }
       }
 
@@ -5778,6 +6332,7 @@
             currentViewQuoteStatus = result.status || "sent";
             loadQuotes();
             loadDashboard();
+            await refreshClient360IfVisible();
           }
           window.open(`/invoices/quote.html?id=${encodeURIComponent(currentViewQuoteId)}`, "_blank");
           return;
@@ -5797,6 +6352,7 @@
             currentViewInvoiceStatus = result.status || "sent";
             loadInvoices();
             loadDashboard();
+            await refreshClient360IfVisible();
           }
           window.open(`/invoices/index.html?id=${encodeURIComponent(currentViewInvoiceId)}`, "_blank");
           return;
@@ -5822,6 +6378,7 @@
           showAlert("Invoice sent successfully!", "success");
           loadInvoices();
           loadDashboard();
+          await refreshClient360IfVisible();
         } else if (result && result.error) {
           showAlert("Failed to send: " + result.error, "danger");
         }

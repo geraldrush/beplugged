@@ -204,6 +204,10 @@ export default {
         return await handleInvoices(request, env, path, method);
       }
 
+      if (path.startsWith("/api/admin/agreements")) {
+        return await handleAgreements(request, env, path, method);
+      }
+
       if (path.startsWith("/api/admin/quotes")) {
         return await handleQuotes(request, env, path, method);
       }
@@ -234,6 +238,11 @@ export default {
       // Client-facing intake questionnaire. Reached by an unguessable token
       // rather than a login, so it must never expose anything beyond the one
       // lead the token belongs to.
+      if (path.startsWith("/api/agreement/")) {
+        const token = path.split("/")[3];
+        return await handlePublicAgreement(request, env, token, method);
+      }
+
       if (path.startsWith("/api/questionnaire/")) {
         const token = path.split("/")[3];
         return await handlePublicQuestionnaire(request, env, token, method);
@@ -1241,6 +1250,35 @@ async function runSchemaSetup(env) {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_lead_questionnaires_lead ON lead_questionnaires (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS scope_agreements (
+      id TEXT PRIMARY KEY,
+      agreement_number TEXT NOT NULL UNIQUE,
+      parent_id TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      title TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_email TEXT NOT NULL,
+      project_name TEXT,
+      linked_type TEXT,
+      linked_id TEXT,
+      body TEXT NOT NULL,
+      body_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      token TEXT UNIQUE,
+      sent_at DATETIME,
+      signed_name TEXT,
+      signed_at DATETIME,
+      signed_ip TEXT,
+      signed_user_agent TEXT,
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id)",
   ).run();
   await seedEditableReferenceData(env);
 }
@@ -2805,6 +2843,412 @@ async function handleCompanyProfile(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+const AGREEMENT_TTL_DAYS = 30;
+const AGREEMENT_STATUSES = new Set(["draft", "sent", "signed", "declined", "void"]);
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(String(text ?? "")),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function agreementUrl(request, token) {
+  return `${new URL(request.url).origin}/sign/?t=${encodeURIComponent(token)}`;
+}
+
+function normalizeAgreementPayload(raw) {
+  return {
+    title: trimText(raw.title, "Title", { required: true, maxLength: 240 }),
+    client_name: trimText(raw.client_name, "Client name", {
+      required: true,
+      maxLength: 200,
+    }),
+    client_email: validateEmail(raw.client_email, "Client email"),
+    project_name: trimText(raw.project_name, "Project", { maxLength: 200 }),
+    linked_type: trimText(raw.linked_type, "Linked type", { maxLength: 40 }),
+    linked_id: trimText(raw.linked_id, "Linked id", { maxLength: 160 }),
+    // The document itself. Written from the meeting minutes.
+    body: trimText(raw.body, "Scope text", { required: true, maxLength: 100000 }),
+  };
+}
+
+function publicAgreement(row) {
+  return {
+    agreement_number: row.agreement_number,
+    version: Number(row.version || 1),
+    title: row.title,
+    client_name: row.client_name,
+    project_name: row.project_name,
+    body: row.body,
+    status: row.status,
+    signed_name: row.signed_name,
+    signed_at: row.signed_at,
+  };
+}
+
+async function handleAgreements(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const id = segments[4];
+  const action = segments[5];
+
+  if (method === "GET" && !id) {
+    const result = await env.DB.prepare(
+      `SELECT id, agreement_number, parent_id, version, title, client_name,
+              client_email, project_name, status, sent_at, signed_name,
+              signed_at, expires_at, created_at
+       FROM scope_agreements ORDER BY created_at DESC LIMIT 200`,
+    ).all();
+    return json(result.results || []);
+  }
+
+  if (method === "GET" && id) {
+    const row = await env.DB.prepare("SELECT * FROM scope_agreements WHERE id = ?")
+      .bind(id)
+      .first();
+    return json(row || { error: "Agreement not found" }, row ? {} : { status: 404 });
+  }
+
+  if (method === "POST" && !id) {
+    const data = normalizeAgreementPayload(await parseRequestJson(request));
+    const newId = createEntityId("agr");
+    await env.DB.prepare(
+      `INSERT INTO scope_agreements (
+         id, agreement_number, version, title, client_name, client_email,
+         project_name, linked_type, linked_id, body, status
+       ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+    )
+      .bind(
+        newId,
+        generateDocumentNumber("SCOPE"),
+        data.title,
+        data.client_name,
+        data.client_email,
+        data.project_name,
+        data.linked_type,
+        data.linked_id,
+        data.body,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "scope_agreement",
+      entity_id: newId,
+      entity_number: data.title,
+    });
+    return json({ id: newId, ...data }, { status: 201 });
+  }
+
+  const existing = id
+    ? await env.DB.prepare("SELECT * FROM scope_agreements WHERE id = ?")
+        .bind(id)
+        .first()
+    : null;
+  if (id && !existing) {
+    throw new RequestError("Agreement not found", 404);
+  }
+
+  // An addendum is how scope changes after signature. The signed document is
+  // never edited, so what was agreed at the time stays provable.
+  if (method === "POST" && id && action === "addendum") {
+    if (existing.status !== "signed") {
+      throw new RequestError(
+        "Only a signed agreement can be extended with an addendum",
+        409,
+      );
+    }
+    const rootId = existing.parent_id || existing.id;
+    const data = normalizeAgreementPayload(await parseRequestJson(request));
+    const highest = await env.DB.prepare(
+      `SELECT MAX(version) AS v FROM scope_agreements
+       WHERE id = ? OR parent_id = ?`,
+    )
+      .bind(rootId, rootId)
+      .first();
+    const version = Number(highest?.v || 1) + 1;
+    const newId = createEntityId("agr");
+    await env.DB.prepare(
+      `INSERT INTO scope_agreements (
+         id, agreement_number, parent_id, version, title, client_name,
+         client_email, project_name, linked_type, linked_id, body, status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+    )
+      .bind(
+        newId,
+        generateDocumentNumber("SCOPE"),
+        rootId,
+        version,
+        data.title,
+        data.client_name,
+        data.client_email,
+        data.project_name,
+        data.linked_type,
+        data.linked_id,
+        data.body,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "addendum_created",
+      entity_type: "scope_agreement",
+      entity_id: newId,
+      entity_number: data.title,
+      details: { parent: rootId, version },
+    });
+    return json({ id: newId, version, parent_id: rootId }, { status: 201 });
+  }
+
+  if (method === "PUT" && id) {
+    if (existing.status !== "draft") {
+      throw new RequestError(
+        "Only a draft agreement can be edited. Issue an addendum instead",
+        409,
+      );
+    }
+    const data = normalizeAgreementPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE scope_agreements SET title = ?, client_name = ?, client_email = ?,
+         project_name = ?, linked_type = ?, linked_id = ?, body = ?,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.title,
+        data.client_name,
+        data.client_email,
+        data.project_name,
+        data.linked_type,
+        data.linked_id,
+        data.body,
+        id,
+      )
+      .run();
+    return json({ success: true });
+  }
+
+  if (method === "POST" && id && action === "send") {
+    if (existing.status === "signed") {
+      throw new RequestError("This agreement has already been signed", 409);
+    }
+    // Hash the exact text being sent. What the client saw stays provable even
+    // if the source record is later superseded.
+    const bodyHash = await sha256Hex(existing.body);
+    const token = createQuestionnaireToken();
+    const expires = new Date(
+      Date.now() + AGREEMENT_TTL_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    await env.DB.prepare(
+      `UPDATE scope_agreements SET token = ?, body_hash = ?, status = 'sent',
+         sent_at = CURRENT_TIMESTAMP, expires_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(token, bodyHash, expires, id)
+      .run();
+
+    const url = agreementUrl(request, token);
+    const bodyHtml = `
+      <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(existing.client_name || "there")},</p>
+      <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Please review the scope for <strong>${escapeHtml(existing.title)}</strong> and confirm it is an accurate description of what we will build. Nothing starts until you have confirmed.</p>
+      ${emailButton(url, "Review and confirm")}
+      <p style="margin:0 0 8px;font-size:13px;color:#7a7a80;line-height:1.7;">If the button does not work, copy this link into your browser:</p>
+      <p style="margin:0 0 22px;font-size:12px;color:#7a7a80;word-break:break-all;">${escapeHtml(url)}</p>
+      <p style="margin:0;font-size:13px;color:#7a7a80;line-height:1.7;">Reference ${escapeHtml(existing.agreement_number)}${Number(existing.version || 1) > 1 ? ` · addendum ${escapeHtml(existing.version)}` : ""}. This link expires in ${AGREEMENT_TTL_DAYS} days.</p>
+    `;
+    await sendBrevoEmail(env, {
+      to: existing.client_email,
+      toName: existing.client_name || "",
+      subject: `Please confirm the scope — ${existing.title}`,
+      htmlContent: emailShell({
+        label: Number(existing.version || 1) > 1 ? "Scope Addendum" : "Scope Confirmation",
+        accent: "#F05023",
+        bodyHtml,
+      }),
+    });
+
+    await recordAudit(env, {
+      action: "sent_for_signature",
+      entity_type: "scope_agreement",
+      entity_id: id,
+      entity_number: existing.agreement_number,
+      details: { recipient: existing.client_email },
+    });
+    return json({ success: true, url, expires_at: expires });
+  }
+
+  if (method === "DELETE" && id) {
+    if (existing.status === "signed") {
+      throw new RequestError("A signed agreement cannot be deleted", 409);
+    }
+    await env.DB.prepare("DELETE FROM scope_agreements WHERE id = ?").bind(id).run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "scope_agreement",
+      entity_id: id,
+      entity_number: existing.agreement_number,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handlePublicAgreement(request, env, token, method) {
+  await ensureSchema(env);
+  if (!token) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT * FROM scope_agreements WHERE token = ?",
+  )
+    .bind(token)
+    .first();
+
+  // Unknown and expired look the same, so the endpoint cannot be probed.
+  if (!row || (row.expires_at && new Date(row.expires_at) < new Date())) {
+    return json({ error: "This link is no longer valid" }, { status: 404 });
+  }
+
+  if (method === "GET") {
+    return json(publicAgreement(row));
+  }
+
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (row.status === "signed") {
+    return json({ error: "This has already been confirmed" }, { status: 409 });
+  }
+
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `a:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const payload = await parseRequestJson(request);
+  if (!normalizeBoolean(payload?.confirmed)) {
+    throw new RequestError("Please tick the confirmation box before signing");
+  }
+  const signedName = trimText(payload?.signed_name, "Full name", {
+    required: true,
+    maxLength: 200,
+  });
+  if (signedName.length < 3) {
+    throw new RequestError("Please enter your full name");
+  }
+
+  const signedAt = new Date().toISOString();
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const agent = String(request.headers.get("User-Agent") || "").slice(0, 300);
+
+  const result = await env.DB.prepare(
+    `UPDATE scope_agreements
+     SET status = 'signed', signed_name = ?, signed_at = ?, signed_ip = ?,
+         signed_user_agent = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status != 'signed'`,
+  )
+    .bind(signedName, signedAt, ip, agent, row.id)
+    .run();
+  if (Number(result?.meta?.changes || 0) !== 1) {
+    return json({ error: "This has already been confirmed" }, { status: 409 });
+  }
+
+  await recordAudit(env, {
+    actor: "client",
+    action: "signed",
+    entity_type: "scope_agreement",
+    entity_id: row.id,
+    entity_number: row.agreement_number,
+    details: { signed_name: signedName, ip, body_hash: row.body_hash },
+  });
+
+  // Both parties get a copy. A failure here must not undo a valid signature.
+  try {
+    await sendSignedCopies(env, { ...row, signed_name: signedName, signed_at: signedAt, signed_ip: ip });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "agreement_copy_failed",
+        agreement_id: row.id,
+        error: String(error?.message || error),
+      }),
+    );
+  }
+
+  return json({ success: true, signed_name: signedName, signed_at: signedAt });
+}
+
+async function sendSignedCopies(env, row) {
+  const when = new Date(row.signed_at).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isAddendum = Number(row.version || 1) > 1;
+
+  const signatureBlock = `
+    ${emailSectionLabel("Confirmed by")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eeeeee;border-radius:8px;">
+      <tr><td style="padding:18px 20px;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#2C2D3F;">${escapeHtml(row.signed_name)}</div>
+        <div style="margin-top:8px;font-size:12px;color:#8a8a8a;line-height:1.8;">
+          ${escapeHtml(when)}<br>
+          Reference ${escapeHtml(row.agreement_number)}${isAddendum ? ` · addendum ${escapeHtml(row.version)}` : ""}<br>
+          Document fingerprint ${escapeHtml(String(row.body_hash || "").slice(0, 16))}
+        </div>
+      </td></tr>
+    </table>`;
+
+  const documentBlock = `
+    ${emailSectionLabel(isAddendum ? "Addendum" : "Agreed scope")}
+    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;margin:0 0 22px;">
+      <tr><td style="padding:16px 18px;font-size:13px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(row.body)}</td></tr>
+    </table>`;
+
+  await sendBrevoEmail(env, {
+    to: row.client_email,
+    toName: row.client_name || "",
+    subject: `Confirmed — ${row.title}`,
+    htmlContent: emailShell({
+      label: isAddendum ? "Addendum Confirmed" : "Scope Confirmed",
+      accent: "#1f8a52",
+      bodyHtml: `
+        <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Thank you ${escapeHtml(row.signed_name)},</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">This is your copy of what was confirmed. Please keep it for your records.</p>
+        ${signatureBlock}
+        <div style="height:22px;"></div>
+        ${documentBlock}`,
+    }),
+  });
+
+  const internal = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+  if (internal && internal !== row.client_email) {
+    await sendBrevoEmail(env, {
+      to: internal,
+      toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
+      subject: `Scope confirmed — ${row.client_name || row.title}`,
+      htmlContent: emailShell({
+        label: isAddendum ? "Addendum Confirmed" : "Scope Confirmed",
+        accent: "#1f8a52",
+        bodyHtml: `
+          <p style="margin:0 0 22px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(row.client_name || "The client")}</strong> has confirmed ${isAddendum ? "an addendum" : "the scope"} for ${escapeHtml(row.title)}.</p>
+          ${signatureBlock}
+          <div style="height:22px;"></div>
+          ${documentBlock}`,
+      }),
+    });
+  }
 }
 
 const QUESTIONNAIRE_TTL_DAYS = 30;
@@ -4478,6 +4922,15 @@ async function handleClients(request, env, path, method) {
   await ensureOperationalSchema(env);
   const segments = path.split("/");
   const clientId = segments[4];
+  const action = segments[5];
+
+  if (method === "GET" && clientId === "overview") {
+    return handleClientOverview(request, env);
+  }
+
+  if (method === "GET" && clientId && action === "overview") {
+    return handleClientOverview(request, env, { client_id: clientId });
+  }
 
   if (method === "GET" && clientId) {
     const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ?")
@@ -4687,6 +5140,338 @@ async function handleClients(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+function clientOverviewEmailKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function resolveClientOverviewProfile(env, clientId, emailKey) {
+  let profile = null;
+
+  if (clientId) {
+    profile = await env.DB.prepare("SELECT * FROM clients WHERE id = ?")
+      .bind(clientId)
+      .first();
+    if (!profile) {
+      throw new RequestError("Client not found", 404);
+    }
+  }
+
+  if (!profile && emailKey) {
+    profile = await env.DB.prepare(
+      "SELECT * FROM clients WHERE LOWER(TRIM(email)) = ?",
+    )
+      .bind(emailKey)
+      .first();
+  }
+
+  if (!profile && emailKey) {
+    const invoiceClient = await env.DB.prepare(
+      `SELECT id as invoice_id, client_id, lead_id, client_name, client_email,
+              client_address, created_at
+       FROM invoices
+       WHERE LOWER(TRIM(client_email)) = ?
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+      .bind(emailKey)
+      .first();
+    if (invoiceClient) {
+      profile = {
+        id: "",
+        client_id: invoiceClient.client_id || "",
+        lead_id: invoiceClient.lead_id || "",
+        name: invoiceClient.client_name || invoiceClient.client_email || "Invoice client",
+        email: invoiceClient.client_email || emailKey,
+        phone: "",
+        address: invoiceClient.client_address || "",
+        city: "",
+        state: "",
+        postal_code: "",
+        country: "",
+        created_at: invoiceClient.created_at,
+        derived_from_invoices: true,
+      };
+    }
+  }
+
+  if (!profile) {
+    throw new RequestError("Client not found", 404);
+  }
+
+  return {
+    ...profile,
+    id: profile.id || "",
+    lead_id: profile.lead_id || "",
+    name: profile.name || profile.client_name || profile.email || "Client",
+    email: profile.email || profile.client_email || "",
+    phone: profile.phone || "",
+    address: profile.address || profile.client_address || "",
+    city: profile.city || "",
+    state: profile.state || "",
+    postal_code: profile.postal_code || "",
+    country: profile.country || "",
+    derived_from_invoices: Boolean(profile.derived_from_invoices),
+  };
+}
+
+async function resolveClientOverviewLead(env, profile, emailKey) {
+  if (profile.lead_id) {
+    const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+      .bind(profile.lead_id)
+      .first();
+    if (lead) {
+      return lead;
+    }
+  }
+
+  if (emailKey) {
+    const lead = await env.DB.prepare(
+      `SELECT * FROM leads
+       WHERE LOWER(TRIM(email)) = ?
+       ORDER BY CASE WHEN stage = 'won' THEN 0 ELSE 1 END, updated_at DESC
+       LIMIT 1`,
+    )
+      .bind(emailKey)
+      .first();
+    if (lead) {
+      return lead;
+    }
+  }
+
+  const nameKey = String(profile.name || "").trim().toLowerCase();
+  if (!nameKey) {
+    return null;
+  }
+
+  return await env.DB.prepare(
+    `SELECT * FROM leads
+     WHERE LOWER(TRIM(company_name)) = ? OR LOWER(TRIM(contact_name)) = ?
+     ORDER BY CASE WHEN stage = 'won' THEN 0 ELSE 1 END, updated_at DESC
+     LIMIT 1`,
+  )
+    .bind(nameKey, nameKey)
+    .first();
+}
+
+function clientOverviewRelation(clientId, leadId, emailKey, alias) {
+  const prefix = alias ? `${alias}.` : "";
+  return {
+    where: `(
+      (? != '' AND ${prefix}client_id = ?)
+      OR (? != '' AND ${prefix}lead_id = ?)
+      OR (? != '' AND LOWER(TRIM(${prefix}client_email)) = ?)
+    )`,
+    params: [
+      clientId || "",
+      clientId || "",
+      leadId || "",
+      leadId || "",
+      emailKey || "",
+      emailKey || "",
+    ],
+  };
+}
+
+async function handleClientOverview(request, env, explicit = {}) {
+  const url = new URL(request.url);
+  const requestedClientId = explicit.client_id || url.searchParams.get("client_id") || "";
+  const requestedEmailKey = clientOverviewEmailKey(url.searchParams.get("email"));
+
+  if (!requestedClientId && !requestedEmailKey) {
+    throw new RequestError("Client id or email is required");
+  }
+
+  const profile = await resolveClientOverviewProfile(
+    env,
+    requestedClientId,
+    requestedEmailKey,
+  );
+  const emailKey = clientOverviewEmailKey(profile.email || requestedEmailKey);
+  const lead = await resolveClientOverviewLead(env, profile, emailKey);
+  if (!profile.lead_id && lead?.id) {
+    profile.lead_id = lead.id;
+  }
+
+  const relatedClientId = profile.id || profile.client_id || "";
+  const relatedLeadId = profile.lead_id || lead?.id || "";
+  const invoiceRelation = clientOverviewRelation(
+    relatedClientId,
+    relatedLeadId,
+    emailKey,
+    "i",
+  );
+  const quoteRelation = clientOverviewRelation(
+    relatedClientId,
+    relatedLeadId,
+    emailKey,
+    "q",
+  );
+
+  const invoiceTotalCentsSql = `(
+    CASE
+      WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0)
+        THEN i.amount_cents
+      ELSE ROUND(i.amount * 100)
+    END
+    +
+    CASE
+      WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0)
+        THEN i.tax_cents
+      ELSE ROUND(i.tax * 100)
+    END
+  )`;
+  const quoteTotalCentsSql = `(
+    CASE
+      WHEN q.amount_cents IS NOT NULL AND (q.amount_cents != 0 OR q.amount = 0)
+        THEN q.amount_cents
+      ELSE ROUND(q.amount * 100)
+    END
+    +
+    CASE
+      WHEN q.tax_cents IS NOT NULL AND (q.tax_cents != 0 OR q.tax = 0)
+        THEN q.tax_cents
+      ELSE ROUND(q.tax * 100)
+    END
+  )`;
+  const paymentCentsSql = `
+    CASE
+      WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0)
+        THEN p.amount_cents
+      ELSE ROUND(p.amount * 100)
+    END`;
+
+  const invoiceRows = await env.DB.prepare(
+    `SELECT i.id, i.invoice_number, i.lead_id, i.client_id, i.quote_id,
+            i.client_name, i.client_email, i.client_address, i.amount, i.tax,
+            i.status, i.created_at, i.due_date, i.payment_terms, i.notes,
+            ${invoiceTotalCentsSql} as total_cents,
+            COALESCE((
+              SELECT SUM(${paymentCentsSql})
+              FROM payments p
+              WHERE p.invoice_id = i.id
+            ), 0) as paid_cents
+     FROM invoices i
+     WHERE ${invoiceRelation.where}
+     ORDER BY i.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...invoiceRelation.params)
+    .all();
+
+  const invoices = (invoiceRows.results || []).map((invoice) => {
+    const totalCents = Number(invoice.total_cents || 0);
+    const paidCents = Number(invoice.paid_cents || 0);
+    return {
+      ...invoice,
+      total_due: centsToAmount(totalCents),
+      total_paid: centsToAmount(paidCents),
+      balance_due: centsToAmount(Math.max(totalCents - paidCents, 0)),
+    };
+  });
+
+  const quoteRows = await env.DB.prepare(
+    `SELECT q.id, q.quote_number, q.lead_id, q.client_id, q.client_name,
+            q.client_email, q.client_address, q.amount, q.tax, q.status,
+            q.created_at, q.expiry_date, q.notes, ${quoteTotalCentsSql} as total_cents
+     FROM quotes q
+     WHERE ${quoteRelation.where}
+     ORDER BY q.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...quoteRelation.params)
+    .all();
+
+  const quotes = (quoteRows.results || []).map((quote) => ({
+    ...quote,
+    total_due: centsToAmount(Number(quote.total_cents || 0)),
+  }));
+
+  const receiptRows = await env.DB.prepare(
+    `SELECT p.id, p.invoice_id, p.amount, p.amount_cents, p.payment_date,
+            p.payment_method, p.notes, p.created_at,
+            i.invoice_number, i.client_name, i.client_email
+     FROM payments p
+     JOIN invoices i ON i.id = p.invoice_id
+     WHERE ${invoiceRelation.where}
+     ORDER BY COALESCE(p.payment_date, p.created_at) DESC
+     LIMIT 100`,
+  )
+    .bind(...invoiceRelation.params)
+    .all();
+
+  const receipts = (receiptRows.results || []).map((payment) => ({
+    ...payment,
+    amount: centsToAmount(
+      persistedCents(payment, "amount_cents", "amount", "Payment amount"),
+    ),
+    receipt_number: receiptNumberFor(payment),
+  }));
+
+  const totalsRow = await env.DB.prepare(
+    `WITH related_invoices AS (
+       SELECT i.id, i.status, ${invoiceTotalCentsSql} as total_cents,
+              COALESCE((
+                SELECT SUM(${paymentCentsSql})
+                FROM payments p
+                WHERE p.invoice_id = i.id
+              ), 0) as paid_cents
+       FROM invoices i
+       WHERE ${invoiceRelation.where}
+     )
+     SELECT
+       COUNT(*) as invoice_count,
+       COALESCE(SUM(CASE WHEN status != 'draft' THEN total_cents ELSE 0 END), 0) as invoiced_cents,
+       COALESCE(SUM(CASE WHEN status != 'draft' THEN paid_cents ELSE 0 END), 0) as paid_cents,
+       COALESCE(SUM(
+         CASE WHEN status != 'draft' THEN MAX(total_cents - paid_cents, 0) ELSE 0 END
+       ), 0) as outstanding_cents,
+       COALESCE(SUM(
+         CASE
+           WHEN status NOT IN ('draft', 'paid') AND total_cents - paid_cents > 0
+             THEN 1
+           ELSE 0
+         END
+       ), 0) as outstanding_invoice_count
+     FROM related_invoices`,
+  )
+    .bind(...invoiceRelation.params)
+    .first();
+
+  const quoteCountRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM quotes q WHERE ${quoteRelation.where}`,
+  )
+    .bind(...quoteRelation.params)
+    .first();
+  const receiptCountRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count
+     FROM payments p
+     JOIN invoices i ON i.id = p.invoice_id
+     WHERE ${invoiceRelation.where}`,
+  )
+    .bind(...invoiceRelation.params)
+    .first();
+
+  return json({
+    profile: {
+      ...profile,
+      derived_from_invoices: Boolean(profile.derived_from_invoices),
+    },
+    lead,
+    invoices,
+    quotes,
+    receipts,
+    kpis: {
+      invoice_count: Number(totalsRow?.invoice_count || 0),
+      quote_count: Number(quoteCountRow?.count || 0),
+      receipt_count: Number(receiptCountRow?.count || 0),
+      outstanding_invoice_count: Number(totalsRow?.outstanding_invoice_count || 0),
+      total_invoiced: centsToAmount(Number(totalsRow?.invoiced_cents || 0)),
+      total_paid: centsToAmount(Number(totalsRow?.paid_cents || 0)),
+      outstanding: centsToAmount(Number(totalsRow?.outstanding_cents || 0)),
+    },
+  });
 }
 
 async function handlePublicInvoiceView(invoiceId, env) {
