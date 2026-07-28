@@ -1967,15 +1967,33 @@
         return list.length ? escapeHtml(list.join(", ")) : "N/A";
       }
 
+      // Data attributes rather than inline onclick: an attribute is HTML-decoded
+      // before the JS in it is parsed, so an id containing a quote could escape
+      // the argument string. Ids are server-generated today, but delegation
+      // removes the footgun entirely.
       function actionButtons(moduleName, id) {
+        const safeModule = escapeAttr(moduleName);
         const safeId = escapeAttr(id);
         return `
           <div class="action-buttons">
-            <button class="btn btn-sm btn-info" onclick="openModuleModal('${moduleName}', '${safeId}')">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteModuleItem('${moduleName}', '${safeId}')">Delete</button>
+            <button class="btn btn-sm btn-info" data-module-action="edit" data-module="${safeModule}" data-id="${safeId}">Edit</button>
+            <button class="btn btn-sm btn-danger" data-module-action="delete" data-module="${safeModule}" data-id="${safeId}">Delete</button>
           </div>
         `;
       }
+
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-module-action]");
+        if (!button) {
+          return;
+        }
+        const { moduleAction, module: moduleName, id } = button.dataset;
+        if (moduleAction === "edit") {
+          openModuleModal(moduleName, id);
+        } else if (moduleAction === "delete") {
+          deleteModuleItem(moduleName, id);
+        }
+      });
 
       async function loadCompany() {
         const company = await apiCall("/admin/company");

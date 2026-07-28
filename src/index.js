@@ -300,6 +300,23 @@ async function isValidToken(token, env) {
   }
 }
 
+// D1 surfaces UNIQUE violations as generic errors, which the top-level handler
+// would turn into a 500. Callers use this to report a conflict instead.
+function isUniqueConstraintError(error) {
+  return /UNIQUE constraint failed/i.test(String(error?.message || ""));
+}
+
+async function runOrConflict(statement, conflictMessage) {
+  try {
+    return await statement.run();
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new RequestError(conflictMessage, 409);
+    }
+    throw error;
+  }
+}
+
 function createEntityId(prefix) {
   return `${prefix}_${crypto.randomUUID()}`;
 }
@@ -347,6 +364,17 @@ function normalizeDate(value, field) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new RequestError(`${field} must use YYYY-MM-DD format`);
   }
+  // The pattern only checks shape, so round-trip through Date to reject real
+  // nonsense like 2026-02-31 or 2026-13-45, which SQLite would happily store.
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new RequestError(`${field} is not a real date`);
+  }
   return date;
 }
 
@@ -355,9 +383,13 @@ function normalizeOptionalUrl(value, field) {
   if (!url) {
     return "";
   }
+  // People paste bare domains, so assume https when no scheme is present. A
+  // scheme that is present is kept as-is and still checked below, so this
+  // cannot be used to smuggle javascript: past the protocol allowlist.
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`;
   let parsed;
   try {
-    parsed = new URL(url);
+    parsed = new URL(candidate);
   } catch {
     throw new RequestError(`${field} must be a valid URL`);
   }
@@ -2505,11 +2537,11 @@ async function handleTeamMembers(request, env, path, method) {
   if (method === "POST" && !memberId) {
     const data = normalizeTeamMemberPayload(await parseRequestJson(request));
     const id = createEntityId("member");
-    await env.DB.prepare(
-      `INSERT INTO team_members (id, name, email, role, department, permissions, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
+    await runOrConflict(
+      env.DB.prepare(
+        `INSERT INTO team_members (id, name, email, role, department, permissions, active)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
         id,
         data.name,
         data.email,
@@ -2517,8 +2549,9 @@ async function handleTeamMembers(request, env, path, method) {
         data.department,
         JSON.stringify(data.permissions),
         data.active ? 1 : 0,
-      )
-      .run();
+      ),
+      "A team member with that email already exists",
+    );
     await recordAudit(env, {
       action: "created",
       entity_type: "team_member",
@@ -2537,13 +2570,13 @@ async function handleTeamMembers(request, env, path, method) {
       throw new RequestError("Team member not found", 404);
     }
     const data = normalizeTeamMemberPayload(await parseRequestJson(request));
-    await env.DB.prepare(
-      `UPDATE team_members SET
-         name = ?, email = ?, role = ?, department = ?, permissions = ?,
-         active = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-    )
-      .bind(
+    await runOrConflict(
+      env.DB.prepare(
+        `UPDATE team_members SET
+           name = ?, email = ?, role = ?, department = ?, permissions = ?,
+           active = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+      ).bind(
         data.name,
         data.email,
         data.role,
@@ -2551,8 +2584,9 @@ async function handleTeamMembers(request, env, path, method) {
         JSON.stringify(data.permissions),
         data.active ? 1 : 0,
         memberId,
-      )
-      .run();
+      ),
+      "Another team member already uses that email",
+    );
     await recordAudit(env, {
       action: "updated",
       entity_type: "team_member",
@@ -2736,11 +2770,11 @@ async function handleClients(request, env, path, method) {
     };
     const id = createEntityId("client");
 
-    await env.DB.prepare(
-      `INSERT INTO clients (id, name, email, phone, address, city, state, postal_code, country)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
+    await runOrConflict(
+      env.DB.prepare(
+        `INSERT INTO clients (id, name, email, phone, address, city, state, postal_code, country)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
         id,
         data.name,
         data.email,
@@ -2750,8 +2784,9 @@ async function handleClients(request, env, path, method) {
         data.state || "",
         data.postal_code || "",
         data.country || "",
-      )
-      .run();
+      ),
+      "A client with that email already exists",
+    );
 
     await recordAudit(env, {
       action: "created",
