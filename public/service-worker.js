@@ -1,15 +1,20 @@
-const CACHE_VERSION = "beplugged-v1";
+const CACHE_VERSION = "beplugged-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
+// Workers Assets serves pages without the .html extension and 307s the
+// extensioned form, so precache the canonical paths users actually navigate
+// to. Caching "/about.html" stored a redirected response under a key no
+// navigation ever matched, which silently broke offline page loads.
+const OFFLINE_URL = "/offline";
+
 const CORE_ASSETS = [
   "/",
-  "/index.html",
-  "/about.html",
-  "/service.html",
-  "/portfolio-details.html",
-  "/contact.html",
-  "/offline.html",
+  "/about",
+  "/service",
+  "/portfolio-details",
+  "/contact",
+  OFFLINE_URL,
   "/style.css",
   "/css/bootstrap.min.css",
   "/css/normalize.css",
@@ -24,6 +29,33 @@ const CORE_ASSETS = [
   "/img/android-chrome-512x512.png",
   "/site.webmanifest"
 ];
+
+function shouldBypassCache(request) {
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin) {
+    return true;
+  }
+
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/admin/") ||
+    url.pathname === "/admin"
+  ) {
+    return true;
+  }
+
+  return request.headers.has("Authorization");
+}
+
+function isCacheableResponse(response) {
+  if (!response || response.status !== 200 || response.type !== "basic") {
+    return false;
+  }
+
+  const cacheControl = response.headers.get("Cache-Control") || "";
+  return !/no-store|private/i.test(cacheControl);
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -48,7 +80,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
-  if (request.method !== "GET") {
+  if (request.method !== "GET" || shouldBypassCache(request)) {
     return;
   }
 
@@ -58,11 +90,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+          if (isCacheableResponse(response)) {
+            const responseClone = response.clone();
+            event.waitUntil(
+              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone))
+            );
+          }
           return response;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/offline.html")))
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL)))
     );
     return;
   }
@@ -75,15 +111,22 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(request)
         .then((response) => {
-          if (!response || response.status !== 200 || response.type !== "basic") {
+          if (!isCacheableResponse(response)) {
             return response;
           }
 
           const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+          event.waitUntil(
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone))
+          );
           return response;
         })
-        .catch(() => caches.match("/img/logo.png"));
+        .catch(() => {
+          if (request.destination === "image") {
+            return caches.match("/img/logo.png");
+          }
+          return Response.error();
+        });
     })
   );
 });

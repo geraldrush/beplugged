@@ -49,6 +49,10 @@ export default {
     }
 
     try {
+      if (path === "/api/contact") {
+        return await handleContactMessage(request, env, method);
+      }
+
       if (path.startsWith("/api/admin/")) {
         const token = request.headers.get("Authorization");
         if (!(await isValidToken(token, env))) {
@@ -206,7 +210,7 @@ async function safeCompareText(provided, expected) {
 }
 
 function getSessionSecret(env) {
-  return env.SESSION_SECRET || env.ADMIN_PASSWORD;
+  return env.SESSION_SECRET;
 }
 
 async function createSessionToken(env) {
@@ -724,9 +728,137 @@ async function generateQrCodeDataUrl(text) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+async function parseContactPayload(request) {
+  const contentType = request.headers.get("Content-Type") || "";
+
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    const formData = await request.formData();
+    return Object.fromEntries(formData.entries());
+  }
+
+  return parseRequestJson(request);
+}
+
+function normalizeContactPayload(raw) {
+  return {
+    name: trimText(raw.name, "Name", { required: true, maxLength: 200 }),
+    email: validateEmail(raw.email, "Email"),
+    phone: trimText(raw.phone, "Phone", { maxLength: 100 }),
+    subject: trimText(raw.subject, "Subject", {
+      required: true,
+      maxLength: 200,
+    }),
+    message: trimText(raw.message, "Message", {
+      required: true,
+      maxLength: 4000,
+    }),
+    newsletter: Boolean(raw.news),
+    website: trimText(raw.website, "Website", { maxLength: 200 }),
+  };
+}
+
+async function handleContactMessage(request, env, method) {
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // This endpoint is unauthenticated and sends an email on every request, so
+  // throttle by client IP before doing any real work. Limits are per-location
+  // and eventually consistent, which is fine for abuse control.
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: clientIp });
+    if (!success) {
+      return json(
+        { error: "Too many messages sent. Please try again in a minute." },
+        { status: 429 },
+      );
+    }
+  } else {
+    // Declared in wrangler.toml, so this only happens on a runtime without
+    // rate-limit support. Fail open rather than break the form, but be loud.
+    console.error(JSON.stringify({ message: "contact_rate_limiter_missing" }));
+  }
+
+  if (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) {
+    return json(
+      { error: "Contact email is not configured. Please email info@beplugged.co.za." },
+      { status: 503 },
+    );
+  }
+
+  const data = normalizeContactPayload(await parseContactPayload(request));
+  if (data.website) {
+    return json({ success: true });
+  }
+
+  const recipientEmail = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+  const safeSubject = data.subject.replace(/\s+/g, " ").trim();
+  const bodyHtml = `
+    ${emailSectionLabel("Website Enquiry")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
+      <tbody>
+        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;width:120px;">Name</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.name)}</td></tr>
+        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;">Email</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.email)}</td></tr>
+        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;">Phone</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.phone || "-")}</td></tr>
+        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;">Newsletter</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;">${data.newsletter ? "Yes" : "No"}</td></tr>
+      </tbody>
+    </table>
+    ${emailSectionLabel("Message")}
+    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;">
+      <tr><td style="padding:16px 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(data.message)}</td></tr>
+    </table>
+  `;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: {
+        name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+        email: env.BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: recipientEmail, name: env.BREVO_SENDER_NAME || "Beplugged Tech" }],
+      replyTo: { email: data.email, name: data.name },
+      subject: `Website enquiry: ${safeSubject}`,
+      htmlContent: emailShell({
+        label: "Website Contact",
+        accent: "#F05023",
+        bodyHtml,
+      }),
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(
+      JSON.stringify({
+        message: "contact_email_failed",
+        status: response.status,
+        response: await response.text(),
+      }),
+    );
+    return json(
+      { error: "Message could not be sent. Please email info@beplugged.co.za." },
+      { status: 502 },
+    );
+  }
+
+  return json({ success: true });
+}
+
 async function handleLogin(request, env) {
   if (!env.ADMIN_PASSWORD) {
     return json({ error: "ADMIN_PASSWORD is not configured" }, { status: 500 });
+  }
+  if (!env.SESSION_SECRET) {
+    return json({ error: "SESSION_SECRET is not configured" }, { status: 500 });
   }
   const { password } = await parseRequestJson(request);
   if (await safeCompareText(String(password || ""), env.ADMIN_PASSWORD)) {
@@ -1164,27 +1296,65 @@ async function handleInvoicePayments(request, env, invoiceId, paymentId, method)
     const amountCents = amountToCents(data.amount, "Payment amount", {
       allowZero: false,
     });
+    // Fast path with a friendly error. The authoritative check is the guarded
+    // INSERT below, which also closes the race between these two statements.
     const { balanceCents } = await getInvoiceBalanceCents(env, invoice);
     if (amountCents > balanceCents) {
-      throw new RequestError("Payment amount cannot exceed the balance due");
+      throw new RequestError("Payment amount cannot exceed the balance due", 409);
     }
 
     const id = createEntityId("pay");
-    await env.DB.prepare(
+    const paymentDate =
+      trimText(data.payment_date, "Payment date", { maxLength: 30 }) ||
+      new Date().toISOString().slice(0, 10);
+    const paymentMethod = trimText(data.payment_method, "Payment method", {
+      maxLength: 100,
+    });
+    const paymentNotes = trimText(data.notes, "Payment notes", { maxLength: 1000 });
+    const insertResult = await env.DB.prepare(
       `INSERT INTO payments (id, invoice_id, amount, amount_cents, payment_date, payment_method, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       SELECT ?, ?, ?, ?, ?, ?, ?
+       WHERE ? <= (
+         SELECT CASE
+           WHEN (
+             (CASE WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0) THEN i.amount_cents ELSE ROUND(i.amount * 100) END) +
+             (CASE WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0) THEN i.tax_cents ELSE ROUND(i.tax * 100) END) -
+             COALESCE((
+               SELECT SUM(CASE WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0) THEN p.amount_cents ELSE ROUND(p.amount * 100) END)
+               FROM payments p
+               WHERE p.invoice_id = i.id
+             ), 0)
+           ) < 0
+           THEN 0
+           ELSE (
+             (CASE WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0) THEN i.amount_cents ELSE ROUND(i.amount * 100) END) +
+             (CASE WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0) THEN i.tax_cents ELSE ROUND(i.tax * 100) END) -
+             COALESCE((
+               SELECT SUM(CASE WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0) THEN p.amount_cents ELSE ROUND(p.amount * 100) END)
+               FROM payments p
+               WHERE p.invoice_id = i.id
+             ), 0)
+           )
+         END
+         FROM invoices i
+         WHERE i.id = ?
+       )`,
     )
       .bind(
         id,
         invoiceId,
         centsToAmount(amountCents),
         amountCents,
-        trimText(data.payment_date, "Payment date", { maxLength: 30 }) ||
-          new Date().toISOString().slice(0, 10),
-        trimText(data.payment_method, "Payment method", { maxLength: 100 }),
-        trimText(data.notes, "Payment notes", { maxLength: 1000 }),
+        paymentDate,
+        paymentMethod,
+        paymentNotes,
+        amountCents,
+        invoiceId,
       )
       .run();
+    if (Number(insertResult?.meta?.changes || 0) !== 1) {
+      throw new RequestError("Payment amount cannot exceed the balance due", 409);
+    }
 
     const { status, total, paid, balance } = await reconcileInvoiceStatus(
       env,

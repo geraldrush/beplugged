@@ -11,6 +11,7 @@ routes = [
 ]
 
 [vars]
+ENVIRONMENT = "production"
 BREVO_REPLY_TO = "info@beplugged.co.za"
 BREVO_SENDER_EMAIL = "info@beplugged.co.za"
 BREVO_SENDER_NAME = "BepluggedTech"
@@ -20,8 +21,11 @@ binding = "DB"
 database_name = "invoicing"
 database_id = "8863ff6e-e263-41e1-a3af-a229e776f81d"
 
-[env.production]
-vars = { ENVIRONMENT = "production" }
+# Throttles the public /api/contact endpoint. period must be 10 or 60.
+[[ratelimits]]
+name = "CONTACT_LIMITER"
+namespace_id = "1001"
 
-[env.development]
-vars = { ENVIRONMENT = "development" }
+  [ratelimits.simple]
+  limit = 5
+  period = 60
