@@ -473,6 +473,51 @@
         color: rgba(44, 45, 63, 0.72);
       }
 
+      .next-action {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .next-action:last-of-type {
+        border-bottom: 0;
+      }
+
+      .next-action:hover {
+        background-color: var(--surface);
+      }
+
+      .next-action .na-what {
+        flex: none;
+        font-weight: 600;
+        font-size: 0.84rem;
+        color: var(--dark);
+      }
+
+      .next-action .na-who {
+        flex: 1;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .next-action .na-go {
+        flex: none;
+        color: var(--primary);
+        font-weight: 700;
+      }
+
       .agr-group {
         cursor: pointer;
       }
@@ -1218,6 +1263,14 @@
         <!-- Dashboard Tab -->
         <div id="dashboard-tab" class="tab-content">
           <h2>Dashboard</h2>
+
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">What needs doing</div>
+            <div style="padding: 0.5rem 0.25rem;">
+              <div id="next-actions"><p style="padding:0.75rem 1rem;color:var(--muted);">Loading…</p></div>
+            </div>
+          </div>
+
           <div
             style="
               display: grid;
@@ -4347,6 +4400,111 @@
           </div>`;
       }
 
+      // What each record is waiting for, derived from its own state. The flow
+      // is then visible on the row rather than something to remember.
+      // Everything waiting on you, in one place, so the flow does not depend on
+      // remembering which tab to check.
+      async function loadNextActions() {
+        const el = document.getElementById("next-actions");
+        if (!el) return;
+        const [leads, quotes, invoices, projects] = await Promise.all([
+          apiCall("/admin/leads"),
+          apiCall("/admin/quotes"),
+          apiCall("/admin/invoices"),
+          apiCall("/admin/projects"),
+        ]);
+
+        const items = [];
+        const collect = (rows, kind, tab, label) => {
+          (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const step = nextStep(kind, row);
+            if (step && step[1] === "do") {
+              items.push({ tab, who: label(row), what: step[0] });
+            }
+          });
+        };
+        collect(leads, "lead", "leads", (r) => r.company_name);
+        collect(quotes, "quote", "quotes", (r) => `${r.quote_number} · ${r.client_name || ""}`);
+        collect(invoices, "invoice", "invoices", (r) => `${r.invoice_number} · ${r.client_name || ""}`);
+        collect(projects, "project", "projects", (r) => r.name);
+
+        if (!items.length) {
+          el.innerHTML = `<p style="padding:0.75rem 1rem;color:var(--muted);">Nothing waiting. Everything is either done or with a client.</p>`;
+          return;
+        }
+
+        el.innerHTML = items
+          .slice(0, 12)
+          .map(
+            (i) => `
+            <button class="next-action" data-goto-tab="${escapeAttr(i.tab)}">
+              <span class="na-what">${escapeHtml(i.what)}</span>
+              <span class="na-who">${escapeHtml(i.who)}</span>
+              <span class="na-go">→</span>
+            </button>`,
+          )
+          .join("") +
+          (items.length > 12
+            ? `<p style="padding:0.6rem 1rem 0;color:var(--muted);font-size:0.8rem;">and ${items.length - 12} more</p>`
+            : "");
+      }
+
+      function nextStep(kind, row) {
+        if (kind === "lead") {
+          const map = {
+            new: ["Send the questionnaire", "do"],
+            qualified: ["Confirm requirements, then quote", "do"],
+            meeting: ["Write up and confirm the scope", "do"],
+            requirements: ["Send a quote", "do"],
+            proposal: ["Awaiting their decision", "wait"],
+            won: ["Start the project", "do"],
+            lost: ["Closed", "done"],
+          };
+          return map[row.stage] || null;
+        }
+        if (kind === "quote") {
+          if (row.status === "draft") return ["Send it to the client", "do"];
+          if (row.status === "sent") return ["Not opened yet", "wait"];
+          if (row.status === "viewed") return ["Opened — follow up", "do"];
+          if (row.status === "accepted") return ["Start the project", "do"];
+          if (row.status === "converted_to_invoice") return ["Project started", "done"];
+          if (row.status === "rejected") return ["Closed", "done"];
+          return null;
+        }
+        if (kind === "invoice") {
+          if (row.status === "draft") return ["Issue it", "do"];
+          if (row.status === "sent") return ["Not opened yet", "wait"];
+          if (row.status === "viewed") return ["Opened — awaiting payment", "wait"];
+          if (row.status === "partially_paid") return ["Chase the balance", "do"];
+          if (row.status === "paid" && !row.project_id) return ["Create the project", "do"];
+          if (row.status === "paid") return ["Paid", "done"];
+          return null;
+        }
+        if (kind === "project") {
+          if (row.review_submitted_at) return ["Closed — feedback received", "done"];
+          if (row.status === "completed" && row.review_sent_at) return ["Awaiting feedback", "wait"];
+          if (row.status === "completed") return ["Ask for a review", "do"];
+          if (row.status === "cancelled") return ["Cancelled", "done"];
+          if (row.status === "on_hold") return ["On hold — chase the blocker", "do"];
+          if (!Number(row.invoice_count || 0)) return ["Raise an invoice", "do"];
+          if (Number(row.progress || 0) >= 100) return ["Mark it complete", "do"];
+          if (!Number(row.progress || 0)) return ["Add milestones and start", "do"];
+          if (Number(row.outstanding || 0) > 0) return [`In progress · ${money(row.outstanding)} outstanding`, "wait"];
+          return ["In progress", "wait"];
+        }
+        return null;
+      }
+
+      function nextStepHtml(kind, row) {
+        const step = nextStep(kind, row);
+        if (!step) return "";
+        const [label, tone] = step;
+        const colour =
+          tone === "do" ? "var(--primary)" : tone === "wait" ? "var(--muted)" : "var(--success)";
+        const mark = tone === "do" ? "→" : tone === "wait" ? "·" : "✓";
+        return `<div style="font-size:0.78rem;color:${colour};margin-top:0.15rem;">${mark} ${escapeHtml(label)}</div>`;
+      }
+
       function renderAgreementRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="6" class="text-center">No agreements yet</td></tr>`;
@@ -4838,6 +4996,7 @@
       }
 
       async function loadDashboard() {
+        loadNextActions();
         // Skip heavy analytics work when the dashboard isn't the active tab.
         if (document.getElementById("dashboard-tab").classList.contains("hidden")) {
           return;
@@ -5250,6 +5409,9 @@
           saveProjectFromInvoice();
           return;
         }
+
+        const goto = event.target.closest("[data-goto-tab]");
+        if (goto) { showTab(goto.dataset.gotoTab); return; }
 
         const revBtn = event.target.closest("[data-project-review]");
         if (revBtn) {
@@ -6426,7 +6588,10 @@
               ${displayPlain(lead.contact_name)}
               <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(lead.email, "")}</div>
             </td>
-            <td><span class="badge status-${safeStatusClass(lead.stage)}">${displayStatus(lead.stage)}</span></td>
+            <td>
+              <span class="badge status-${safeStatusClass(lead.stage)}">${displayStatus(lead.stage)}</span>
+              ${nextStepHtml("lead", lead)}
+            </td>
             <td>${money(lead.estimated_value)}</td>
             <td>${displayDate(lead.next_follow_up)}</td>
             <td>
@@ -6536,7 +6701,10 @@
               <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(project.project_code, "")}</div>
             </td>
             <td>${displayPlain(project.client_name)}</td>
-            <td><span class="badge status-${safeStatusClass(project.status)}">${displayStatus(project.status)}</span></td>
+            <td>
+              <span class="badge status-${safeStatusClass(project.status)}">${displayStatus(project.status)}</span>
+              ${nextStepHtml("project", project)}
+            </td>
             <td>${displayPlain(project.owner)}</td>
             <td>${displayDate(project.due_date)}</td>
             <td>
@@ -7168,7 +7336,10 @@
             <td>${escapeHtml(inv.invoice_number)}</td>
             <td>${escapeHtml(inv.client_name)}</td>
             <td>R${(Number(inv.amount || 0) + Number(inv.tax || 0)).toFixed(2)}</td>
-            <td><span class="badge status-${safeStatusClass(inv.status)}">${displayStatus(inv.status)}</span></td>
+            <td>
+              <span class="badge status-${safeStatusClass(inv.status)}">${displayStatus(inv.status)}</span>
+              ${nextStepHtml("invoice", inv)}
+            </td>
             <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "N/A"}</td>
             <td>
               <div class="action-buttons">
@@ -7786,6 +7957,7 @@
             <td>R${(Number(q.amount || 0) + Number(q.tax || 0)).toFixed(2)}</td>
             <td>
                 <span class="badge status-${safeStatusClass(q.status)}">${displayStatus(q.status)}</span>
+                ${nextStepHtml("quote", q)}
                 ${q.accepted_name ? `<div style="font-size:0.78rem;color:var(--muted);">by ${escapeHtml(q.accepted_name)}${q.accepted_at ? " · " + displayDate(q.accepted_at) : ""}</div>` : ""}
                 ${q.decline_reason ? `<div style="font-size:0.78rem;color:var(--muted);">${escapeHtml(q.decline_reason)}</div>` : ""}
               </td>
