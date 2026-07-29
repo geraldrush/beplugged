@@ -3498,8 +3498,8 @@
           modules: [
             { name: "Projects", status: "live", tab: "projects" },
             { name: "Document Control", status: "live", tab: "documents" },
-            { name: "Tasks", status: "next" },
-            { name: "Milestones", status: "next" },
+            { name: "Tasks", status: "live", tab: "projects" },
+            { name: "Milestones", status: "live", tab: "projects" },
             { name: "Project Risks", status: "next" },
             { name: "Issues", status: "later" },
             { name: "Change Requests", status: "later" },
@@ -6279,10 +6279,12 @@
                 ? `${money(project.invoiced)} <div style="font-size:0.8rem;color:var(--muted);">${money(project.paid)} paid${Number(project.outstanding || 0) > 0 ? ` · <span style="color:var(--danger);">${money(project.outstanding)} due</span>` : ""}</div>`
                 : `<span style="color:var(--muted);">no invoices</span>`}
             </td>
-            <td><div class="action-buttons">
+            <td>
               <button class="btn btn-sm btn-primary" data-project-plan="${escapeAttr(project.id)}" data-project-name="${escapeAttr(project.name)}">Plan &amp; progress</button>
-              <button class="btn btn-sm btn-secondary" data-plan-share="${escapeAttr(project.id)}">Client link</button>
-            </div>${actionButtons("projects", project.id)}</td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-secondary" data-plan-share="${escapeAttr(project.id)}">Client progress link</button>
+              </div>${actionButtons("projects", project.id)}
+            </td>
           </tr>
         `;
           })
