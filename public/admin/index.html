@@ -509,6 +509,25 @@
       .jr-detail { font-size: 0.79rem; color: var(--muted); }
       .jr-when { flex: none; font-size: 0.76rem; color: var(--muted); padding-top: 0.15rem; }
 
+      .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.3rem; }
+      .pl-step {
+        display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
+        flex: 1 1 90px; min-width: 90px;
+        background: #fff; border: 1px solid var(--border); border-radius: 0.375rem;
+        padding: 0.55rem 0.65rem; cursor: pointer; font: inherit; text-align: left;
+      }
+      .pl-step:hover { background: var(--surface); border-color: rgba(44,45,63,.2); }
+      .pl-step.has { border-left: 3px solid var(--primary); }
+      .pl-n {
+        font-size: 0.64rem; font-weight: 700; letter-spacing: .06em;
+        color: var(--muted);
+      }
+      .pl-label { font-size: 0.8rem; font-weight: 600; color: var(--dark); }
+      .pl-count { font-size: 1.15rem; font-weight: 600; color: var(--muted); line-height: 1.2; }
+      .pl-step.has .pl-count { color: var(--primary); }
+      .pl-arrow { align-self: center; color: rgba(44,45,63,.28); font-size: 0.8rem; }
+      @media (max-width: 640px) { .pl-arrow { display: none; } .pl-step { flex-basis: 30%; } }
+
       .next-action {
         display: flex;
         align-items: center;
@@ -1299,6 +1318,17 @@
         <!-- Dashboard Tab -->
         <div id="dashboard-tab" class="tab-content">
           <h2>Dashboard</h2>
+
+          <div class="card" style="margin-bottom: 1.25rem;">
+            <div class="card-header">How work moves through</div>
+            <div style="padding: 1rem 1.15rem;">
+              <div class="pipeline" id="pipeline"></div>
+              <p style="margin-top:0.85rem;font-size:0.79rem;color:var(--muted);">
+                Work moves left to right. The number is how many are sitting at
+                that stage now — click one to go there.
+              </p>
+            </div>
+          </div>
 
           <div class="card" style="margin-bottom: 1.25rem;">
             <div class="card-header">What needs doing</div>
@@ -4512,6 +4542,48 @@
       // is then visible on the row rather than something to remember.
       // Everything waiting on you, in one place, so the flow does not depend on
       // remembering which tab to check.
+      // The path itself, so it is obvious where work starts, where it goes, and
+      // where it is piling up right now.
+      const PIPELINE = [
+        { key: "enquiry",  n: 1, label: "Enquiry",    tab: "leads",     hint: "Log it and send the questionnaire" },
+        { key: "qualify",  n: 2, label: "Qualify",    tab: "leads",     hint: "Answers in, scope agreed" },
+        { key: "quote",    n: 3, label: "Quote",      tab: "quotes",    hint: "Priced and sent" },
+        { key: "won",      n: 4, label: "Won",        tab: "quotes",    hint: "Accepted — start the project" },
+        { key: "deliver",  n: 5, label: "Deliver",    tab: "projects",  hint: "Milestones, tasks, progress" },
+        { key: "bill",     n: 6, label: "Bill",       tab: "invoices",  hint: "Invoiced, awaiting payment" },
+        { key: "close",    n: 7, label: "Close",      tab: "projects",  hint: "Complete — ask for feedback" },
+      ];
+
+      function pipelineCounts(leads, quotes, invoices, projects) {
+        const L = Array.isArray(leads) ? leads : [];
+        const Q = Array.isArray(quotes) ? quotes : [];
+        const I = Array.isArray(invoices) ? invoices : [];
+        const P = Array.isArray(projects) ? projects : [];
+        return {
+          enquiry: L.filter((x) => x.stage === "new").length,
+          qualify: L.filter((x) => ["qualified", "meeting", "requirements"].includes(x.stage)).length,
+          quote: Q.filter((x) => ["draft", "sent", "viewed"].includes(x.status)).length,
+          won: Q.filter((x) => x.status === "accepted").length,
+          deliver: P.filter((x) => ["planning", "active", "on_hold"].includes(x.status)).length,
+          bill: I.filter((x) => ["sent", "viewed", "partially_paid"].includes(x.status)).length,
+          close: P.filter((x) => x.status === "completed" && !x.review_submitted_at).length,
+        };
+      }
+
+      function renderPipeline(counts) {
+        const el = document.getElementById("pipeline");
+        if (!el) return;
+        el.innerHTML = PIPELINE.map((st) => {
+          const n = Number(counts[st.key] || 0);
+          return `
+            <button class="pl-step ${n ? "has" : ""}" data-goto-tab="${escapeAttr(st.tab)}" title="${escapeAttr(st.hint)}">
+              <span class="pl-n">${st.n}</span>
+              <span class="pl-label">${escapeHtml(st.label)}</span>
+              <span class="pl-count">${n}</span>
+            </button>`;
+        }).join('<span class="pl-arrow">→</span>');
+      }
+
       async function loadNextActions() {
         const el = document.getElementById("next-actions");
         if (!el) return;
@@ -4521,6 +4593,8 @@
           apiCall("/admin/invoices"),
           apiCall("/admin/projects"),
         ]);
+
+        renderPipeline(pipelineCounts(leads, quotes, invoices, projects));
 
         const items = [];
         const collect = (rows, kind, tab, label) => {
