@@ -444,6 +444,29 @@
         color: rgba(44, 45, 63, 0.72);
       }
 
+      .agr-group {
+        cursor: pointer;
+      }
+
+      .agr-group:hover {
+        background-color: var(--surface);
+      }
+
+      .agr-chev {
+        display: inline-block;
+        margin-right: 0.3rem;
+        color: var(--muted);
+        transition: transform 0.15s;
+      }
+
+      .agr-group.open .agr-chev {
+        transform: rotate(90deg);
+      }
+
+      .agr-detail > td {
+        background-color: rgba(44, 45, 63, 0.015);
+      }
+
       .status-register {
         background-color: rgba(47, 111, 159, 0.14);
         color: #245a82;
@@ -3902,44 +3925,99 @@
         }
       }
 
+      // One line per client and project. Each family of documents — the
+      // original plus its addenda — expands underneath, so a project with
+      // several addenda no longer fills the table.
+      function agreementActions(a) {
+        const signed = a.status === "signed";
+        const locked = signed || a.status === "sent";
+        return `
+          <div class="action-buttons">
+            <button class="btn btn-sm btn-secondary" data-agr-view="${escapeAttr(a.id)}">View</button>
+            <button class="btn btn-sm btn-primary" data-agr-send="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>${a.status === "sent" ? "Resend" : "Send for signature"}</button>
+            <button class="btn btn-sm btn-secondary" data-agr-addendum="${escapeAttr(a.id)}" ${signed ? "" : "disabled"}>Add addendum</button>
+            <button class="btn btn-sm btn-info" data-module-action="edit" data-module="agreements" data-id="${escapeAttr(a.id)}" ${locked ? "disabled" : ""}>Edit</button>
+            <button class="btn btn-sm btn-danger" data-module-action="delete" data-module="agreements" data-id="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>Delete</button>
+          </div>`;
+      }
+
       function renderAgreementRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="6" class="text-center">No agreements yet</td></tr>`;
         }
-        return rows
-          .map((a) => {
-            const signed = a.status === "signed";
-            const locked = signed || a.status === "sent";
-            return `
-          <tr>
+
+        const groups = new Map();
+        rows.forEach((a) => {
+          const key =
+            (a.linked_id || "no-project") +
+            "|" +
+            String(a.client_email || a.client_name || "").toLowerCase();
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(a);
+        });
+
+        let n = 0;
+        return Array.from(groups.values())
+          .map((items) => {
+            items.sort((x, y) => Number(x.version || 1) - Number(y.version || 1));
+            const head = items[0];
+            const signed = items.filter((x) => x.status === "signed").length;
+            const pending = items.filter((x) => x.status === "sent").length;
+            const drafts = items.filter((x) => x.status === "draft").length;
+            const latest = items
+              .filter((x) => x.signed_at)
+              .map((x) => x.signed_at)
+              .sort()
+              .pop();
+            const addenda = items.length - 1;
+            const gid = "agrg" + n++;
+
+            const summary = [
+              signed ? `<span class="badge status-won">${signed} signed</span>` : "",
+              pending ? `<span class="badge status-next">${pending} awaiting</span>` : "",
+              drafts ? `<span class="badge status-later">${drafts} draft</span>` : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            const groupRow = `
+          <tr class="agr-group" data-agr-group="${gid}">
             <td>
+              <span class="agr-chev">▸</span>
+              ${displayPlain(head.project_name, "No project")}
+              <div style="font-size:0.8rem;color:var(--muted);">${items.length} document${items.length === 1 ? "" : "s"}</div>
+            </td>
+            <td>
+              ${displayPlain(head.client_name)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(head.client_email, "")}</div>
+            </td>
+            <td>${addenda ? `Original + ${addenda} addend${addenda === 1 ? "um" : "a"}` : "Original"}</td>
+            <td>${summary || "—"}</td>
+            <td>${latest ? displayDate(latest) : "—"}</td>
+            <td></td>
+          </tr>`;
+
+            const detail = items
+              .map(
+                (a) => `
+          <tr class="agr-detail ${gid} hidden">
+            <td style="padding-left:2.2rem;">
               ${displayPlain(a.title)}
               <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.agreement_number, "")}</div>
             </td>
-            <td>
-              ${displayPlain(a.client_name)}
-              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.client_email, "")}</div>
-            </td>
-            <td>
-              ${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}
-              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.project_name, "")}</div>
-              ${a.requirement_id ? `<div style="font-size:0.75rem;color:var(--muted);">from a requirement</div>` : ""}
-            </td>
+            <td>${a.requirement_id ? `<span style="font-size:0.8rem;color:var(--muted);">from a requirement</span>` : ""}</td>
+            <td>${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}</td>
             <td><span class="badge status-${safeStatusClass(a.status)}">${displayStatus(a.status)}</span></td>
             <td>
-              ${signed ? `<span style="font-family:Georgia,serif;font-style:italic;">${displayPlain(a.signed_name, "")}</span>
+              ${a.status === "signed" ? `<span style="font-family:Georgia,serif;font-style:italic;">${displayPlain(a.signed_name, "")}</span>
                  <div style="font-size:0.8rem;color:var(--muted);">${displayDate(a.signed_at)}</div>` : "—"}
             </td>
-            <td>
-              <div class="action-buttons">
-                <button class="btn btn-sm btn-secondary" data-agr-view="${escapeAttr(a.id)}">View</button>
-                <button class="btn btn-sm btn-primary" data-agr-send="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>${a.status === "sent" ? "Resend" : "Send for signature"}</button>
-                <button class="btn btn-sm btn-secondary" data-agr-addendum="${escapeAttr(a.id)}" ${signed ? "" : "disabled"}>Add addendum</button>
-                <button class="btn btn-sm btn-info" data-module-action="edit" data-module="agreements" data-id="${escapeAttr(a.id)}" ${locked ? "disabled" : ""}>Edit</button>
-                <button class="btn btn-sm btn-danger" data-module-action="delete" data-module="agreements" data-id="${escapeAttr(a.id)}" ${signed ? "disabled" : ""}>Delete</button>
-              </div>
-            </td>
-          </tr>`;
+            <td>${agreementActions(a)}</td>
+          </tr>`,
+              )
+              .join("");
+
+            return groupRow + detail;
           })
           .join("");
       }
@@ -4764,6 +4842,16 @@
         const reqAgr = event.target.closest("[data-req-agreement]");
         if (reqAgr) {
           createAgreementFromRequirement(reqAgr.dataset.reqAgreement);
+          return;
+        }
+
+        const agrGroup = event.target.closest("[data-agr-group]");
+        if (agrGroup && !event.target.closest(".action-buttons, .row-menu")) {
+          const gid = agrGroup.dataset.agrGroup;
+          const open = agrGroup.classList.toggle("open");
+          document
+            .querySelectorAll("tr.agr-detail." + gid)
+            .forEach((row) => row.classList.toggle("hidden", !open));
           return;
         }
 
