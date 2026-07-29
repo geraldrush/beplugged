@@ -3450,6 +3450,54 @@ async function handlePublicAgreement(request, env, token, method) {
 // Markdown to email-safe HTML. Inline styles only, since email clients drop
 // stylesheets, and the source is escaped before parsing so a stored document
 // cannot inject markup.
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+// A standalone copy of the agreement the client can open in any browser and
+// print. Self-contained, so it keeps working with no network and no site.
+function agreementAttachmentHtml(row, when) {
+  const isAddendum = Number(row.version || 1) > 1;
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(row.title)} — ${escapeHtml(row.agreement_number)}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    color:#2C2D3F;line-height:1.65;font-size:14px;max-width:760px;margin:0 auto;padding:32px 20px;}
+  .head{border-bottom:3px solid #F05023;padding-bottom:12px;margin-bottom:20px;}
+  .head h1{font-size:20px;margin:0 0 4px;}
+  .meta{color:#6b6b76;font-size:12px;}
+  .sig{border:1px solid #ddd;border-radius:6px;padding:16px 18px;margin:0 0 24px;background:#fafafb;}
+  .sig .name{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;}
+  .sig .stamp{margin-top:8px;font-size:11px;color:#6b6b76;line-height:1.8;}
+  table{border-collapse:collapse;width:100%;margin:0 0 14px;}
+  th,td{border:1px solid #eee;padding:7px 10px;font-size:12px;text-align:left;vertical-align:top;}
+  th{background:#fafafb;}
+  @media print{body{padding:0;} .sig{break-inside:avoid;} table,pre,blockquote{break-inside:avoid;}}
+</style></head><body>
+<div class="head">
+  <h1>${escapeHtml(row.title)}</h1>
+  <div class="meta">${escapeHtml(row.agreement_number)}${isAddendum ? ` &middot; addendum ${escapeHtml(row.version)}` : ""}
+    &middot; ${escapeHtml(row.client_name || "")}${row.project_name ? ` &middot; ${escapeHtml(row.project_name)}` : ""}</div>
+</div>
+<div class="sig">
+  <div class="name">${escapeHtml(row.signed_name || "")}</div>
+  <div class="stamp">Confirmed ${escapeHtml(when)}<br>
+    Reference ${escapeHtml(row.agreement_number)}<br>
+    Document fingerprint ${escapeHtml(String(row.body_hash || ""))}</div>
+</div>
+${markdownToEmailHtml(row.body)}
+<p style="margin-top:28px;font-size:11px;color:#6b6b76;">
+  Beplugged Tech &middot; info@beplugged.co.za. This file is a copy of the
+  document confirmed on the date shown. The fingerprint identifies the exact
+  text that was agreed.</p>
+</body></html>`;
+}
+
 function markdownToEmailHtml(src) {
   const lines = escapeHtml(src).replace(/\r\n/g, "\n").split("\n");
   const out = [];
@@ -3553,6 +3601,16 @@ async function sendSignedCopies(env, row, viewUrl) {
   });
   const isAddendum = Number(row.version || 1) > 1;
 
+  // The document is attached rather than inlined. A five page scope makes for
+  // an unreadable email, and an attachment is what the client actually files.
+  const fileName = `${row.agreement_number || "agreement"}.html`;
+  const attachments = [
+    {
+      name: fileName,
+      content: toBase64(agreementAttachmentHtml(row, when)),
+    },
+  ];
+
   const signatureBlock = `
     ${emailSectionLabel("Confirmed by")}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eeeeee;border-radius:8px;">
@@ -3560,32 +3618,33 @@ async function sendSignedCopies(env, row, viewUrl) {
         <div style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:22px;color:#2C2D3F;">${escapeHtml(row.signed_name)}</div>
         <div style="margin-top:8px;font-size:12px;color:#8a8a8a;line-height:1.8;">
           ${escapeHtml(when)}<br>
-          Reference ${escapeHtml(row.agreement_number)}${isAddendum ? ` · addendum ${escapeHtml(row.version)}` : ""}<br>
+          Reference ${escapeHtml(row.agreement_number)}${isAddendum ? ` &middot; addendum ${escapeHtml(row.version)}` : ""}<br>
           Document fingerprint ${escapeHtml(String(row.body_hash || "").slice(0, 16))}
         </div>
       </td></tr>
     </table>`;
 
-  const documentBlock = `
-    ${emailSectionLabel(isAddendum ? "Addendum" : "Agreed scope")}
-    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;margin:0 0 22px;">
-      <tr><td style="padding:16px 18px;">${markdownToEmailHtml(row.body)}</td></tr>
-    </table>`;
+  const attachmentNote = `
+    <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">
+      The full document is attached as <strong>${escapeHtml(fileName)}</strong>.
+      Open it in any browser to read or print it, or use the button above to
+      view it online.
+    </p>`;
 
   await sendBrevoEmail(env, {
     to: row.client_email,
     toName: row.client_name || "",
     subject: `Confirmed — ${row.title}`,
+    attachments,
     htmlContent: emailShell({
       label: isAddendum ? "Addendum Confirmed" : "Scope Confirmed",
       accent: "#1f8a52",
       bodyHtml: `
         <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Thank you ${escapeHtml(row.signed_name)},</p>
-        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">This is your copy of what was confirmed. Please keep it for your records. The full document is below, and stays available at the link.</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">This confirms what you agreed for <strong>${escapeHtml(row.title)}</strong>. Please keep this for your records.</p>
         ${signatureBlock}
         ${viewUrl ? emailButton(viewUrl, "View online", "#1f8a52") : ""}
-        <div style="height:22px;"></div>
-        ${documentBlock}`,
+        ${attachmentNote}`,
     }),
   });
 
@@ -3595,14 +3654,15 @@ async function sendSignedCopies(env, row, viewUrl) {
       to: internal,
       toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
       subject: `Scope confirmed — ${row.client_name || row.title}`,
+      attachments,
       htmlContent: emailShell({
         label: isAddendum ? "Addendum Confirmed" : "Scope Confirmed",
         accent: "#1f8a52",
         bodyHtml: `
-          <p style="margin:0 0 22px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(row.client_name || "The client")}</strong> has confirmed ${isAddendum ? "an addendum" : "the scope"} for ${escapeHtml(row.title)}.</p>
+          <p style="margin:0 0 22px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(row.client_name || "The client")}</strong> has confirmed ${isAddendum ? "an addendum" : "the scope"} for ${escapeHtml(row.title)}${row.project_name ? ` (${escapeHtml(row.project_name)})` : ""}.</p>
           ${signatureBlock}
-          <div style="height:22px;"></div>
-          ${documentBlock}`,
+          ${viewUrl ? emailButton(viewUrl, "View online", "#1f8a52") : ""}
+          ${attachmentNote}`,
       }),
     });
   }
@@ -3988,7 +4048,7 @@ async function notifyQuestionnaireSubmitted(request, env, lead, answers) {
 
 // Shared Brevo send. Invoices and receipts predate this and keep their own
 // copies; quotes and questionnaires route through here.
-async function sendBrevoEmail(env, { to, toName, subject, htmlContent }) {
+async function sendBrevoEmail(env, { to, toName, subject, htmlContent, attachments }) {
   if (!env.BREVO_API_KEY) {
     throw new RequestError("Missing BREVO_API_KEY secret", 500);
   }
@@ -4006,6 +4066,9 @@ async function sendBrevoEmail(env, { to, toName, subject, htmlContent }) {
     subject,
     htmlContent,
   };
+  if (Array.isArray(attachments) && attachments.length) {
+    payload.attachment = attachments;
+  }
 
   // Keep a copy on file, as invoices and receipts already do.
   const bccEmail = env.BREVO_BCC_EMAIL || "info@beplugged.co.za";
