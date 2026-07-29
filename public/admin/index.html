@@ -551,6 +551,8 @@
         background-color: var(--surface);
       }
 
+      .next-action.urgent .na-what { color: var(--danger); }
+
       .next-action .na-what {
         flex: none;
         font-weight: 600;
@@ -4751,16 +4753,29 @@
       async function loadNextActions() {
         const el = document.getElementById("next-actions");
         if (!el) return;
-        const [leads, quotes, invoices, projects] = await Promise.all([
+        const [leads, quotes, invoices, projects, followUps] = await Promise.all([
           apiCall("/admin/leads"),
           apiCall("/admin/quotes"),
           apiCall("/admin/invoices"),
           apiCall("/admin/projects"),
+          apiCall("/admin/due-activities"),
         ]);
 
         renderPipeline(pipelineCounts(leads, quotes, invoices, projects));
 
         const items = [];
+
+        // Follow-ups first: they have a date attached, so they are the only
+        // items here that are actually late rather than merely outstanding.
+        (Array.isArray(followUps) ? followUps : []).forEach((a) => {
+          items.push({
+            tab: "crm",
+            who: [a.company, a.contact_name].filter(Boolean).join(" · "),
+            what: (a.overdue ? "Overdue: " : "Due today: ") + (a.title || "Follow up"),
+            urgent: !!a.overdue,
+          });
+        });
+
         const collect = (rows, kind, tab, label) => {
           (Array.isArray(rows) ? rows : []).forEach((row) => {
             const step = nextStep(kind, row);
@@ -4783,7 +4798,7 @@
           .slice(0, 12)
           .map(
             (i) => `
-            <button class="next-action" data-goto-tab="${escapeAttr(i.tab)}">
+            <button class="next-action${i.urgent ? " urgent" : ""}" data-goto-tab="${escapeAttr(i.tab)}">
               <span class="na-what">${escapeHtml(i.what)}</span>
               <span class="na-who">${escapeHtml(i.who)}</span>
               <span class="na-go">→</span>
@@ -6995,6 +7010,11 @@
             <td>
               <span class="badge status-${safeStatusClass(lead.stage)}">${displayStatus(lead.stage)}</span>
               ${nextStepHtml("lead", lead)}
+              ${Number(lead.due_activity_count || 0) > 0
+                ? `<div style="font-size:0.78rem;color:var(--danger);margin-top:0.1rem;">${Number(lead.due_activity_count)} follow-up${Number(lead.due_activity_count) === 1 ? "" : "s"} due</div>`
+                : lead.next_activity_due
+                  ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.1rem;">next follow-up ${displayDate(lead.next_activity_due)}</div>`
+                  : ""}
             </td>
             <td>${money(lead.estimated_value)}</td>
             <td>${displayDate(lead.next_follow_up)}</td>

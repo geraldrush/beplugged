@@ -194,6 +194,11 @@ export default {
 
       // Contacts for a company, so a form can offer people rather than ask for
       // an address that is already on file.
+      // Follow-ups that have come due, for the dashboard.
+      if (path === "/api/admin/due-activities" && method === "GET") {
+        return json(await dueActivities(env));
+      }
+
       if (path === "/api/admin/contacts-for" && method === "GET") {
         const q = url.searchParams;
         return json(
@@ -3930,6 +3935,33 @@ function summariseAnswers(answers) {
 // address. Prefer the primary contact, then any contact, then whatever the
 // record itself carries, so the flow addresses a person rather than a company.
 // Contacts for a company, for populating a picker.
+// Planned activities that have come due. This is what makes the follow-up
+// ladder in SOP-CLI-001 operate rather than sit in a document: a call booked
+// for Tuesday appears on Tuesday instead of relying on memory.
+async function dueActivities(env, limit = 50) {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await env.DB.prepare(
+    `SELECT a.id, a.lead_id, a.client_id, a.contact_id, a.activity_type, a.title,
+            a.due_date, a.owner,
+            COALESCE(l.company_name, a.client_name, '') AS company,
+            COALESCE(c.name, '') AS contact_name
+     FROM crm_activities a
+     LEFT JOIN leads l ON l.id = a.lead_id
+     LEFT JOIN crm_contacts c ON c.id = a.contact_id
+     WHERE a.status = 'planned'
+       AND a.due_date IS NOT NULL AND TRIM(a.due_date) != ''
+       AND a.due_date <= ?
+     ORDER BY a.due_date ASC
+     LIMIT ?`,
+  )
+    .bind(today, limit)
+    .all();
+  return (rows.results || []).map((r) => ({
+    ...r,
+    overdue: String(r.due_date) < today,
+  }));
+}
+
 async function contactsFor(env, { leadId, clientId, clientEmail }) {
   const conditions = [];
   const params = [];
@@ -4594,9 +4626,16 @@ async function handleLeads(request, env, path, method) {
 
   if (method === "GET" && !leadId) {
     const result = await env.DB.prepare(
-      `SELECT * FROM leads
+      `SELECT l.*,
+              (SELECT MIN(a.due_date) FROM crm_activities a
+                WHERE a.lead_id = l.id AND a.status = 'planned'
+                  AND a.due_date IS NOT NULL AND TRIM(a.due_date) != '') AS next_activity_due,
+              (SELECT COUNT(*) FROM crm_activities a
+                WHERE a.lead_id = l.id AND a.status = 'planned'
+                  AND a.due_date IS NOT NULL AND a.due_date <= date('now')) AS due_activity_count
+       FROM leads l
        ORDER BY
-         CASE stage
+         CASE l.stage
            WHEN 'new' THEN 1
            WHEN 'qualified' THEN 2
            WHEN 'meeting' THEN 3
@@ -4606,8 +4645,8 @@ async function handleLeads(request, env, path, method) {
            WHEN 'lost' THEN 7
            ELSE 8
          END,
-         COALESCE(next_follow_up, '9999-12-31') ASC,
-         updated_at DESC
+         COALESCE(l.next_follow_up, '9999-12-31') ASC,
+         l.updated_at DESC
        LIMIT 200`,
     ).all();
     return json(result.results || []);
@@ -5264,7 +5303,14 @@ async function handleCrmActivities(request, env, method, activityId) {
 
   if (method === "PUT" && activityId) {
     const existing = await requireCrmActivity(env, activityId);
-    const data = normalizeCrmActivityPayload(await parseRequestJson(request));
+    // Merge over what is stored, as project risks do, so marking a follow-up
+    // done does not require resending the whole activity.
+    const raw = await parseRequestJson(request);
+    const data = normalizeCrmActivityPayload({ ...existing, ...raw });
+    // Completing one stamps the time, so the history reads truthfully.
+    if (data.status === "completed" && !data.completed_at) {
+      data.completed_at = new Date().toISOString();
+    }
     await env.DB.prepare(
       `UPDATE crm_activities SET
          lead_id = ?, client_id = ?, client_email = ?, client_name = ?,
