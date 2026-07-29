@@ -267,7 +267,8 @@ CREATE TABLE IF NOT EXISTS scope_agreements (
     client_email TEXT NOT NULL,
     project_name TEXT,
     linked_type TEXT,
-    linked_id TEXT,
+    linked_id TEXT,                -- the project it governs
+    requirement_id TEXT,           -- the requirement it was drafted from
     body TEXT NOT NULL,            -- the document, in Markdown
     body_hash TEXT,                -- sha256 of body at the moment it was sent
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'signed', 'declined', 'void')),

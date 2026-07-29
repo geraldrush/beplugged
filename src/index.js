@@ -1280,6 +1280,14 @@ async function runSchemaSetup(env) {
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id)",
   ).run();
+  // Must come after the table exists: ensureColumn returns early when
+  // PRAGMA table_info finds nothing.
+  await ensureColumn(
+    env,
+    "scope_agreements",
+    "requirement_id",
+    "requirement_id TEXT",
+  );
   await seedEditableReferenceData(env);
 }
 
@@ -1549,6 +1557,7 @@ async function ensureColumn(env, tableName, columnName, columnDefinition) {
     "payments",
     "quality_records",
     "security_records",
+    "scope_agreements",
   ]);
   if (!allowedTables.has(tableName)) {
     throw new Error("Invalid schema table");
@@ -2874,6 +2883,9 @@ function normalizeAgreementPayload(raw) {
       required: true,
       maxLength: 160,
     }),
+    requirement_id: trimText(raw.requirement_id, "Requirement", {
+      maxLength: 160,
+    }),
     // The document itself. Written from the meeting minutes.
     body: trimText(raw.body, "Scope text", { required: true, maxLength: 100000 }),
   };
@@ -2916,7 +2928,8 @@ async function handleAgreements(request, env, path, method) {
   if (method === "GET" && !id) {
     const result = await env.DB.prepare(
       `SELECT id, agreement_number, parent_id, version, title, client_name,
-              client_email, project_name, linked_type, linked_id, status,
+              client_email, project_name, linked_type, linked_id,
+              requirement_id, status,
               sent_at, signed_name, signed_at, expires_at, created_at
        FROM scope_agreements ORDER BY created_at DESC LIMIT 200`,
     ).all();
@@ -2937,8 +2950,8 @@ async function handleAgreements(request, env, path, method) {
     await env.DB.prepare(
       `INSERT INTO scope_agreements (
          id, agreement_number, version, title, client_name, client_email,
-         project_name, linked_type, linked_id, body, status
-       ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+         project_name, linked_type, linked_id, requirement_id, body, status
+       ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
     )
       .bind(
         newId,
@@ -2949,6 +2962,7 @@ async function handleAgreements(request, env, path, method) {
         project.name,
         "project",
         project.id,
+        data.requirement_id,
         data.body,
       )
       .run();
@@ -2985,6 +2999,7 @@ async function handleAgreements(request, env, path, method) {
     const data = normalizeAgreementPayload({
       ...raw,
       project_id: raw.project_id || existing.linked_id,
+      requirement_id: raw.requirement_id || existing.requirement_id || "",
     });
     const project = await resolveAgreementProject(env, data.project_id);
     const highest = await env.DB.prepare(
@@ -2998,8 +3013,9 @@ async function handleAgreements(request, env, path, method) {
     await env.DB.prepare(
       `INSERT INTO scope_agreements (
          id, agreement_number, parent_id, version, title, client_name,
-         client_email, project_name, linked_type, linked_id, body, status
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+         client_email, project_name, linked_type, linked_id, requirement_id,
+         body, status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
     )
       .bind(
         newId,
@@ -3012,6 +3028,7 @@ async function handleAgreements(request, env, path, method) {
         project.name,
         "project",
         project.id,
+        data.requirement_id,
         data.body,
       )
       .run();
@@ -3036,8 +3053,8 @@ async function handleAgreements(request, env, path, method) {
     const project = await resolveAgreementProject(env, data.project_id);
     await env.DB.prepare(
       `UPDATE scope_agreements SET title = ?, client_name = ?, client_email = ?,
-         project_name = ?, linked_type = ?, linked_id = ?, body = ?,
-         updated_at = CURRENT_TIMESTAMP
+         project_name = ?, linked_type = ?, linked_id = ?, requirement_id = ?,
+         body = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
       .bind(
@@ -3047,6 +3064,7 @@ async function handleAgreements(request, env, path, method) {
         project.name,
         "project",
         project.id,
+        data.requirement_id,
         data.body,
         id,
       )

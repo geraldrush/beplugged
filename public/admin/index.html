@@ -2601,6 +2601,7 @@
               choices: [],
             },
             { name: "body", label: "Scope (Markdown — paste from your minutes)", type: "textarea", fullSpan: true },
+            { name: "requirement_id", type: "hidden" },
           ],
           // Projects change, so the list is fetched each time the form opens.
           loadChoices: async (config) => {
@@ -3267,6 +3268,25 @@
         const req = await apiCall("/admin/requirements/" + id);
         if (!req) return;
 
+        // An agreement belongs to a project, so with none created the required
+        // dropdown would be empty and unfillable. Offer the missing step.
+        const projects = await apiCall("/admin/projects");
+        if (!Array.isArray(projects) || !projects.length) {
+          if (
+            confirm(
+              "An agreement belongs to a project, and there are no projects yet.\n\n" +
+                "Create one for this requirement now?",
+            )
+          ) {
+            showTab("projects");
+            await openModuleModal("projects", null, {
+              name: req.title || "",
+              client_name: req.client_name || "",
+            });
+          }
+          return;
+        }
+
         // Requirements carry a client name but no email, so look one up.
         let email = "";
         const clients = await apiCall("/admin/clients");
@@ -3285,6 +3305,7 @@
           client_name: req.client_name || "",
           client_email: email,
           body: scopeFromRequirement(req),
+          requirement_id: req.id,
         });
         if (!email) {
           showAlert("Add the client email and pick a project before saving", "danger");
@@ -3312,6 +3333,7 @@
             <td>
               ${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}
               <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.project_name, "")}</div>
+              ${a.requirement_id ? `<div style="font-size:0.75rem;color:var(--muted);">from a requirement</div>` : ""}
             </td>
             <td><span class="badge status-${safeStatusClass(a.status)}">${displayStatus(a.status)}</span></td>
             <td>
@@ -5130,6 +5152,9 @@
 
       function moduleFieldHtml(field, record) {
         const value = moduleFieldValue(field, record);
+        if (field.type === "hidden") {
+          return `<input type="hidden" id="module_${field.name}" value="${escapeAttr(value)}" />`;
+        }
         const required = field.required ? "required" : "";
         const fullSpan = field.fullSpan ? " full-span" : "";
         const placeholder = field.placeholder
