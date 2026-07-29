@@ -2255,7 +2255,7 @@ async function handleInvoices(request, env, path, method) {
   }
 
   if (method === "POST" && invoiceId && action === "project") {
-    return handleCreateProjectFromInvoice(env, invoiceId);
+    return handleCreateProjectFromInvoice(request, env, invoiceId);
   }
 
   if (method === "POST" && invoiceId && action === "send") {
@@ -2460,8 +2460,12 @@ function emailShell({ label, accent = "#F05023", bodyHtml }) {
 
 // Turns invoiced work into a project, so what has been paid for appears on
 // the delivery side instead of only in the finance tables.
-async function handleCreateProjectFromInvoice(env, invoiceId) {
+async function handleCreateProjectFromInvoice(request, env, invoiceId) {
   const invoice = await requireInvoice(env, invoiceId);
+  // The project is named by whoever creates it. Naming it after the invoice
+  // meant every project read as a document reference rather than a job.
+  const raw = await parseOptionalJson(request);
+  const chosenName = trimText(raw?.name, "Project name", { maxLength: 200 });
   if (invoice.project_id) {
     throw new RequestError("This invoice already belongs to a project", 409);
   }
@@ -2481,7 +2485,7 @@ async function handleCreateProjectFromInvoice(env, invoiceId) {
     .bind(
       id,
       projectCode,
-      `${invoice.client_name || "Client"} — ${invoice.invoice_number}`,
+      chosenName || `${invoice.client_name || "Client"} project`,
       invoice.client_name || "",
       invoice.client_id || null,
       new Date().toISOString().slice(0, 10),

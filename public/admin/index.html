@@ -2837,6 +2837,32 @@
       </div>
     </div>
 
+    <!-- Naming a project created from an invoice -->
+    <div id="projectNameModal" class="modal">
+      <div class="modal-content" style="max-width: 520px">
+        <div class="modal-header">
+          <h5>Create project</h5>
+          <button type="button" onclick="closeProjectNameModal()"
+            style="background:none;border:none;color:inherit;font-size:1.5rem;cursor:pointer;">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-meta" id="project-name-context"></div>
+          <div class="form-group">
+            <label class="form-label" for="project-name-input">Project name</label>
+            <input class="form-control" id="project-name-input" placeholder="e.g. Acme booking website" />
+            <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);">
+              This is what the client sees on the progress link, so name it for
+              the work rather than the invoice.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeProjectNameModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" id="project-name-save">Create project</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Project plan: milestones the client sees, tasks underneath -->
     <div id="planModal" class="modal">
       <div class="modal-content" style="max-width: 780px">
@@ -4004,11 +4030,42 @@
       // record; this turns it into client-facing wording to be signed.
       // Invoiced work becomes a project, so what has been paid for appears on
       // the delivery side rather than only in the finance tables.
+      let projectFromInvoiceId = null;
+
       async function createProjectFromInvoice(id) {
-        if (!confirm("Create a project from this invoice?")) return;
-        const r = await apiCall("/admin/invoices/" + id + "/project", "POST");
+        const inv = await apiCall("/admin/invoices/" + id);
+        if (!inv) return;
+        projectFromInvoiceId = id;
+        document.getElementById("project-name-context").innerHTML = [
+          `<span>${escapeHtml(inv.invoice_number || "")}</span>`,
+          inv.client_name ? `<span>${escapeHtml(inv.client_name)}</span>` : "",
+          `<span>${money(Number(inv.amount || 0) + Number(inv.tax || 0))}</span>`,
+        ].filter(Boolean).join("");
+        document.getElementById("project-name-input").value = "";
+        document.getElementById("projectNameModal").classList.add("show");
+        document.getElementById("project-name-input").focus();
+      }
+
+      function closeProjectNameModal() {
+        document.getElementById("projectNameModal").classList.remove("show");
+        projectFromInvoiceId = null;
+      }
+
+      async function saveProjectFromInvoice() {
+        if (!projectFromInvoiceId) return;
+        const name = document.getElementById("project-name-input").value.trim();
+        if (!name) {
+          showAlert("Give the project a name", "danger");
+          return;
+        }
+        const r = await apiCall(
+          "/admin/invoices/" + projectFromInvoiceId + "/project",
+          "POST",
+          { name },
+        );
         if (r && r.success) {
           showAlert("Project " + r.project_code + " created", "success");
+          closeProjectNameModal();
           loadInvoices();
         }
       }
@@ -5089,6 +5146,11 @@
 
         if (event.target.closest("#addendum-save")) {
           saveAddendum();
+          return;
+        }
+
+        if (event.target.closest("#project-name-save")) {
+          saveProjectFromInvoice();
           return;
         }
 
