@@ -4228,6 +4228,127 @@ async function handleSendQuestionnaire(request, env, lead, token) {
   return json({ success: true, url });
 }
 
+// Acceptance is the moment a prospect becomes a job. This is where the
+// project begins, rather than sideways from an invoice, so the quote, the
+// project and the deposit all reference each other.
+async function handleConvertQuoteToProject(request, env, quoteId) {
+  await ensureSchema(env);
+  const quote = await requireQuote(env, quoteId);
+
+  if (quote.status !== "accepted") {
+    throw new RequestError(
+      "Only an accepted quote can be turned into a project",
+      409,
+    );
+  }
+  if (quote.project_id) {
+    throw new RequestError("This quote already has a project", 409);
+  }
+
+  const raw = await parseOptionalJson(request);
+  const name = trimText(raw?.name, "Project name", { maxLength: 200 });
+  const depositPercent = normalizeInteger(
+    raw?.deposit_percent === undefined ? 0 : raw.deposit_percent,
+    "Deposit percentage",
+    { min: 0, max: 100, fallback: 0 },
+  );
+
+  const amountCents = persistedCents(quote, "amount_cents", "amount", "Quote amount");
+  const taxCents = persistedCents(quote, "tax_cents", "tax", "Quote tax");
+  const totalCents = amountCents + taxCents;
+
+  const projectId = createEntityId("project");
+  const projectCode = generateDocumentNumber("PRJ");
+  await env.DB.prepare(
+    `INSERT INTO projects (
+       id, project_code, name, client_name, client_id, status, priority,
+       start_date, budget, budget_cents, progress, notes
+     ) VALUES (?, ?, ?, ?, ?, 'planning', 'medium', ?, ?, ?, 0, ?)`,
+  )
+    .bind(
+      projectId,
+      projectCode,
+      name || `${quote.client_name || "Client"} project`,
+      quote.client_name || "",
+      quote.client_id || null,
+      new Date().toISOString().slice(0, 10),
+      centsToAmount(totalCents),
+      totalCents,
+      `Created from accepted quote ${quote.quote_number}.`,
+    )
+    .run();
+
+  let invoice = null;
+  if (depositPercent > 0) {
+    const depositCents = Math.round((totalCents * depositPercent) / 100);
+    const invoiceId = createEntityId("inv");
+    const invoiceNumber = generateDocumentNumber("INV");
+    const qrCode = await generateQrCodeDataUrl(
+      invoicePublicUrl(request, invoiceId),
+    );
+    // A single inclusive line, so the deposit plus the balance invoice add up
+    // to the quoted total rather than drifting through rounded tax.
+    const items = [
+      {
+        description: `Deposit — ${depositPercent}% of quote ${quote.quote_number}`,
+        quantity: 1,
+        rate: centsToAmount(depositCents),
+        discount: 0,
+      },
+    ];
+    await env.DB.prepare(
+      `INSERT INTO invoices (
+         id, invoice_number, lead_id, client_id, quote_id, project_id,
+         client_name, client_email, client_address, amount, amount_cents, tax,
+         tax_cents, status, due_date, payment_terms, items, notes, qr_code_url
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'draft', ?, '', ?, ?, ?)`,
+    )
+      .bind(
+        invoiceId,
+        invoiceNumber,
+        quote.lead_id || null,
+        quote.client_id || null,
+        quote.id,
+        projectId,
+        quote.client_name || "",
+        quote.client_email || "",
+        quote.client_address || "",
+        centsToAmount(depositCents),
+        depositCents,
+        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        JSON.stringify(items),
+        `Deposit against quote ${quote.quote_number}.`,
+        qrCode,
+      )
+      .run();
+    invoice = { id: invoiceId, invoice_number: invoiceNumber, amount: centsToAmount(depositCents) };
+  }
+
+  await env.DB.prepare(
+    "UPDATE quotes SET project_id = ?, status = 'converted_to_invoice' WHERE id = ?",
+  )
+    .bind(projectId, quoteId)
+    .run();
+
+  await recordAudit(env, {
+    action: "converted_to_project",
+    entity_type: "quote",
+    entity_id: quoteId,
+    entity_number: quote.quote_number,
+    details: {
+      project_id: projectId,
+      project_code: projectCode,
+      deposit_percent: depositPercent,
+      invoice_id: invoice?.id || null,
+    },
+  });
+
+  return json(
+    { success: true, project_id: projectId, project_code: projectCode, invoice },
+    { status: 201 },
+  );
+}
+
 async function handleSendQuote(request, env, quoteId) {
   await ensureOperationalSchema(env);
   const quote = await requireQuote(env, quoteId);
@@ -6356,6 +6477,10 @@ async function handleQuotes(request, env, path, method) {
       .bind(quoteId)
       .first();
     return json(result || { error: "Not found" }, result ? {} : { status: 404 });
+  }
+
+  if (method === "POST" && quoteId && action === "convert") {
+    return handleConvertQuoteToProject(request, env, quoteId);
   }
 
   if (method === "POST" && quoteId && action === "send") {

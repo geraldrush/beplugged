@@ -2837,6 +2837,41 @@
       </div>
     </div>
 
+    <!-- Turning an accepted quote into a project -->
+    <div id="convertModal" class="modal">
+      <div class="modal-content" style="max-width: 560px">
+        <div class="modal-header">
+          <h5>Start the project</h5>
+          <button type="button" onclick="closeConvertModal()"
+            style="background:none;border:none;color:inherit;font-size:1.5rem;cursor:pointer;">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-meta" id="convert-context"></div>
+          <div class="form-group">
+            <label class="form-label" for="convert-name">Project name</label>
+            <input class="form-control" id="convert-name" placeholder="e.g. Acme booking website" />
+            <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);">
+              What the client sees on the progress link. Name it for the work.
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="convert-deposit">Deposit to invoice now</label>
+            <select class="form-control" id="convert-deposit">
+              <option value="50">50% deposit</option>
+              <option value="25">25% deposit</option>
+              <option value="100">Full amount</option>
+              <option value="0">No invoice yet</option>
+            </select>
+            <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);" id="convert-deposit-note"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeConvertModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" id="convert-save">Create project</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Naming a project created from an invoice -->
     <div id="projectNameModal" class="modal">
       <div class="modal-content" style="max-width: 520px">
@@ -4030,6 +4065,61 @@
       // record; this turns it into client-facing wording to be signed.
       // Invoiced work becomes a project, so what has been paid for appears on
       // the delivery side rather than only in the finance tables.
+      let convertQuoteId = null;
+      let convertQuoteTotal = 0;
+
+      async function convertQuote(id) {
+        const q = await apiCall("/admin/quotes/" + id);
+        if (!q) return;
+        convertQuoteId = id;
+        convertQuoteTotal = Number(q.amount || 0) + Number(q.tax || 0);
+        document.getElementById("convert-context").innerHTML = [
+          `<span>${escapeHtml(q.quote_number || "")}</span>`,
+          q.client_name ? `<span>${escapeHtml(q.client_name)}</span>` : "",
+          `<span>${money(convertQuoteTotal)}</span>`,
+          q.accepted_name ? `<span>accepted by ${escapeHtml(q.accepted_name)}</span>` : "",
+        ].filter(Boolean).join("");
+        document.getElementById("convert-name").value = "";
+        document.getElementById("convert-deposit").value = "50";
+        updateDepositNote();
+        document.getElementById("convertModal").classList.add("show");
+        document.getElementById("convert-name").focus();
+      }
+
+      function updateDepositNote() {
+        const pct = Number(document.getElementById("convert-deposit").value || 0);
+        document.getElementById("convert-deposit-note").textContent = pct
+          ? `A draft invoice for ${money(Math.round(convertQuoteTotal * pct) / 100)} will be created. Review it before sending.`
+          : "No invoice will be created. You can raise one against the project later.";
+      }
+
+      function closeConvertModal() {
+        document.getElementById("convertModal").classList.remove("show");
+        convertQuoteId = null;
+      }
+
+      async function saveConvertQuote() {
+        if (!convertQuoteId) return;
+        const name = document.getElementById("convert-name").value.trim();
+        if (!name) {
+          showAlert("Give the project a name", "danger");
+          return;
+        }
+        const r = await apiCall("/admin/quotes/" + convertQuoteId + "/convert", "POST", {
+          name,
+          deposit_percent: Number(document.getElementById("convert-deposit").value || 0),
+        });
+        if (r && r.success) {
+          showAlert(
+            "Project " + r.project_code + " created" +
+              (r.invoice ? " with deposit invoice " + r.invoice.invoice_number : ""),
+            "success",
+          );
+          closeConvertModal();
+          loadQuotes();
+        }
+      }
+
       let projectFromInvoiceId = null;
 
       async function createProjectFromInvoice(id) {
@@ -5148,6 +5238,13 @@
           saveAddendum();
           return;
         }
+
+        if (event.target.closest("#convert-save")) { saveConvertQuote(); return; }
+
+        if (event.target.closest("#convert-deposit")) { updateDepositNote(); return; }
+
+        const convBtn = event.target.closest("[data-quote-convert]");
+        if (convBtn) { convertQuote(convBtn.dataset.quoteConvert); return; }
 
         if (event.target.closest("#project-name-save")) {
           saveProjectFromInvoice();
@@ -7684,6 +7781,7 @@
                 <button class="btn btn-sm btn-secondary" onclick="editQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Edit</button>
                 <button class="btn btn-sm btn-secondary" onclick="downloadQuote('${escapeAttr(q.id)}', '${safeStatusClass(q.status)}')">Download</button>
                 <button class="btn btn-sm btn-primary" data-quote-send="${escapeAttr(q.id)}">Send</button>
+                <button class="btn btn-sm btn-success" data-quote-convert="${escapeAttr(q.id)}" ${q.status === "accepted" ? "" : "disabled"}>${q.project_id ? "Project created" : "Start project"}</button>
                 <button class="btn btn-sm btn-success" data-quote-invoice="${escapeAttr(q.id)}" ${q.status !== "accepted" ? "disabled" : ""}>Invoice</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteQuote('${escapeAttr(q.id)}')" ${q.status !== "draft" ? "disabled" : ""}>Delete</button>
               </div>
