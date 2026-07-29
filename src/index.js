@@ -119,6 +119,12 @@ const CRM_ACTIVITY_TYPES = new Set([
   "task",
 ]);
 const CRM_ACTIVITY_STATUSES = new Set(["planned", "completed", "cancelled"]);
+const PROJECT_RISK_STATUSES = new Set([
+  "open",
+  "monitoring",
+  "mitigated",
+  "closed",
+]);
 
 class RequestError extends Error {
   constructor(message, status = 400) {
@@ -186,6 +192,19 @@ export default {
         return await handleLeads(request, env, path, method);
       }
 
+      // Contacts for a company, so a form can offer people rather than ask for
+      // an address that is already on file.
+      if (path === "/api/admin/contacts-for" && method === "GET") {
+        const q = url.searchParams;
+        return json(
+          await contactsFor(env, {
+            leadId: q.get("lead_id") || "",
+            clientId: q.get("client_id") || "",
+            clientEmail: q.get("client_email") || "",
+          }),
+        );
+      }
+
       if (path.startsWith("/api/admin/crm")) {
         return await handleCrm(request, env, path, method);
       }
@@ -224,6 +243,10 @@ export default {
 
       if (path.startsWith("/api/admin/tasks")) {
         return await handleTasks(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/project-risks")) {
+        return await handleProjectRisks(request, env, path, method);
       }
 
       if (path.startsWith("/api/admin/agreements")) {
@@ -819,6 +842,32 @@ function normalizeProjectPayload(raw) {
       fallback: 0,
     }),
     notes: trimText(raw.notes, "Project notes", { maxLength: 3000 }),
+  };
+}
+
+function normalizeProjectRiskPayload(raw) {
+  return {
+    project_id: trimText(raw.project_id, "Project", {
+      required: true,
+      maxLength: 160,
+    }),
+    title: trimText(raw.title, "Risk title", {
+      required: true,
+      maxLength: 240,
+    }),
+    risk_level: normalizeKey(raw.risk_level, "Risk level", RISK_LEVELS, "medium"),
+    status: normalizeKey(
+      raw.status,
+      "Risk status",
+      PROJECT_RISK_STATUSES,
+      "open",
+    ),
+    owner: trimText(raw.owner, "Risk owner", { maxLength: 200 }),
+    due_date: normalizeDate(raw.due_date, "Review date"),
+    impact: trimText(raw.impact, "Impact", { maxLength: 3000 }),
+    mitigation: trimText(raw.mitigation, "Mitigation", { maxLength: 4000 }),
+    contingency: trimText(raw.contingency, "Contingency", { maxLength: 4000 }),
+    notes: trimText(raw.notes, "Risk notes", { maxLength: 3000 }),
   };
 }
 
@@ -1491,10 +1540,36 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS project_risks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      risk_level TEXT NOT NULL DEFAULT 'medium' CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'monitoring', 'mitigated', 'closed')),
+      owner TEXT,
+      due_date DATE,
+      impact TEXT,
+      mitigation TEXT,
+      contingency TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones (project_id)",
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON milestone_tasks (milestone_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_project_risks_project ON project_risks (project_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_project_risks_status ON project_risks (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_project_risks_level ON project_risks (risk_level)",
   ).run();
   // Read-only progress link the client can be given, and the review sent at
   // handover. Both are unguessable tokens, like the questionnaire.
@@ -3851,6 +3926,57 @@ function summariseAnswers(answers) {
   return { goals, scope, constraints, notes };
 }
 
+// Contacts are the people at a company; a lead or client record holds only one
+// address. Prefer the primary contact, then any contact, then whatever the
+// record itself carries, so the flow addresses a person rather than a company.
+// Contacts for a company, for populating a picker.
+async function contactsFor(env, { leadId, clientId, clientEmail }) {
+  const conditions = [];
+  const params = [];
+  if (leadId) { conditions.push("lead_id = ?"); params.push(leadId); }
+  if (clientId) { conditions.push("client_id = ?"); params.push(clientId); }
+  if (clientEmail) {
+    conditions.push("LOWER(TRIM(client_email)) = ?");
+    params.push(String(clientEmail).trim().toLowerCase());
+  }
+  if (!conditions.length) return [];
+  const rows = await env.DB.prepare(
+    `SELECT id, name, email, role, is_primary FROM crm_contacts
+     WHERE (${conditions.join(" OR ")}) AND email IS NOT NULL AND TRIM(email) != ''
+     ORDER BY is_primary DESC, name ASC LIMIT 50`,
+  )
+    .bind(...params)
+    .all();
+  return rows.results || [];
+}
+
+async function resolveContactEmail(env, { leadId, clientId, clientEmail, fallback }) {
+  const conditions = [];
+  const params = [];
+  if (leadId) { conditions.push("lead_id = ?"); params.push(leadId); }
+  if (clientId) { conditions.push("client_id = ?"); params.push(clientId); }
+  if (clientEmail) {
+    conditions.push("LOWER(TRIM(client_email)) = ?");
+    params.push(String(clientEmail).trim().toLowerCase());
+  }
+
+  if (conditions.length) {
+    const row = await env.DB.prepare(
+      `SELECT name, email FROM crm_contacts
+       WHERE (${conditions.join(" OR ")}) AND email IS NOT NULL AND TRIM(email) != ''
+       ORDER BY is_primary DESC, updated_at DESC
+       LIMIT 1`,
+    )
+      .bind(...params)
+      .first();
+    if (row?.email) {
+      return { email: row.email, name: row.name || "", source: "contact" };
+    }
+  }
+
+  return fallback ? { email: fallback, name: "", source: "record" } : null;
+}
+
 async function handleLeadQuestionnaire(request, env, leadId, method, action) {
   const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
     .bind(leadId)
@@ -4194,6 +4320,17 @@ async function sendBrevoEmail(env, { to, toName, subject, htmlContent, attachmen
 
 async function handleSendQuestionnaire(request, env, lead, token) {
   const url = questionnaireUrl(request, token);
+  const recipient = await resolveContactEmail(env, {
+    leadId: lead.id,
+    clientEmail: lead.email,
+    fallback: lead.email,
+  });
+  if (!recipient) {
+    throw new RequestError(
+      "No email for this lead. Add one to the lead or a CRM contact.",
+      400,
+    );
+  }
   const bodyHtml = `
     <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(lead.contact_name || lead.company_name || "there")},</p>
     <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Thank you for your interest in working with us. So that we can quote accurately and build what you actually need, please answer a few questions about your project. It takes about five minutes.</p>
@@ -4212,8 +4349,8 @@ async function handleSendQuestionnaire(request, env, lead, token) {
   `;
 
   await sendBrevoEmail(env, {
-    to: lead.email,
-    toName: lead.contact_name || lead.company_name || "",
+    to: recipient.email,
+    toName: recipient.name || lead.contact_name || lead.company_name || "",
     subject: "A few questions about your project — Beplugged Tech",
     htmlContent: emailShell({
       label: "Project Questionnaire",
@@ -4227,10 +4364,10 @@ async function handleSendQuestionnaire(request, env, lead, token) {
     entity_type: "lead",
     entity_id: lead.id,
     entity_number: lead.company_name,
-    details: { recipient: lead.email },
+    details: { recipient: recipient.email, via: recipient.source },
   });
 
-  return json({ success: true, url });
+  return json({ success: true, url, recipient: recipient.email });
 }
 
 // Acceptance is the moment a prospect becomes a job. This is where the
@@ -5390,21 +5527,47 @@ function projectProgress(milestones, tasks) {
 }
 
 async function loadProjectPlan(env, projectId) {
-  const milestones = await env.DB.prepare(
-    "SELECT * FROM project_milestones WHERE project_id = ? ORDER BY position ASC, created_at ASC",
-  )
-    .bind(projectId)
-    .all();
-  const tasks = await env.DB.prepare(
-    "SELECT * FROM milestone_tasks WHERE project_id = ? ORDER BY position ASC, created_at ASC",
-  )
-    .bind(projectId)
-    .all();
+  const [milestones, tasks, risks] = await Promise.all([
+    env.DB.prepare(
+      "SELECT * FROM project_milestones WHERE project_id = ? ORDER BY position ASC, created_at ASC",
+    )
+      .bind(projectId)
+      .all(),
+    env.DB.prepare(
+      "SELECT * FROM milestone_tasks WHERE project_id = ? ORDER BY position ASC, created_at ASC",
+    )
+      .bind(projectId)
+      .all(),
+    env.DB.prepare(
+      `SELECT * FROM project_risks
+       WHERE project_id = ?
+       ORDER BY
+         CASE status
+           WHEN 'open' THEN 1
+           WHEN 'monitoring' THEN 2
+           WHEN 'mitigated' THEN 3
+           WHEN 'closed' THEN 4
+           ELSE 5
+         END,
+         CASE risk_level
+           WHEN 'critical' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'medium' THEN 3
+           WHEN 'low' THEN 4
+           ELSE 5
+         END,
+         COALESCE(due_date, '9999-12-31') ASC,
+         updated_at DESC`,
+    )
+      .bind(projectId)
+      .all(),
+  ]);
   const ms = milestones.results || [];
   const ts = tasks.results || [];
   return {
     milestones: ms.map((m) => ({ ...m, ...milestoneProgress(m, ts), tasks: ts.filter((t) => t.milestone_id === m.id) })),
     tasks: ts,
+    risks: risks.results || [],
     percent: projectProgress(ms, ts),
   };
 }
@@ -5446,6 +5609,13 @@ const REVIEW_QUESTIONS = [
 ];
 
 async function projectClientEmail(env, project) {
+  // A named contact first, so feedback reaches the person who dealt with us.
+  const contact = await resolveContactEmail(env, {
+    clientId: project.client_id,
+    fallback: "",
+  });
+  if (contact?.email) return contact.email;
+
   if (project.client_id) {
     const client = await env.DB.prepare("SELECT email FROM clients WHERE id = ?")
       .bind(project.client_id)
@@ -5819,6 +5989,178 @@ async function handlePublicProgress(env, token) {
   });
 }
 
+async function requireProject(env, projectId) {
+  const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+    .bind(projectId)
+    .first();
+  if (!project) {
+    throw new RequestError("Project not found", 404);
+  }
+  return project;
+}
+
+function projectRiskSelect() {
+  return `SELECT r.*,
+                 COALESCE(p.name, '') as project_name,
+                 COALESCE(p.project_code, '') as project_code,
+                 COALESCE(p.client_name, '') as client_name
+          FROM project_risks r
+          LEFT JOIN projects p ON p.id = r.project_id`;
+}
+
+async function handleProjectRisks(request, env, path, method) {
+  await ensureSchema(env);
+  const riskId = path.split("/")[4];
+
+  if (method === "GET" && !riskId) {
+    const url = new URL(request.url);
+    const projectId = trimText(url.searchParams.get("project_id"), "Project", {
+      maxLength: 160,
+    });
+    const where = projectId ? "WHERE r.project_id = ?" : "";
+    const statement = env.DB.prepare(
+      `${projectRiskSelect()}
+       ${where}
+       ORDER BY
+         CASE r.status
+           WHEN 'open' THEN 1
+           WHEN 'monitoring' THEN 2
+           WHEN 'mitigated' THEN 3
+           WHEN 'closed' THEN 4
+           ELSE 5
+         END,
+         CASE r.risk_level
+           WHEN 'critical' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'medium' THEN 3
+           WHEN 'low' THEN 4
+           ELSE 5
+         END,
+         COALESCE(r.due_date, '9999-12-31') ASC,
+         r.updated_at DESC
+       LIMIT 200`,
+    );
+    const rows = projectId ? await statement.bind(projectId).all() : await statement.all();
+    return json(rows.results || []);
+  }
+
+  if (method === "GET" && riskId) {
+    const risk = await env.DB.prepare(`${projectRiskSelect()} WHERE r.id = ?`)
+      .bind(riskId)
+      .first();
+    return json(
+      risk || { error: "Project risk not found" },
+      risk ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !riskId) {
+    const data = normalizeProjectRiskPayload(await parseRequestJson(request));
+    const project = await requireProject(env, data.project_id);
+    const id = createEntityId("risk");
+    await env.DB.prepare(
+      `INSERT INTO project_risks (
+         id, project_id, title, risk_level, status, owner, due_date,
+         impact, mitigation, contingency, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.project_id,
+        data.title,
+        data.risk_level,
+        data.status,
+        data.owner,
+        data.due_date,
+        data.impact,
+        data.mitigation,
+        data.contingency,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "project_risk",
+      entity_id: id,
+      entity_number: data.title,
+      details: {
+        project_id: data.project_id,
+        project_code: project.project_code,
+        risk_level: data.risk_level,
+        status: data.status,
+      },
+    });
+    return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && riskId) {
+    const existing = await env.DB.prepare("SELECT * FROM project_risks WHERE id = ?")
+      .bind(riskId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Project risk not found", 404);
+    }
+    const raw = await parseRequestJson(request);
+    const data = normalizeProjectRiskPayload({ ...existing, ...raw });
+    await requireProject(env, data.project_id);
+    await env.DB.prepare(
+      `UPDATE project_risks SET
+         project_id = ?, title = ?, risk_level = ?, status = ?, owner = ?,
+         due_date = ?, impact = ?, mitigation = ?, contingency = ?,
+         notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.project_id,
+        data.title,
+        data.risk_level,
+        data.status,
+        data.owner,
+        data.due_date,
+        data.impact,
+        data.mitigation,
+        data.contingency,
+        data.notes,
+        riskId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "project_risk",
+      entity_id: riskId,
+      entity_number: data.title,
+      details: {
+        previous_status: existing.status,
+        status: data.status,
+        risk_level: data.risk_level,
+      },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && riskId) {
+    const existing = await env.DB.prepare("SELECT * FROM project_risks WHERE id = ?")
+      .bind(riskId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Project risk not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM project_risks WHERE id = ?")
+      .bind(riskId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "project_risk",
+      entity_id: riskId,
+      entity_number: existing.title,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
 async function handleMilestones(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
@@ -6112,7 +6454,10 @@ async function handleProjects(request, env, path, method) {
               COALESCE(f.invoice_count, 0) AS invoice_count,
               COALESCE(f.invoiced_cents, 0) AS invoiced_cents,
               COALESCE(f.paid_cents, 0) AS paid_cents,
-              MAX(COALESCE(f.invoiced_cents, 0) - COALESCE(f.paid_cents, 0), 0) AS outstanding_cents
+              MAX(COALESCE(f.invoiced_cents, 0) - COALESCE(f.paid_cents, 0), 0) AS outstanding_cents,
+              COALESCE(r.risk_count, 0) AS risk_count,
+              COALESCE(r.open_risk_count, 0) AS open_risk_count,
+              COALESCE(r.high_risk_count, 0) AS high_risk_count
        FROM projects p
        LEFT JOIN (
          SELECT i.project_id,
@@ -6128,6 +6473,14 @@ async function handleProjects(request, env, path, method) {
          WHERE i.project_id IS NOT NULL AND i.project_id != '' AND i.status != 'draft'
          GROUP BY i.project_id
        ) f ON f.project_id = p.id
+       LEFT JOIN (
+         SELECT project_id,
+                COUNT(*) AS risk_count,
+                SUM(CASE WHEN status NOT IN ('mitigated', 'closed') THEN 1 ELSE 0 END) AS open_risk_count,
+                SUM(CASE WHEN status NOT IN ('mitigated', 'closed') AND risk_level IN ('high', 'critical') THEN 1 ELSE 0 END) AS high_risk_count
+         FROM project_risks
+         GROUP BY project_id
+       ) r ON r.project_id = p.id
        ORDER BY
          CASE p.status
            WHEN 'active' THEN 1
@@ -6147,6 +6500,9 @@ async function handleProjects(request, env, path, method) {
         invoiced: centsToAmount(Number(row.invoiced_cents || 0)),
         paid: centsToAmount(Number(row.paid_cents || 0)),
         outstanding: centsToAmount(Number(row.outstanding_cents || 0)),
+        risk_count: Number(row.risk_count || 0),
+        open_risk_count: Number(row.open_risk_count || 0),
+        high_risk_count: Number(row.high_risk_count || 0),
       })),
     );
   }

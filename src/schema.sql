@@ -350,6 +350,23 @@ CREATE TABLE IF NOT EXISTS milestone_tasks (
     FOREIGN KEY (milestone_id) REFERENCES project_milestones (id)
 );
 
+CREATE TABLE IF NOT EXISTS project_risks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    risk_level TEXT NOT NULL DEFAULT 'medium' CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'monitoring', 'mitigated', 'closed')),
+    owner TEXT,
+    due_date DATE,
+    impact TEXT,
+    mitigation TEXT,
+    contingency TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects (id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 
@@ -430,3 +447,9 @@ CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (pare
 CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones (project_id);
 
 CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON milestone_tasks (milestone_id);
+
+CREATE INDEX IF NOT EXISTS idx_project_risks_project ON project_risks (project_id);
+
+CREATE INDEX IF NOT EXISTS idx_project_risks_status ON project_risks (status);
+
+CREATE INDEX IF NOT EXISTS idx_project_risks_level ON project_risks (risk_level);
