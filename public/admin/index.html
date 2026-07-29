@@ -510,24 +510,100 @@
       .jr-detail { font-size: 0.79rem; color: var(--muted); }
       .jr-when { flex: none; font-size: 0.76rem; color: var(--muted); padding-top: 0.15rem; }
 
-      .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.3rem; }
-      .pl-step {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem;
-        flex: 1 1 90px; min-width: 90px;
-        background: #fff; border: 1px solid var(--border); border-radius: 0.375rem;
-        padding: 0.55rem 0.65rem; cursor: pointer; font: inherit; text-align: left;
+      /* A single continuous rail rather than a row of cards: the process is
+         one path, and the eye should follow it rather than count boxes. */
+      .rail-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
       }
-      .pl-step:hover { background: var(--surface); border-color: rgba(44,45,63,.2); }
-      .pl-step.has { border-left: 3px solid var(--primary); }
-      .pl-n {
-        font-size: 0.64rem; font-weight: 700; letter-spacing: .06em;
+
+      .rail-note {
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
         color: var(--muted);
       }
-      .pl-label { font-size: 0.8rem; font-weight: 600; color: var(--dark); }
-      .pl-count { font-size: 1.15rem; font-weight: 600; color: var(--muted); line-height: 1.2; }
-      .pl-step.has .pl-count { color: var(--primary); }
-      .pl-arrow { align-self: center; color: rgba(44,45,63,.28); font-size: 0.8rem; }
-      @media (max-width: 640px) { .pl-arrow { display: none; } .pl-step { flex-basis: 30%; } }
+
+      .rail-wrap {
+        padding: 1.35rem 1.15rem 1.15rem;
+        overflow-x: auto;
+      }
+
+      .rail {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        min-width: 520px;
+      }
+
+      .stage {
+        flex: 1;
+        display: block;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+
+      /* The track is the rail itself. Segments butt together, so the row reads
+         as one line of travel; the fill is what marks where work sits. */
+      .stage-track {
+        display: block;
+        height: 3px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .stage:first-child .stage-track { border-radius: 2px 0 0 2px; }
+      .stage:last-child .stage-track { border-radius: 0 2px 2px 0; }
+
+      .stage-track i {
+        display: block;
+        height: 100%;
+        background: var(--primary);
+        transition: width 0.35s ease;
+      }
+
+      .stage-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.4rem;
+        padding: 0.55rem 0.6rem 0 0;
+      }
+
+      .stage-name {
+        font-size: 0.73rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .stage.live .stage-name { color: var(--dark); }
+
+      /* The count is subordinate: the stage names are the shape of the
+         process, the numbers are only where it happens to be loaded. */
+      .stage-n {
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .stage:hover .stage-name { color: var(--dark); }
+      .stage:hover .stage-track { background: rgba(44, 45, 63, 0.18); }
+      .stage:hover .stage-track i { background: var(--primary-dark); }
+
+      @media (max-width: 700px) {
+        .rail { min-width: 620px; }
+      }
 
       .next-action {
         display: flex;
@@ -1355,13 +1431,12 @@
           <h2>Dashboard</h2>
 
           <div class="card" style="margin-bottom: 1.25rem;">
-            <div class="card-header">How work moves through</div>
-            <div style="padding: 1rem 1.15rem;">
-              <div class="pipeline" id="pipeline"></div>
-              <p style="margin-top:0.85rem;font-size:0.79rem;color:var(--muted);">
-                Work moves left to right. The number is how many are sitting at
-                that stage now — click one to go there.
-              </p>
+            <div class="card-header rail-header">
+              <span>How work moves through</span>
+              <span class="rail-note" id="rail-note"></span>
+            </div>
+            <div class="rail-wrap">
+              <div class="rail" id="pipeline"></div>
             </div>
           </div>
 
@@ -4739,15 +4814,24 @@
       function renderPipeline(counts) {
         const el = document.getElementById("pipeline");
         if (!el) return;
-        el.innerHTML = PIPELINE.map((st) => {
+        const total = PIPELINE.reduce((n, st) => n + Number(counts[st.key] || 0), 0);
+        el.innerHTML = PIPELINE.map((st, i) => {
           const n = Number(counts[st.key] || 0);
           return `
-            <button class="pl-step ${n ? "has" : ""}" data-goto-tab="${escapeAttr(st.tab)}" title="${escapeAttr(st.hint)}">
-              <span class="pl-n">${st.n}</span>
-              <span class="pl-label">${escapeHtml(st.label)}</span>
-              <span class="pl-count">${n}</span>
+            <button class="stage${n ? " live" : ""}" data-goto-tab="${escapeAttr(st.tab)}" title="${escapeAttr(st.hint)}">
+              <span class="stage-track"><i style="width:${n ? "100%" : "0%"}"></i></span>
+              <span class="stage-head">
+                <span class="stage-name">${escapeHtml(st.label)}</span>
+                <span class="stage-n">${n || ""}</span>
+              </span>
             </button>`;
-        }).join('<span class="pl-arrow">→</span>');
+        }).join("");
+        const note = document.getElementById("rail-note");
+        if (note) {
+          note.textContent = total
+            ? `${total} in progress`
+            : "Nothing in progress";
+        }
       }
 
       async function loadNextActions() {
