@@ -3356,8 +3356,15 @@ async function handlePublicAgreement(request, env, token, method) {
     .bind(token)
     .first();
 
-  // Unknown and expired look the same, so the endpoint cannot be probed.
-  if (!row || (row.expires_at && new Date(row.expires_at) < new Date())) {
+  // Expiry limits how long there is to sign, not how long a completed record
+  // can be read. Once signed the link stays valid, since it is the client's
+  // copy. Unknown and expired look the same, so the endpoint cannot be probed.
+  const expired =
+    row &&
+    row.status !== "signed" &&
+    row.expires_at &&
+    new Date(row.expires_at) < new Date();
+  if (!row || expired) {
     return json({ error: "This link is no longer valid" }, { status: 404 });
   }
 
@@ -3420,7 +3427,11 @@ async function handlePublicAgreement(request, env, token, method) {
 
   // Both parties get a copy. A failure here must not undo a valid signature.
   try {
-    await sendSignedCopies(env, { ...row, signed_name: signedName, signed_at: signedAt, signed_ip: ip });
+    await sendSignedCopies(
+      env,
+      { ...row, signed_name: signedName, signed_at: signedAt, signed_ip: ip },
+      agreementUrl(request, row.token),
+    );
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -3434,7 +3445,103 @@ async function handlePublicAgreement(request, env, token, method) {
   return json({ success: true, signed_name: signedName, signed_at: signedAt });
 }
 
-async function sendSignedCopies(env, row) {
+// Markdown to email-safe HTML. Inline styles only, since email clients drop
+// stylesheets, and the source is escaped before parsing so a stored document
+// cannot inject markup.
+function markdownToEmailHtml(src) {
+  const lines = escapeHtml(src).replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+  const inline = (t) =>
+    t
+      .replace(/`([^`]+)`/g, '<code style="font-family:monospace;font-size:12px;">$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      .replace(
+        /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+        '<a href="$2" style="color:#F05023;">$1</a>',
+      );
+  const cells = (row) =>
+    row.replace(/^\||\|$/g, "").split("|").map((x) => x.trim());
+  const H = {
+    1: "font-size:18px;margin:18px 0 8px;",
+    2: "font-size:15px;margin:16px 0 7px;",
+    3: "font-size:14px;margin:14px 0 6px;",
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    if (/^```/.test(line)) {
+      const buf = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      out.push(`<pre style="background:#f4f4f7;border:1px solid #eeeeee;border-radius:4px;padding:10px 12px;font-size:12px;overflow-x:auto;">${buf.join("\n")}</pre>`);
+      continue;
+    }
+    if (/^\s*(---|===)\s*$/.test(line)) {
+      out.push('<hr style="border:0;border-top:1px solid #eeeeee;margin:18px 0;">');
+      i++; continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const lvl = Math.min(h[1].length, 3);
+      out.push(`<div style="font-weight:bold;color:#2C2D3F;${H[lvl]}">${inline(h[2])}</div>`);
+      i++; continue;
+    }
+    if (
+      /^\s*\|.*\|\s*$/.test(line) &&
+      i + 1 < lines.length &&
+      /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])
+    ) {
+      const head = cells(line.trim());
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(cells(lines[i++].trim()));
+      out.push(
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 14px;"><thead><tr>${head
+          .map((x) => `<th align="left" style="border:1px solid #eeeeee;background:#fafafb;padding:7px 10px;font-size:12px;">${inline(x)}</th>`)
+          .join("")}</tr></thead><tbody>${rows
+          .map((r) => `<tr>${r.map((x) => `<td style="border:1px solid #eeeeee;padding:7px 10px;font-size:12px;vertical-align:top;">${inline(x)}</td>`).join("")}</tr>`)
+          .join("")}</tbody></table>`,
+      );
+      continue;
+    }
+    if (/^\s*&gt;\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*&gt;\s?/, ""));
+      out.push(`<table role="presentation" width="100%" style="margin:0 0 14px;"><tr><td style="background:#fafafb;border-left:3px solid #F05023;padding:10px 14px;font-size:13px;color:#555555;">${inline(buf.join(" "))}</td></tr></table>`);
+      continue;
+    }
+    if (/^\s*(?:[-*]|\d+\.)\s+/.test(line)) {
+      const ordered = /^\s*\d+\./.test(line);
+      const items = [];
+      while (i < lines.length && /^\s*(?:[-*]|\d+\.)\s+/.test(lines[i])) {
+        items.push(
+          inline(
+            lines[i++]
+              .replace(/^\s*(?:[-*]|\d+\.)\s+/, "")
+              .replace(/^\[( |x)\]\s*/, (m, ch) => (ch === "x" ? "&#9745; " : "&#9744; ")),
+          ),
+        );
+      }
+      const tag = ordered ? "ol" : "ul";
+      out.push(`<${tag} style="margin:0 0 14px 18px;padding:0;font-size:13px;color:#2C2D3F;">${items.map((x) => `<li style="margin-bottom:5px;">${x}</li>`).join("")}</${tag}>`);
+      continue;
+    }
+    const buf = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,6}\s|\s*\||\s*&gt;|```|\s*(?:[-*]|\d+\.)\s)/.test(lines[i])
+    ) {
+      buf.push(lines[i++]);
+    }
+    out.push(`<p style="margin:0 0 12px;font-size:13px;line-height:1.8;color:#2C2D3F;">${inline(buf.join(" "))}</p>`);
+  }
+  return out.join("\n");
+}
+
+async function sendSignedCopies(env, row, viewUrl) {
   const when = new Date(row.signed_at).toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
@@ -3460,7 +3567,7 @@ async function sendSignedCopies(env, row) {
   const documentBlock = `
     ${emailSectionLabel(isAddendum ? "Addendum" : "Agreed scope")}
     <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;margin:0 0 22px;">
-      <tr><td style="padding:16px 18px;font-size:13px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(row.body)}</td></tr>
+      <tr><td style="padding:16px 18px;">${markdownToEmailHtml(row.body)}</td></tr>
     </table>`;
 
   await sendBrevoEmail(env, {
@@ -3472,8 +3579,9 @@ async function sendSignedCopies(env, row) {
       accent: "#1f8a52",
       bodyHtml: `
         <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Thank you ${escapeHtml(row.signed_name)},</p>
-        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">This is your copy of what was confirmed. Please keep it for your records.</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">This is your copy of what was confirmed. Please keep it for your records. The full document is below, and stays available at the link.</p>
         ${signatureBlock}
+        ${viewUrl ? emailButton(viewUrl, "View online", "#1f8a52") : ""}
         <div style="height:22px;"></div>
         ${documentBlock}`,
     }),
