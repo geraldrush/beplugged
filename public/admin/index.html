@@ -3247,6 +3247,50 @@
         anything_else: "Anything else",
       };
 
+      // Drafts an agreement from a requirement. The requirement is the working
+      // record; this turns it into client-facing wording to be signed.
+      function scopeFromRequirement(req) {
+        const section = (heading, text) => {
+          const body = String(text || "").trim();
+          return body ? `## ${heading}\n\n${body}\n\n` : "";
+        };
+        return (
+          section("What we will build", req.goals) +
+          section("Scope", req.scope) +
+          section("Constraints and assumptions", req.constraints) +
+          section("Notes", req.notes) +
+          "## Not included\n\n- \n\n## Timeline\n\n- \n"
+        ).trim();
+      }
+
+      async function createAgreementFromRequirement(id) {
+        const req = await apiCall("/admin/requirements/" + id);
+        if (!req) return;
+
+        // Requirements carry a client name but no email, so look one up.
+        let email = "";
+        const clients = await apiCall("/admin/clients");
+        if (Array.isArray(clients) && req.client_name) {
+          const match = clients.find(
+            (c) =>
+              String(c.name || "").trim().toLowerCase() ===
+              String(req.client_name).trim().toLowerCase(),
+          );
+          if (match) email = match.email || "";
+        }
+
+        showTab("agreements");
+        await openModuleModal("agreements", null, {
+          title: req.title ? `${req.title} — scope confirmation` : "Scope confirmation",
+          client_name: req.client_name || "",
+          client_email: email,
+          body: scopeFromRequirement(req),
+        });
+        if (!email) {
+          showAlert("Add the client email and pick a project before saving", "danger");
+        }
+      }
+
       function renderAgreementRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="6" class="text-center">No agreements yet</td></tr>`;
@@ -4084,6 +4128,12 @@
           return;
         }
 
+        const reqAgr = event.target.closest("[data-req-agreement]");
+        if (reqAgr) {
+          createAgreementFromRequirement(reqAgr.dataset.reqAgreement);
+          return;
+        }
+
         const agrView = event.target.closest("[data-agr-view]");
         if (agrView) { viewAgreement(agrView.dataset.agrView); return; }
 
@@ -4579,7 +4629,9 @@
             <td><span class="badge status-${safeStatusClass(requirement.status)}">${displayStatus(requirement.status)}</span></td>
             <td>${displayPlain(requirement.owner)}</td>
             <td>${displayDate(requirement.due_date)}</td>
-            <td>${actionButtons("requirements", requirement.id)}</td>
+            <td><div class="action-buttons">
+              <button class="btn btn-sm btn-primary" data-req-agreement="${escapeAttr(requirement.id)}">Create agreement</button>
+            </div>${actionButtons("requirements", requirement.id)}</td>
           </tr>
         `,
           )
@@ -5031,14 +5083,18 @@
         `;
       }
 
-      async function openModuleModal(moduleName, id = null) {
+      async function openModuleModal(moduleName, id = null, seed = null) {
         const config = MODULES[moduleName];
         if (!config) {
           return;
         }
         currentModuleName = moduleName;
         currentModuleRecordId = id;
-        const record = id ? await apiCall(moduleRecordEndpoint(config, id)) : {};
+        // seed prefills a new record, e.g. an agreement drafted from a
+        // requirement, without turning it into an edit of something existing.
+        const record = id
+          ? await apiCall(moduleRecordEndpoint(config, id))
+          : seed || {};
         if (!record) {
           return;
         }
