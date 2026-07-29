@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Document reference** | SOP-FIN-002 |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Draft |
 | **Category** | Finance |
 | **Owner** | Gerald Rushwaya |
@@ -16,13 +16,13 @@
 
 ## 1. Purpose
 
-To define how Beplugged Tech prices work and issues quotes, so that prices are built on a consistent method rather than instinct, every quote states plainly what is and is not included, and an accepted quote can be turned into an invoice without renegotiation.
+To define how Beplugged Tech prices work and issues quotes, so that prices are built on a consistent method rather than instinct, every quote states plainly what is and is not included, and an accepted quote becomes a project without renegotiation.
 
 ## 2. Scope
 
 Applies to every quote issued for website and web application work.
 
-**In scope:** establishing the pricing basis, building the price, issuing the quote, tracking the outcome, and converting an accepted quote into an invoice.
+**In scope:** establishing the pricing basis, building the price, issuing the quote, recording the outcome, and turning an accepted quote into a project.
 
 **Out of scope:** capturing requirements (SOP-CLI-001) and collecting payment (SOP-FIN-001).
 
@@ -118,7 +118,7 @@ This is the last point at which the quote can be changed. Once issued it is lock
 ### 6.3 Issue and share
 
 1. Select **Issue**. The status moves to **sent** and the quote becomes available at its public link, with a QR code.
-2. **Send the link to the client yourself.** Unlike invoices and receipts, the system does not email quotes — see §9. Copy the public link into an email or WhatsApp message.
+2. Select **Send**. The client is emailed the quote with a link to view it, and a copy is retained at `info@beplugged.co.za`.
 3. Record in the lead notes that the quote was issued and when.
 4. Move the lead to stage **Proposal** and set its follow-up date to the quote expiry date.
 
@@ -145,22 +145,21 @@ Where a client goes quiet after viewing, the usual cause is price or a competing
 
 ### 6.6 Record the outcome
 
-Because the system does not currently track quote acceptance (§9), the outcome is recorded **on the lead**, not on the quote:
+The client accepts or declines on the quote itself, which records their name, the time and the address. Update the lead to match:
 
 - **Accepted** — lead stage **Won**. Note the quote number and accepted value in the lead notes.
 - **Declined** — lead stage **Lost**, with the reason.
 
-Obtain acceptance in writing before starting work. Email or WhatsApp is sufficient; verbal agreement is not.
+Acceptance recorded on the quote is the written agreement. Do not start work on a verbal yes with the quote still showing **viewed**.
 
-### 6.7 Convert to an invoice
+### 6.7 Convert to a project
 
-There is no automatic conversion (§9). On acceptance:
+Select **Start project** on the accepted quote. This creates the project, optionally raises the deposit as a draft invoice, and links the quote, project and invoice to each other. Then:
 
-1. Create a new invoice per SOP-FIN-001 §6.1.
-2. Copy the line items from the accepted quote exactly. Any difference must be one the client has agreed to.
-3. Reference the quote number in the invoice notes, so the two documents can be tied together later.
-4. Invoice the deposit if one applies (§10), or the full amount for smaller projects.
-5. Create the project record and move it to **planning**.
+1. Name the project for the work rather than the document. It is what the client sees on their progress link.
+2. Choose the deposit percentage, or none where the full amount is invoiced on completion.
+3. Review the draft deposit invoice before sending it (SOP-FIN-001 §6.2).
+4. Where further invoices are needed, raise them against the same project so the totals roll up.
 
 ## 7. Discounts
 
@@ -180,13 +179,21 @@ An issued quote cannot be edited. Where the price or scope changes:
 
 Do not delete superseded quotes. The system permits deletion only while a quote is in draft, which preserves this history by design.
 
-## 9. Known system limitations
+## 9. What the system records
 
-Two gaps to be aware of. Both have workarounds above; both are candidates for improvement.
+Sending, acceptance and conversion are all handled in the system, so the
+commercial history of a quote does not depend on anyone's memory.
 
-**Quotes are not emailed by the system.** Invoices and receipts are sent through Brevo, with a copy retained at `info@beplugged.co.za`. Quotes have no equivalent — the link must be shared manually, and no file copy is retained automatically. Until this changes, send quotes from an account whose sent items are retained.
+**Quotes are emailed** through Brevo with a copy retained at
+`info@beplugged.co.za`, as invoices and receipts are.
 
-**Quote acceptance is not tracked on the quote.** The statuses `accepted`, `rejected`, and `converted_to_invoice` exist in the database but nothing sets them, so a quote's status stops at **viewed**. Acceptance is therefore recorded on the lead instead (§6.6). This works, but it means quote win-rate cannot be reported directly from the quotes table.
+**Acceptance is recorded on the quote**: who accepted it, when, and from
+what address. Declining records the reason where the client gives one. An
+expired quote cannot be accepted, and neither decision can be reversed by
+the client. Win rate is therefore answerable from the quotes themselves.
+
+**An accepted quote becomes a project** through Start project, which also
+raises the deposit invoice where one applies and links the three records.
 
 ## 10. Items to confirm before approval
 
@@ -212,3 +219,4 @@ Proposed defaults. Confirm, then remove this section at version 1.1.
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Initial draft |
+| 1.1 | 2026-07-29 | Gerald Rushwaya | Quote sending, acceptance and conversion to a project are now handled in the system; sections 6.3, 6.6, 6.7 and 9 rewritten accordingly |

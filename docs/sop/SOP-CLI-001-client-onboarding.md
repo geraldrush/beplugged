@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Document reference** | SOP-CLI-001 |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Draft |
 | **Category** | Client |
 | **Owner** | Gerald Rushwaya |
@@ -61,9 +61,9 @@ Where Beplugged Tech operates as a single person, both roles are held by the own
 
 ### 5.2 Issue the intake questionnaire
 
-1. Send the questionnaire in Appendix A, in the channel the client used to make contact.
+1. Open the lead and select **Questionnaire**, then **Send by email**. The client receives a personal link that expires after 30 days. Appendix A is the wording, kept here so it can be sent by hand where a client prefers WhatsApp.
 2. Say how long it takes — around five minutes — and why it exists: so the quote is accurate rather than padded with guesses.
-3. Record in the lead notes that it was sent and when.
+3. The send is recorded automatically, and the answers appear against the lead once submitted.
 
 ### 5.3 Follow up
 
@@ -104,7 +104,7 @@ Write up the outcome in the lead notes the same day.
 ### 5.6 Confirm requirements — stage: Requirements
 
 1. Write the scope back to the client in plain language: pages, features, what is included, and what is explicitly excluded.
-2. Ask them to confirm in writing. Email or WhatsApp is sufficient; verbal agreement is not.
+2. Create a scope agreement from the requirement and send it for signature. The client ticks a confirmation and types their name, and the name, time, address and a fingerprint of the exact text are recorded. Verbal agreement is not sufficient, and neither is an email that could later be disputed.
 3. Record the confirmation against the lead.
 
 The exclusions matter as much as the inclusions. Most scope disputes concern something never discussed rather than something described badly.
@@ -123,8 +123,8 @@ Hand over to SOP-FIN-002. Set the lead's follow-up date to the quote expiry date
 | Record | Where | Retained |
 |---|---|---|
 | Lead, stage history, notes | Admin system (D1) | 3 years |
-| Questionnaire responses | Lead notes | 3 years |
-| Requirements confirmation | Lead notes, plus the original email or message | 3 years |
+| Questionnaire responses | Admin system (D1), against the lead | 3 years |
+| Signed scope confirmation | Admin system (D1), with a copy emailed to both parties | 5 years |
 | Enquiry emails | `info@beplugged.co.za` | 3 years |
 
 Personal information collected through this process is held only for as long as it is needed and is not shared with third parties (§8).
@@ -244,3 +244,4 @@ Timeline and budget were also lifted out of the catch-all question into their ow
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Initial draft. Questionnaire based on the existing client intake questions, extended per Appendix B. |
+| 1.1 | 2026-07-29 | Gerald Rushwaya | The questionnaire is now emailed from the system and requirements are confirmed by a signed scope agreement; sections 5.2, 5.6 and 6 updated |
