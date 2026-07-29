@@ -248,7 +248,12 @@ export default {
       }
 
       if (path.startsWith("/api/quote/")) {
-        const quoteId = path.split("/")[3];
+        const parts = path.split("/");
+        const quoteId = parts[3];
+        const quoteAction = parts[4];
+        if (method === "POST" && (quoteAction === "accept" || quoteAction === "decline")) {
+          return await handleQuoteDecision(request, env, quoteId, quoteAction);
+        }
         return await handlePublicQuoteView(quoteId, env);
       }
 
@@ -1370,6 +1375,12 @@ async function runSchemaSetup(env) {
   // invoiced and paid for never appeared as a project.
   await ensureColumn(env, "invoices", "project_id", "project_id TEXT");
   await ensureColumn(env, "quotes", "project_id", "project_id TEXT");
+  // Acceptance was never recorded: a quote's status stopped at viewed, so
+  // there was no won or lost and no way to report a rate.
+  await ensureColumn(env, "quotes", "accepted_name", "accepted_name TEXT");
+  await ensureColumn(env, "quotes", "accepted_at", "accepted_at DATETIME");
+  await ensureColumn(env, "quotes", "accepted_ip", "accepted_ip TEXT");
+  await ensureColumn(env, "quotes", "decline_reason", "decline_reason TEXT");
   await ensureColumn(env, "projects", "client_id", "client_id TEXT");
   await ensureColumn(env, "clients", "lead_id", "lead_id TEXT");
   await ensureColumn(env, "quotes", "lead_id", "lead_id TEXT");
@@ -6332,7 +6343,10 @@ async function handleQuotes(request, env, path, method) {
 
   if (method === "GET" && !quoteId) {
     const result = await env.DB.prepare(
-      "SELECT id, quote_number, lead_id, client_id, client_name, client_email, client_address, amount, tax, status, created_at, expiry_date FROM quotes ORDER BY created_at DESC LIMIT 100",
+      `SELECT id, quote_number, lead_id, client_id, project_id, client_name,
+              client_email, client_address, amount, tax, status, created_at,
+              expiry_date, accepted_name, accepted_at, decline_reason
+       FROM quotes ORDER BY created_at DESC LIMIT 100`,
     ).all();
     return json(result.results);
   }
@@ -7090,6 +7104,125 @@ async function handlePublicInvoiceView(invoiceId, env) {
     total_due: total,
     total_paid: paid,
     balance_due: balance,
+  });
+}
+
+// The client accepting or declining is the moment a prospect becomes a job,
+// so it is recorded with who and when rather than left to memory.
+async function handleQuoteDecision(request, env, quoteId, decision) {
+  await ensureOperationalSchema(env);
+  const quote = await env.DB.prepare("SELECT * FROM quotes WHERE id = ?")
+    .bind(quoteId)
+    .first();
+  if (!quote) {
+    return json({ error: "Quote not found" }, { status: 404 });
+  }
+  if (quote.status === "draft") {
+    return json({ error: "This quote is not available" }, { status: 404 });
+  }
+  if (quote.status === "accepted" || quote.status === "converted_to_invoice") {
+    return json({ error: "This quote has already been accepted" }, { status: 409 });
+  }
+  if (quote.status === "rejected") {
+    return json({ error: "This quote has already been declined" }, { status: 409 });
+  }
+  if (quote.expiry_date && new Date(quote.expiry_date) < new Date(new Date().toDateString())) {
+    return json(
+      { error: "This quote has expired. Please contact us for a new one." },
+      { status: 409 },
+    );
+  }
+
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `q:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const body = await parseOptionalJson(request);
+  const ip = request.headers.get("CF-Connecting-IP") || "";
+  const now = new Date().toISOString();
+
+  if (decision === "decline") {
+    const reason = trimText(body?.reason, "Reason", { maxLength: 1000 });
+    await env.DB.prepare(
+      "UPDATE quotes SET status = 'rejected', decline_reason = ? WHERE id = ? AND status IN ('sent', 'viewed')",
+    )
+      .bind(reason, quoteId)
+      .run();
+    await recordAudit(env, {
+      actor: "client",
+      action: "declined",
+      entity_type: "quote",
+      entity_id: quoteId,
+      entity_number: quote.quote_number,
+      details: { reason, ip },
+    });
+    return json({ success: true, status: "rejected" });
+  }
+
+  const name = trimText(body?.accepted_name, "Full name", {
+    required: true,
+    maxLength: 200,
+  });
+  if (name.length < 3) {
+    throw new RequestError("Please enter your full name");
+  }
+
+  const result = await env.DB.prepare(
+    `UPDATE quotes SET status = 'accepted', accepted_name = ?, accepted_at = ?, accepted_ip = ?
+     WHERE id = ? AND status IN ('sent', 'viewed')`,
+  )
+    .bind(name, now, ip, quoteId)
+    .run();
+  if (Number(result?.meta?.changes || 0) !== 1) {
+    return json({ error: "This quote can no longer be accepted" }, { status: 409 });
+  }
+
+  await recordAudit(env, {
+    actor: "client",
+    action: "accepted",
+    entity_type: "quote",
+    entity_id: quoteId,
+    entity_number: quote.quote_number,
+    details: { accepted_name: name, ip },
+  });
+
+  try {
+    await notifyQuoteAccepted(env, { ...quote, accepted_name: name, accepted_at: now });
+  } catch (error) {
+    console.error(
+      JSON.stringify({ message: "quote_accepted_notify_failed", quote_id: quoteId, error: String(error?.message || error) }),
+    );
+  }
+
+  return json({ success: true, status: "accepted", accepted_name: name, accepted_at: now });
+}
+
+async function notifyQuoteAccepted(env, quote) {
+  const recipient = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+  if (!recipient) return;
+  const total = Number(quote.amount || 0) + Number(quote.tax || 0);
+  await sendBrevoEmail(env, {
+    to: recipient,
+    toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    subject: `Quote accepted — ${quote.client_name || quote.quote_number}`,
+    htmlContent: emailShell({
+      label: "Quote Accepted",
+      accent: "#1f8a52",
+      bodyHtml: `
+        <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(quote.client_name || "A client")}</strong> has accepted ${escapeHtml(quote.quote_number)}.</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Accepted by ${escapeHtml(quote.accepted_name)}.</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eefaf2;border-radius:8px;margin:0 0 24px;">
+          <tr><td style="padding:20px 24px;">
+            <div style="font-size:11px;color:#2f7d55;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Accepted Value</div>
+            <div style="font-size:30px;font-weight:bold;color:#1f8a52;margin-top:6px;">${formatMoney(total)}</div>
+          </td></tr>
+        </table>
+        <p style="margin:0;font-size:13px;color:#7a7a80;line-height:1.7;">Next step: create the project and invoice the deposit.</p>`,
+    }),
   });
 }
 

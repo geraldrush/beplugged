@@ -178,6 +178,29 @@
       transition: all 0.3s;
     }
 
+    .decision {
+      margin: 1.5rem 0;
+      padding: 1.15rem 1.25rem;
+      border: 1px solid #e5e6ea;
+      border-left: 3px solid #f05023;
+      border-radius: 0.375rem;
+      background: #fff;
+    }
+    .decision.decided { border-left-color: #1e8750; background: #f4fbf7; }
+    .decision.declined { border-left-color: #8a8a92; background: #fafafb; }
+    .decision .sub { color: #6b6b76; font-size: 0.85rem; margin-top: 0.2rem; }
+    .decision input {
+      width: 100%; max-width: 340px; margin-top: 0.9rem;
+      border: 1px solid #e5e6ea; border-radius: 0.3rem;
+      padding: 0.5rem 0.7rem; font: inherit; font-size: 0.95rem;
+    }
+    .decision input:focus { outline: none; border-color: #f05023; box-shadow: 0 0 0 0.15rem rgba(240,80,35,.15); }
+    .decision-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+    .decision-status { margin-top: 0.6rem; font-weight: 600; font-size: 0.88rem; }
+    .btn-accept { background: #1e8750; color: #fff; }
+    .btn-accept:hover { background: #176b3f; color: #fff; }
+    @media print { .decision { display: none; } }
+
     .btn-primary {
       background-color: var(--brand-primary);
       color: white;
@@ -336,6 +359,96 @@
       return escapeHtml(String(status || 'draft').replace(/_/g, ' '));
     }
 
+    // Accepting is what turns a prospect into a job, so it is captured here
+    // with a name rather than agreed by email and remembered.
+    function decisionHtml(quote) {
+      if (quote.status === 'accepted' || quote.status === 'converted_to_invoice') {
+        return `
+          <div class="decision decided" data-html2canvas-ignore="true">
+            <strong>Accepted</strong>
+            <div class="sub">${escapeHtml(quote.accepted_name || '')}${quote.accepted_at ? ' · ' + new Date(quote.accepted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+          </div>`;
+      }
+      if (quote.status === 'rejected') {
+        return `
+          <div class="decision declined" data-html2canvas-ignore="true">
+            <strong>Declined</strong>
+            <div class="sub">Contact us if this was a mistake.</div>
+          </div>`;
+      }
+      const expired = quote.expiry_date && new Date(quote.expiry_date) < new Date(new Date().toDateString());
+      if (expired) {
+        return `
+          <div class="decision declined" data-html2canvas-ignore="true">
+            <strong>This quote has expired</strong>
+            <div class="sub">Please contact us for an updated one.</div>
+          </div>`;
+      }
+      return `
+        <div class="decision" id="decision" data-html2canvas-ignore="true">
+          <strong>Happy with this quote?</strong>
+          <div class="sub">Accepting it lets us book the work in and get started.</div>
+          <input type="text" id="accept-name" placeholder="Your full name" autocomplete="name" />
+          <div class="decision-actions">
+            <button class="btn btn-accept" onclick="acceptQuote()">Accept quote</button>
+            <button class="btn btn-secondary" onclick="declineQuote()">Decline</button>
+          </div>
+          <div class="decision-status" id="decision-status" role="status" aria-live="polite"></div>
+        </div>`;
+    }
+
+    async function acceptQuote() {
+      const name = (document.getElementById('accept-name').value || '').trim();
+      const status = document.getElementById('decision-status');
+      if (name.length < 3) {
+        status.style.color = '#c0392b';
+        status.textContent = 'Please enter your full name.';
+        return;
+      }
+      status.style.color = '';
+      status.textContent = 'Sending…';
+      try {
+        const r = await fetch(`/api/quote/${encodeURIComponent(currentQuote.id)}/accept`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accepted_name: name }),
+        });
+        const b = await r.json();
+        if (!r.ok || !b.success) throw new Error(b.error || 'Could not accept');
+        document.getElementById('decision').outerHTML = `
+          <div class="decision decided">
+            <strong>Accepted — thank you</strong>
+            <div class="sub">${escapeHtml(name)}. We will be in touch to get started.</div>
+          </div>`;
+      } catch (err) {
+        status.style.color = '#c0392b';
+        status.textContent = err.message;
+      }
+    }
+
+    async function declineQuote() {
+      const reason = prompt('If you are happy to say, what made you decide against it?') || '';
+      const status = document.getElementById('decision-status');
+      status.textContent = 'Sending…';
+      try {
+        const r = await fetch(`/api/quote/${encodeURIComponent(currentQuote.id)}/decline`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+        const b = await r.json();
+        if (!r.ok || !b.success) throw new Error(b.error || 'Could not send');
+        document.getElementById('decision').outerHTML = `
+          <div class="decision declined">
+            <strong>Thank you for letting us know</strong>
+            <div class="sub">If anything changes, just get in touch.</div>
+          </div>`;
+      } catch (err) {
+        status.style.color = '#c0392b';
+        status.textContent = err.message;
+      }
+    }
+
     function displayQuote(quote) {
       currentQuote = quote;
       const url = new URL(window.location.href);
@@ -440,6 +553,8 @@
             <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${escapeHtml(quote.notes)}</p>
           </div>
         ` : ''}
+
+        ${decisionHtml(quote)}
 
         <div class="action-buttons" data-html2canvas-ignore="true">
           <button class="btn btn-secondary" onclick="window.print()">

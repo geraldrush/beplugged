@@ -7672,7 +7672,11 @@
             <td>${escapeHtml(q.quote_number)}</td>
             <td>${escapeHtml(q.client_name)}</td>
             <td>R${(Number(q.amount || 0) + Number(q.tax || 0)).toFixed(2)}</td>
-            <td><span class="badge status-${safeStatusClass(q.status)}">${displayStatus(q.status)}</span></td>
+            <td>
+                <span class="badge status-${safeStatusClass(q.status)}">${displayStatus(q.status)}</span>
+                ${q.accepted_name ? `<div style="font-size:0.78rem;color:var(--muted);">by ${escapeHtml(q.accepted_name)}${q.accepted_at ? " · " + displayDate(q.accepted_at) : ""}</div>` : ""}
+                ${q.decline_reason ? `<div style="font-size:0.78rem;color:var(--muted);">${escapeHtml(q.decline_reason)}</div>` : ""}
+              </td>
             <td>${q.expiry_date ? new Date(q.expiry_date).toLocaleDateString() : "N/A"}</td>
             <td>
               <div class="action-buttons">
