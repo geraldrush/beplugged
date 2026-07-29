@@ -109,6 +109,16 @@ const SECURITY_STATUSES = new Set([
 ]);
 const RISK_LEVELS = new Set(["low", "medium", "high", "critical"]);
 const PRIORITIES = new Set(["low", "medium", "high"]);
+const CRM_ACTIVITY_TYPES = new Set([
+  "note",
+  "call",
+  "meeting",
+  "email",
+  "whatsapp",
+  "follow_up",
+  "task",
+]);
+const CRM_ACTIVITY_STATUSES = new Set(["planned", "completed", "cancelled"]);
 
 class RequestError extends Error {
   constructor(message, status = 400) {
@@ -174,6 +184,10 @@ export default {
 
       if (path.startsWith("/api/admin/leads")) {
         return await handleLeads(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/crm")) {
+        return await handleCrm(request, env, path, method);
       }
 
       if (path.startsWith("/api/admin/requirements")) {
@@ -872,6 +886,78 @@ function normalizeClientPayload(raw) {
   };
 }
 
+function normalizeCrmRelation(raw) {
+  const leadId = trimText(raw.lead_id, "Lead id", { maxLength: 160 });
+  const clientId = trimText(raw.client_id, "Client id", { maxLength: 160 });
+  const clientEmail = normalizeOptionalEmail(raw.client_email, "Client email");
+  const clientName = trimText(raw.client_name, "Client name", { maxLength: 200 });
+  if (!leadId && !clientId && !clientEmail) {
+    throw new RequestError("Link this CRM record to a lead or client");
+  }
+  return {
+    lead_id: leadId,
+    client_id: clientId,
+    client_email: clientEmail,
+    client_name: clientName,
+  };
+}
+
+function normalizeCrmContactPayload(raw) {
+  const relation = normalizeCrmRelation(raw);
+  return {
+    ...relation,
+    name: trimText(raw.name, "Contact name", {
+      required: true,
+      maxLength: 200,
+    }),
+    email: normalizeOptionalEmail(raw.email, "Contact email"),
+    phone: trimText(raw.phone, "Contact phone", { maxLength: 100 }),
+    role: trimText(raw.role, "Contact role", { maxLength: 120 }),
+    is_primary: normalizeBoolean(raw.is_primary) ? 1 : 0,
+    notes: trimText(raw.notes, "Contact notes", { maxLength: 2000 }),
+  };
+}
+
+function normalizeCrmActivityPayload(raw) {
+  const relation = normalizeCrmRelation(raw);
+  const activityType = normalizeKey(
+    raw.activity_type,
+    "Activity type",
+    CRM_ACTIVITY_TYPES,
+    "note",
+  );
+  const defaultStatus = activityType === "note" ? "completed" : "planned";
+  const status = normalizeKey(
+    raw.status,
+    "Activity status",
+    CRM_ACTIVITY_STATUSES,
+    defaultStatus,
+  );
+  const occurredAt = normalizeDate(raw.occurred_at, "Occurred date");
+  const completedAt =
+    status === "completed"
+      ? normalizeDate(raw.completed_at, "Completed date") ||
+        occurredAt ||
+        new Date().toISOString().slice(0, 10)
+      : normalizeDate(raw.completed_at, "Completed date");
+
+  return {
+    ...relation,
+    contact_id: trimText(raw.contact_id, "Contact id", { maxLength: 160 }),
+    activity_type: activityType,
+    status,
+    title: trimText(raw.title, "Activity title", {
+      required: true,
+      maxLength: 240,
+    }),
+    description: trimText(raw.description, "Activity notes", { maxLength: 4000 }),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    occurred_at: occurredAt,
+    completed_at: completedAt,
+    owner: trimText(raw.owner, "Owner", { maxLength: 160 }),
+  };
+}
+
 function normalizeTeamMemberPayload(raw) {
   return {
     name: trimText(raw.name, "Name", { required: true, maxLength: 200 }),
@@ -1043,6 +1129,43 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS crm_contacts (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT,
+      client_id TEXT,
+      client_email TEXT,
+      client_name TEXT,
+      name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      role TEXT,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS crm_activities (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT,
+      client_id TEXT,
+      client_email TEXT,
+      client_name TEXT,
+      contact_id TEXT,
+      activity_type TEXT NOT NULL DEFAULT 'note' CHECK (activity_type IN ('note', 'call', 'meeting', 'email', 'whatsapp', 'follow_up', 'task')),
+      status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('planned', 'completed', 'cancelled')),
+      title TEXT NOT NULL,
+      description TEXT,
+      due_date DATE,
+      occurred_at DATE,
+      completed_at DATE,
+      owner TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS requirements (
       id TEXT PRIMARY KEY,
       requirement_number TEXT NOT NULL UNIQUE,
@@ -1160,6 +1283,27 @@ async function runSchemaSetup(env) {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_contacts_lead_id ON crm_contacts (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_contacts_client_id ON crm_contacts (client_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_contacts_client_email ON crm_contacts (client_email)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_activities_lead_id ON crm_activities (lead_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_activities_client_id ON crm_activities (client_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_activities_client_email ON crm_activities (client_email)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_crm_activities_status_due ON crm_activities (status, due_date)",
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements (status)",
@@ -3858,6 +4002,10 @@ async function handleLeads(request, env, path, method) {
     return handleLeadQuestionnaire(request, env, leadId, method, segments[6]);
   }
 
+  if (leadId && segments[5] === "overview" && method === "GET") {
+    return handleLeadOverview(request, env, leadId);
+  }
+
   if (method === "GET" && !leadId) {
     const result = await env.DB.prepare(
       `SELECT * FROM leads
@@ -3979,6 +4127,649 @@ async function handleLeads(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleLeadOverview(request, env, leadId) {
+  await ensureSchema(env);
+  const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?")
+    .bind(leadId)
+    .first();
+  if (!lead) {
+    throw new RequestError("Lead not found", 404);
+  }
+
+  const emailKey = crmEmailKey(lead.email);
+  const clientRows = await env.DB.prepare(
+    `SELECT * FROM clients
+     WHERE lead_id = ? OR (? != '' AND LOWER(TRIM(email)) = ?)
+     ORDER BY created_at DESC
+     LIMIT 20`,
+  )
+    .bind(leadId, emailKey, emailKey)
+    .all();
+  const clients = clientRows.results || [];
+  const firstClient = clients[0] || null;
+  const relatedClientId = firstClient?.id || "";
+
+  const relation = clientOverviewRelation(relatedClientId, leadId, emailKey, "i");
+  const quoteRelation = clientOverviewRelation(relatedClientId, leadId, emailKey, "q");
+  const contactRelation = clientOverviewRelation(relatedClientId, leadId, emailKey, "c");
+  const activityRelation = clientOverviewRelation(relatedClientId, leadId, emailKey, "a");
+
+  const invoiceTotalCentsSql = `(
+    CASE
+      WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0)
+        THEN i.amount_cents
+      ELSE ROUND(i.amount * 100)
+    END
+    +
+    CASE
+      WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0)
+        THEN i.tax_cents
+      ELSE ROUND(i.tax * 100)
+    END
+  )`;
+  const quoteTotalCentsSql = `(
+    CASE
+      WHEN q.amount_cents IS NOT NULL AND (q.amount_cents != 0 OR q.amount = 0)
+        THEN q.amount_cents
+      ELSE ROUND(q.amount * 100)
+    END
+    +
+    CASE
+      WHEN q.tax_cents IS NOT NULL AND (q.tax_cents != 0 OR q.tax = 0)
+        THEN q.tax_cents
+      ELSE ROUND(q.tax * 100)
+    END
+  )`;
+  const paymentCentsSql = `
+    CASE
+      WHEN p.amount_cents IS NOT NULL AND (p.amount_cents != 0 OR p.amount = 0)
+        THEN p.amount_cents
+      ELSE ROUND(p.amount * 100)
+    END`;
+
+  const quoteRows = await env.DB.prepare(
+    `SELECT q.id, q.quote_number, q.lead_id, q.client_id, q.client_name,
+            q.client_email, q.client_address, q.amount, q.tax, q.status,
+            q.created_at, q.expiry_date, q.notes, ${quoteTotalCentsSql} as total_cents
+     FROM quotes q
+     WHERE ${quoteRelation.where}
+     ORDER BY q.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...quoteRelation.params)
+    .all();
+  const quotes = (quoteRows.results || []).map((quote) => ({
+    ...quote,
+    total_due: centsToAmount(Number(quote.total_cents || 0)),
+  }));
+
+  const invoiceRows = await env.DB.prepare(
+    `SELECT i.id, i.invoice_number, i.lead_id, i.client_id, i.quote_id,
+            i.client_name, i.client_email, i.client_address, i.amount, i.tax,
+            i.status, i.created_at, i.due_date, i.payment_terms, i.notes,
+            ${invoiceTotalCentsSql} as total_cents,
+            COALESCE((
+              SELECT SUM(${paymentCentsSql})
+              FROM payments p
+              WHERE p.invoice_id = i.id
+            ), 0) as paid_cents
+     FROM invoices i
+     WHERE ${relation.where}
+     ORDER BY i.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...relation.params)
+    .all();
+  const invoices = (invoiceRows.results || []).map((invoice) => {
+    const totalCents = Number(invoice.total_cents || 0);
+    const paidCents = Number(invoice.paid_cents || 0);
+    return {
+      ...invoice,
+      total_due: centsToAmount(totalCents),
+      total_paid: centsToAmount(paidCents),
+      balance_due: centsToAmount(Math.max(totalCents - paidCents, 0)),
+    };
+  });
+
+  const receiptRows = await env.DB.prepare(
+    `SELECT p.id, p.invoice_id, p.amount, p.amount_cents, p.payment_date,
+            p.payment_method, p.notes, p.created_at,
+            i.invoice_number, i.client_name, i.client_email
+     FROM payments p
+     JOIN invoices i ON i.id = p.invoice_id
+     WHERE ${relation.where}
+     ORDER BY COALESCE(p.payment_date, p.created_at) DESC
+     LIMIT 100`,
+  )
+    .bind(...relation.params)
+    .all();
+  const receipts = (receiptRows.results || []).map((payment) => ({
+    ...payment,
+    amount: centsToAmount(
+      persistedCents(payment, "amount_cents", "amount", "Payment amount"),
+    ),
+    receipt_number: receiptNumberFor(payment),
+  }));
+
+  const contactRows = await env.DB.prepare(
+    `${crmContactSelect()}
+     WHERE ${contactRelation.where}
+     ORDER BY c.is_primary DESC, c.updated_at DESC, c.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...contactRelation.params)
+    .all();
+  const contacts = (contactRows.results || []).map((contact) => ({
+    ...contact,
+    is_primary: Number(contact.is_primary || 0) === 1,
+  }));
+
+  const activityRows = await env.DB.prepare(
+    `${crmActivitySelect()}
+     WHERE ${activityRelation.where}
+     ORDER BY
+       CASE WHEN a.status = 'planned' THEN 0 ELSE 1 END,
+       COALESCE(a.due_date, a.occurred_at, a.created_at) DESC,
+       a.updated_at DESC
+     LIMIT 100`,
+  )
+    .bind(...activityRelation.params)
+    .all();
+  const activities = activityRows.results || [];
+
+  const totalsRow = await env.DB.prepare(
+    `WITH related_invoices AS (
+       SELECT i.id, i.status, ${invoiceTotalCentsSql} as total_cents,
+              COALESCE((
+                SELECT SUM(${paymentCentsSql})
+                FROM payments p
+                WHERE p.invoice_id = i.id
+              ), 0) as paid_cents
+       FROM invoices i
+       WHERE ${relation.where}
+     )
+     SELECT
+       COUNT(*) as invoice_count,
+       COALESCE(SUM(CASE WHEN status != 'draft' THEN total_cents ELSE 0 END), 0) as invoiced_cents,
+       COALESCE(SUM(CASE WHEN status != 'draft' THEN paid_cents ELSE 0 END), 0) as paid_cents,
+       COALESCE(SUM(
+         CASE WHEN status != 'draft' THEN MAX(total_cents - paid_cents, 0) ELSE 0 END
+       ), 0) as outstanding_cents
+     FROM related_invoices`,
+  )
+    .bind(...relation.params)
+    .first();
+  const quoteCountRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM quotes q WHERE ${quoteRelation.where}`,
+  )
+    .bind(...quoteRelation.params)
+    .first();
+  const plannedActivitiesRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM crm_activities a
+     WHERE ${activityRelation.where} AND a.status = 'planned'`,
+  )
+    .bind(...activityRelation.params)
+    .first();
+  const overdueActivitiesRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM crm_activities a
+     WHERE ${activityRelation.where}
+       AND a.status = 'planned'
+       AND a.due_date IS NOT NULL
+       AND a.due_date < date('now')`,
+  )
+    .bind(...activityRelation.params)
+    .first();
+  const questionnaire = await env.DB.prepare(
+    "SELECT * FROM lead_questionnaires WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+  )
+    .bind(leadId)
+    .first();
+
+  return json({
+    lead,
+    questionnaire: questionnaire
+      ? {
+          ...questionnaire,
+          url: questionnaireUrl(request, questionnaire.token),
+        }
+      : null,
+    clients,
+    quotes,
+    invoices,
+    receipts,
+    contacts,
+    activities,
+    kpis: {
+      quote_count: Number(quoteCountRow?.count || 0),
+      invoice_count: Number(totalsRow?.invoice_count || 0),
+      total_invoiced: centsToAmount(Number(totalsRow?.invoiced_cents || 0)),
+      total_paid: centsToAmount(Number(totalsRow?.paid_cents || 0)),
+      outstanding: centsToAmount(Number(totalsRow?.outstanding_cents || 0)),
+      planned_activities: Number(plannedActivitiesRow?.count || 0),
+      overdue_activities: Number(overdueActivitiesRow?.count || 0),
+      contact_count: contacts.length,
+    },
+  });
+}
+
+function crmEmailKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function crmRelationFilter(searchParams, alias) {
+  const prefix = alias ? `${alias}.` : "";
+  const leadId = trimText(searchParams.get("lead_id"), "Lead id", {
+    maxLength: 160,
+  });
+  const clientId = trimText(searchParams.get("client_id"), "Client id", {
+    maxLength: 160,
+  });
+  const clientEmail = crmEmailKey(searchParams.get("client_email"));
+
+  if (!leadId && !clientId && !clientEmail) {
+    return { where: "1 = ?", params: [1] };
+  }
+
+  return {
+    where: `(
+      (? != '' AND ${prefix}lead_id = ?)
+      OR (? != '' AND ${prefix}client_id = ?)
+      OR (? != '' AND LOWER(TRIM(${prefix}client_email)) = ?)
+    )`,
+    params: [
+      leadId,
+      leadId,
+      clientId,
+      clientId,
+      clientEmail,
+      clientEmail,
+    ],
+  };
+}
+
+function crmContactSelect() {
+  return `SELECT c.*,
+                 COALESCE(l.company_name, '') as lead_name,
+                 COALESCE(saved.name, c.client_name, '') as resolved_client_name
+          FROM crm_contacts c
+          LEFT JOIN leads l ON l.id = c.lead_id
+          LEFT JOIN clients saved ON saved.id = c.client_id`;
+}
+
+function crmActivitySelect() {
+  return `SELECT a.*,
+                 COALESCE(contact.name, '') as contact_name,
+                 COALESCE(l.company_name, '') as lead_name,
+                 COALESCE(saved.name, a.client_name, '') as resolved_client_name
+          FROM crm_activities a
+          LEFT JOIN crm_contacts contact ON contact.id = a.contact_id
+          LEFT JOIN leads l ON l.id = a.lead_id
+          LEFT JOIN clients saved ON saved.id = a.client_id`;
+}
+
+async function handleCrm(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const resource = segments[4];
+  const recordId = segments[5];
+
+  if (resource === "contacts") {
+    return handleCrmContacts(request, env, method, recordId);
+  }
+
+  if (resource === "activities") {
+    return handleCrmActivities(request, env, method, recordId);
+  }
+
+  if (resource === "summary" && method === "GET") {
+    return handleCrmSummary(env);
+  }
+
+  return json({ error: "CRM route not found" }, { status: 404 });
+}
+
+async function requireCrmContact(env, contactId) {
+  const contact = await env.DB.prepare("SELECT * FROM crm_contacts WHERE id = ?")
+    .bind(contactId)
+    .first();
+  if (!contact) {
+    throw new RequestError("Contact not found", 404);
+  }
+  return contact;
+}
+
+async function requireCrmActivity(env, activityId) {
+  const activity = await env.DB.prepare("SELECT * FROM crm_activities WHERE id = ?")
+    .bind(activityId)
+    .first();
+  if (!activity) {
+    throw new RequestError("Activity not found", 404);
+  }
+  return activity;
+}
+
+async function handleCrmContacts(request, env, method, contactId) {
+  if (method === "GET" && contactId) {
+    const contact = await env.DB.prepare(`${crmContactSelect()} WHERE c.id = ?`)
+      .bind(contactId)
+      .first();
+    return json(
+      contact || { error: "Contact not found" },
+      contact ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "GET") {
+    const url = new URL(request.url);
+    const relation = crmRelationFilter(url.searchParams, "c");
+    const rows = await env.DB.prepare(
+      `${crmContactSelect()}
+       WHERE ${relation.where}
+       ORDER BY c.is_primary DESC, c.updated_at DESC, c.created_at DESC
+       LIMIT 200`,
+    )
+      .bind(...relation.params)
+      .all();
+    return json(
+      (rows.results || []).map((contact) => ({
+        ...contact,
+        is_primary: Number(contact.is_primary || 0) === 1,
+      })),
+    );
+  }
+
+  if (method === "POST") {
+    const data = normalizeCrmContactPayload(await parseRequestJson(request));
+    const id = createEntityId("contact");
+    await env.DB.prepare(
+      `INSERT INTO crm_contacts (
+         id, lead_id, client_id, client_email, client_name, name, email, phone,
+         role, is_primary, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.lead_id,
+        data.client_id,
+        data.client_email,
+        data.client_name,
+        data.name,
+        data.email,
+        data.phone,
+        data.role,
+        data.is_primary,
+        data.notes,
+      )
+      .run();
+
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "crm_contact",
+      entity_id: id,
+      entity_number: data.name,
+      details: {
+        lead_id: data.lead_id,
+        client_id: data.client_id,
+        client_email: data.client_email,
+      },
+    });
+
+    return json({ id, ...data, is_primary: data.is_primary === 1 }, { status: 201 });
+  }
+
+  if (method === "PUT" && contactId) {
+    const existing = await requireCrmContact(env, contactId);
+    const data = normalizeCrmContactPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE crm_contacts SET
+         lead_id = ?, client_id = ?, client_email = ?, client_name = ?,
+         name = ?, email = ?, phone = ?, role = ?, is_primary = ?,
+         notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.lead_id,
+        data.client_id,
+        data.client_email,
+        data.client_name,
+        data.name,
+        data.email,
+        data.phone,
+        data.role,
+        data.is_primary,
+        data.notes,
+        contactId,
+      )
+      .run();
+
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "crm_contact",
+      entity_id: contactId,
+      entity_number: data.name,
+      details: { previous_name: existing.name },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && contactId) {
+    const existing = await requireCrmContact(env, contactId);
+    await env.DB.prepare("DELETE FROM crm_contacts WHERE id = ?")
+      .bind(contactId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE crm_activities SET contact_id = '' WHERE contact_id = ?",
+    )
+      .bind(contactId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "crm_contact",
+      entity_id: contactId,
+      entity_number: existing.name,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleCrmActivities(request, env, method, activityId) {
+  if (method === "GET" && activityId) {
+    const activity = await env.DB.prepare(`${crmActivitySelect()} WHERE a.id = ?`)
+      .bind(activityId)
+      .first();
+    return json(
+      activity || { error: "Activity not found" },
+      activity ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "GET") {
+    const url = new URL(request.url);
+    const relation = crmRelationFilter(url.searchParams, "a");
+    const clauses = [relation.where];
+    const params = [...relation.params];
+    const status = trimText(url.searchParams.get("status"), "Activity status", {
+      maxLength: 80,
+    });
+    if (status) {
+      const normalizedStatus = normalizeKey(
+        status,
+        "Activity status",
+        CRM_ACTIVITY_STATUSES,
+        "planned",
+      );
+      clauses.push("a.status = ?");
+      params.push(normalizedStatus);
+    }
+
+    const due = trimText(url.searchParams.get("due"), "Due filter", {
+      maxLength: 20,
+    });
+    if (due === "overdue") {
+      clauses.push("a.status = 'planned' AND a.due_date IS NOT NULL AND a.due_date < date('now')");
+    } else if (due === "upcoming") {
+      clauses.push("a.status = 'planned' AND (a.due_date IS NULL OR a.due_date >= date('now'))");
+    } else if (due && due !== "all") {
+      throw new RequestError("Due filter is invalid");
+    }
+
+    const rows = await env.DB.prepare(
+      `${crmActivitySelect()}
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY
+         CASE WHEN a.status = 'planned' THEN 0 ELSE 1 END,
+         COALESCE(a.due_date, a.occurred_at, a.created_at) DESC,
+         a.updated_at DESC
+       LIMIT 200`,
+    )
+      .bind(...params)
+      .all();
+    return json(rows.results || []);
+  }
+
+  if (method === "POST") {
+    const data = normalizeCrmActivityPayload(await parseRequestJson(request));
+    const id = createEntityId("activity");
+    await env.DB.prepare(
+      `INSERT INTO crm_activities (
+         id, lead_id, client_id, client_email, client_name, contact_id,
+         activity_type, status, title, description, due_date, occurred_at,
+         completed_at, owner
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        data.lead_id,
+        data.client_id,
+        data.client_email,
+        data.client_name,
+        data.contact_id,
+        data.activity_type,
+        data.status,
+        data.title,
+        data.description,
+        data.due_date,
+        data.occurred_at,
+        data.completed_at,
+        data.owner,
+      )
+      .run();
+
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "crm_activity",
+      entity_id: id,
+      entity_number: data.title,
+      details: {
+        activity_type: data.activity_type,
+        status: data.status,
+        due_date: data.due_date,
+      },
+    });
+
+    return json({ id, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && activityId) {
+    const existing = await requireCrmActivity(env, activityId);
+    const data = normalizeCrmActivityPayload(await parseRequestJson(request));
+    await env.DB.prepare(
+      `UPDATE crm_activities SET
+         lead_id = ?, client_id = ?, client_email = ?, client_name = ?,
+         contact_id = ?, activity_type = ?, status = ?, title = ?,
+         description = ?, due_date = ?, occurred_at = ?, completed_at = ?,
+         owner = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.lead_id,
+        data.client_id,
+        data.client_email,
+        data.client_name,
+        data.contact_id,
+        data.activity_type,
+        data.status,
+        data.title,
+        data.description,
+        data.due_date,
+        data.occurred_at,
+        data.completed_at,
+        data.owner,
+        activityId,
+      )
+      .run();
+
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "crm_activity",
+      entity_id: activityId,
+      entity_number: data.title,
+      details: { previous_status: existing.status, status: data.status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && activityId) {
+    const existing = await requireCrmActivity(env, activityId);
+    await env.DB.prepare("DELETE FROM crm_activities WHERE id = ?")
+      .bind(activityId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "crm_activity",
+      entity_id: activityId,
+      entity_number: existing.title,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleCrmSummary(env) {
+  const contactsRow = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM crm_contacts",
+  ).first();
+  const plannedRow = await env.DB.prepare(
+    "SELECT COUNT(*) as count FROM crm_activities WHERE status = 'planned'",
+  ).first();
+  const overdueRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM crm_activities
+     WHERE status = 'planned' AND due_date IS NOT NULL AND due_date < date('now')`,
+  ).first();
+  const dueTodayRow = await env.DB.prepare(
+    `SELECT COUNT(*) as count FROM crm_activities
+     WHERE status = 'planned' AND due_date = date('now')`,
+  ).first();
+
+  const upcomingRows = await env.DB.prepare(
+    `${crmActivitySelect()}
+     WHERE a.status = 'planned'
+     ORDER BY COALESCE(a.due_date, '9999-12-31') ASC, a.created_at DESC
+     LIMIT 8`,
+  ).all();
+  const recentRows = await env.DB.prepare(
+    `${crmActivitySelect()}
+     ORDER BY a.created_at DESC
+     LIMIT 8`,
+  ).all();
+
+  return json({
+    kpis: {
+      contacts: Number(contactsRow?.count || 0),
+      planned_activities: Number(plannedRow?.count || 0),
+      overdue_activities: Number(overdueRow?.count || 0),
+      due_today: Number(dueTodayRow?.count || 0),
+    },
+    upcoming: upcomingRows.results || [],
+    recent: recentRows.results || [],
+  });
 }
 
 async function handleRequirements(request, env, path, method) {
@@ -5450,6 +6241,44 @@ async function handleClientOverview(request, env, explicit = {}) {
     receipt_number: receiptNumberFor(payment),
   }));
 
+  const crmContactRelation = clientOverviewRelation(
+    relatedClientId,
+    relatedLeadId,
+    emailKey,
+    "c",
+  );
+  const contactRows = await env.DB.prepare(
+    `${crmContactSelect()}
+     WHERE ${crmContactRelation.where}
+     ORDER BY c.is_primary DESC, c.updated_at DESC, c.created_at DESC
+     LIMIT 100`,
+  )
+    .bind(...crmContactRelation.params)
+    .all();
+  const contacts = (contactRows.results || []).map((contact) => ({
+    ...contact,
+    is_primary: Number(contact.is_primary || 0) === 1,
+  }));
+
+  const crmActivityRelation = clientOverviewRelation(
+    relatedClientId,
+    relatedLeadId,
+    emailKey,
+    "a",
+  );
+  const activityRows = await env.DB.prepare(
+    `${crmActivitySelect()}
+     WHERE ${crmActivityRelation.where}
+     ORDER BY
+       CASE WHEN a.status = 'planned' THEN 0 ELSE 1 END,
+       COALESCE(a.due_date, a.occurred_at, a.created_at) DESC,
+       a.updated_at DESC
+     LIMIT 100`,
+  )
+    .bind(...crmActivityRelation.params)
+    .all();
+  const activities = activityRows.results || [];
+
   const totalsRow = await env.DB.prepare(
     `WITH related_invoices AS (
        SELECT i.id, i.status, ${invoiceTotalCentsSql} as total_cents,
@@ -5503,6 +6332,8 @@ async function handleClientOverview(request, env, explicit = {}) {
     invoices,
     quotes,
     receipts,
+    contacts,
+    activities,
     kpis: {
       invoice_count: Number(totalsRow?.invoice_count || 0),
       quote_count: Number(quoteCountRow?.count || 0),

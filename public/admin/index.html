@@ -361,6 +361,7 @@
       }
 
       .status-new,
+      .status-note,
       .status-planning,
       .status-draft {
         background-color: rgba(44, 45, 63, 0.12);
@@ -369,6 +370,9 @@
 
       .status-qualified,
       .status-meeting,
+      .status-call,
+      .status-email,
+      .status-whatsapp,
       .status-discovery,
       .status-active,
       .status-review {
@@ -380,6 +384,9 @@
       .status-proposal,
       .status-on_hold,
       .status-open,
+      .status-planned,
+      .status-follow_up,
+      .status-task,
       .status-assessing,
       .status-high,
       .status-medium {
@@ -895,6 +902,103 @@
         overflow-wrap: anywhere;
       }
 
+      .timeline-list {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1rem;
+      }
+
+      .timeline-item {
+        border-left: 3px solid var(--border);
+        padding-left: 0.8rem;
+      }
+
+      .timeline-item.planned {
+        border-left-color: var(--warning);
+      }
+
+      .timeline-item.completed {
+        border-left-color: var(--success);
+      }
+
+      .timeline-title {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        font-weight: 600;
+      }
+
+      .timeline-meta {
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin-top: 0.2rem;
+      }
+
+      .pipeline-board {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(7, minmax(220px, 1fr));
+        margin-bottom: 1.25rem;
+        overflow-x: auto;
+        padding-bottom: 0.35rem;
+      }
+
+      .pipeline-column {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        min-height: 260px;
+      }
+
+      .pipeline-column-header {
+        align-items: center;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        padding: 0.65rem 0.75rem;
+      }
+
+      .pipeline-column-header h4 {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin: 0;
+        text-transform: uppercase;
+      }
+
+      .pipeline-column-body {
+        display: grid;
+        gap: 0.55rem;
+        padding: 0.65rem;
+      }
+
+      .pipeline-card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
+        padding: 0.7rem;
+      }
+
+      .pipeline-card-title {
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        overflow-wrap: anywhere;
+      }
+
+      .pipeline-card-meta {
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.5;
+      }
+
+      .overdue-text {
+        color: var(--danger);
+        font-weight: 700;
+      }
+
       @media (max-width: 768px) {
         .sidebar {
           display: none;
@@ -947,6 +1051,9 @@
           <div class="nav-section-title">Sales</div>
           <button class="nav-link" onclick="showTab('leads')">
             <i class="fas fa-bullseye"></i> Leads
+          </button>
+          <button class="nav-link" onclick="showTab('crm')">
+            <i class="fas fa-address-book"></i> CRM
           </button>
           <button class="nav-link" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
@@ -1286,7 +1393,14 @@
             </button>
           </div>
 
+          <div id="lead-pipeline-board" class="pipeline-board">
+            <div class="text-center">Loading pipeline...</div>
+          </div>
+
           <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Lead Register</h5>
+            </div>
             <div class="table-responsive">
               <table class="table">
                 <thead>
@@ -1305,6 +1419,276 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lead 360 Tab -->
+        <div id="lead360-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <div>
+              <button class="btn btn-sm btn-secondary" onclick="showTab('leads')">
+                <i class="fas fa-arrow-left"></i> Leads
+              </button>
+              <h2 id="lead360-title" style="margin-top:0.75rem;">Lead 360</h2>
+            </div>
+            <div class="action-buttons">
+              <button class="btn btn-secondary" onclick="contactLead360()">
+                <i class="fas fa-user-plus"></i> Contact
+              </button>
+              <button class="btn btn-secondary" onclick="noteLead360()">
+                <i class="fas fa-note-sticky"></i> Note
+              </button>
+              <button class="btn btn-secondary" onclick="callLead360()">
+                <i class="fas fa-phone"></i> Call
+              </button>
+              <button class="btn btn-secondary" onclick="meetingLead360()">
+                <i class="fas fa-handshake"></i> Meeting
+              </button>
+              <button class="btn btn-secondary" onclick="followUpLead360()">
+                <i class="fas fa-calendar-check"></i> Follow-up
+              </button>
+              <button class="btn btn-info" onclick="editLead360()">
+                <i class="fas fa-pen"></i> Edit Lead
+              </button>
+              <button class="btn btn-primary" onclick="clientLead360()">
+                <i class="fas fa-users"></i> Client
+              </button>
+              <button class="btn btn-primary" onclick="quoteLead360()">
+                <i class="fas fa-file-signature"></i> Quote
+              </button>
+              <button class="btn btn-secondary" onclick="invoiceLead360()">
+                <i class="fas fa-file-invoice"></i> Invoice
+              </button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Estimated Value</h3>
+                <div class="value" id="lead360-value">R0.00</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Quotes</h3>
+                <div class="value" id="lead360-quotes-count">0</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Total Invoiced</h3>
+                <div class="value" id="lead360-invoiced">R0.00</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Outstanding</h3>
+                <div class="value" id="lead360-outstanding">R0.00</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-panel">
+              <h4>Lead Profile</h4>
+              <div class="detail-panel-body" id="lead360-profile">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <h4>Questionnaire</h4>
+              <div class="detail-panel-body" id="lead360-questionnaire">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-panel">
+              <h4>Linked Clients</h4>
+              <div class="detail-panel-body" id="lead360-clients">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <h4>Contacts</h4>
+              <div class="detail-panel-body" id="lead360-contacts">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-panel">
+            <h4>Activity Timeline</h4>
+            <div id="lead360-activities" class="timeline-list">
+              <div class="text-center">Loading...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Quotes</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Quote #</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Expiry</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="lead360-quotes">
+                  <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Invoices</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Invoice #</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Due</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="lead360-invoices">
+                  <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Receipts</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Receipt #</th>
+                    <th>Invoice #</th>
+                    <th>Amount</th>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="lead360-receipts">
+                  <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CRM Tab -->
+        <div id="crm-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>CRM</h2>
+            <div class="action-buttons">
+              <button class="btn btn-primary" onclick="openCrmActivityModal()">
+                <i class="fas fa-plus"></i> Add Activity
+              </button>
+              <button class="btn btn-secondary" onclick="openCrmContactModal()">
+                <i class="fas fa-user-plus"></i> New Contact
+              </button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Planned</h3>
+                <div class="value" id="crm-planned-count">0</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Overdue</h3>
+                <div class="value" id="crm-overdue-count">0</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Due Today</h3>
+                <div class="value" id="crm-today-count">0</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card">
+                <h3>Contacts</h3>
+                <div class="value" id="crm-contact-count">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Upcoming Follow-ups and Tasks</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Activity</th>
+                    <th>Linked To</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="crm-upcoming-list">
+                  <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Contacts</h5>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Linked To</th>
+                    <th>Role</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="crm-contacts-list">
+                  <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h5 style="margin:0;">Recent Activity</h5>
+            </div>
+            <div id="crm-recent-list" class="timeline-list">
+              <div class="text-center">Loading...</div>
             </div>
           </div>
         </div>
@@ -1667,6 +2051,21 @@
               <h2 id="client360-title" style="margin-top:0.75rem;">Client 360</h2>
             </div>
             <div class="action-buttons">
+              <button class="btn btn-secondary" onclick="contactClient360()">
+                <i class="fas fa-user-plus"></i> Contact
+              </button>
+              <button class="btn btn-secondary" onclick="noteClient360()">
+                <i class="fas fa-note-sticky"></i> Note
+              </button>
+              <button class="btn btn-secondary" onclick="callClient360()">
+                <i class="fas fa-phone"></i> Call
+              </button>
+              <button class="btn btn-secondary" onclick="meetingClient360()">
+                <i class="fas fa-handshake"></i> Meeting
+              </button>
+              <button class="btn btn-secondary" onclick="followUpClient360()">
+                <i class="fas fa-calendar-check"></i> Follow-up
+              </button>
               <button class="btn btn-info" onclick="editClient360()">
                 <i class="fas fa-pen"></i> Edit Client
               </button>
@@ -1716,6 +2115,21 @@
             <div class="detail-panel">
               <h4>Linked Lead</h4>
               <div class="detail-panel-body" id="client360-lead">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-panel">
+              <h4>Contacts</h4>
+              <div class="detail-panel-body" id="client360-contacts">
+                <div class="text-center">Loading...</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <h4>Activity Timeline</h4>
+              <div id="client360-activities" class="timeline-list">
                 <div class="text-center">Loading...</div>
               </div>
             </div>
@@ -2430,6 +2844,164 @@
       </div>
     </div>
 
+    <!-- CRM Contact Modal -->
+    <div id="crmContactModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="crm-contact-modal-title">New Contact</h5>
+          <button
+            type="button"
+            onclick="closeCrmContactModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="crmContactForm">
+            <input type="hidden" id="crm_contact_lead_id" />
+            <input type="hidden" id="crm_contact_client_id" />
+            <input type="hidden" id="crm_contact_client_email" />
+            <input type="hidden" id="crm_contact_client_name" />
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Lead</label>
+                <select class="form-control" id="crm_contact_lead_source"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Client</label>
+                <select class="form-control" id="crm_contact_client_source"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" class="form-control" id="crm_contact_name" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Role</label>
+                <input type="text" class="form-control" id="crm_contact_role" placeholder="Decision maker, billing, technical" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" id="crm_contact_email" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" class="form-control" id="crm_contact_phone" />
+              </div>
+              <div class="form-group full-span">
+                <label style="display:flex;align-items:center;gap:0.5rem;">
+                  <input type="checkbox" id="crm_contact_primary" />
+                  Primary contact
+                </label>
+              </div>
+              <div class="form-group full-span">
+                <label class="form-label">Notes</label>
+                <textarea class="form-control" id="crm_contact_notes" rows="3"></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCrmContactModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveCrmContact()">Save Contact</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRM Activity Modal -->
+    <div id="crmActivityModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="crm-activity-modal-title">Add Activity</h5>
+          <button
+            type="button"
+            onclick="closeCrmActivityModal()"
+            style="
+              background: none;
+              border: none;
+              color: white;
+              font-size: 1.5rem;
+              cursor: pointer;
+            "
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="crmActivityForm">
+            <input type="hidden" id="crm_activity_lead_id" />
+            <input type="hidden" id="crm_activity_client_id" />
+            <input type="hidden" id="crm_activity_client_email" />
+            <input type="hidden" id="crm_activity_client_name" />
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Lead</label>
+                <select class="form-control" id="crm_activity_lead_source"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Client</label>
+                <select class="form-control" id="crm_activity_client_source"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contact</label>
+                <select class="form-control" id="crm_activity_contact_source"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-control" id="crm_activity_type">
+                  <option value="note">Note</option>
+                  <option value="call">Call</option>
+                  <option value="meeting">Meeting</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="follow_up">Follow-up</option>
+                  <option value="task">Task</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-control" id="crm_activity_status">
+                  <option value="planned">Planned</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Due Date</label>
+                <input type="date" class="form-control" id="crm_activity_due_date" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Occurred Date</label>
+                <input type="date" class="form-control" id="crm_activity_occurred_at" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Owner</label>
+                <input type="text" class="form-control" id="crm_activity_owner" />
+              </div>
+              <div class="form-group full-span">
+                <label class="form-label">Title *</label>
+                <input type="text" class="form-control" id="crm_activity_title" required />
+              </div>
+              <div class="form-group full-span">
+                <label class="form-label">Notes</label>
+                <textarea class="form-control" id="crm_activity_description" rows="4"></textarea>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCrmActivityModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveCrmActivity()">Save Activity</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/js/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script>
@@ -2444,10 +3016,15 @@
       let currentEditInvoiceStatus = "draft";
       let currentEditQuoteId = null;
       let currentEditClientId = null;
+      let currentLead360 = null;
       let currentClient360 = null;
+      let currentCrmContactId = null;
+      let currentCrmActivityId = null;
       let currentModuleName = null;
       let currentModuleRecordId = null;
+      const leadCache = new Map();
       const clientCache = new Map();
+      const crmContactCache = new Map();
       let workflowSourcesPromise = null;
       let workflowLeads = [];
       let workflowClients = [];
@@ -2829,13 +3406,14 @@
           group: "CRM & Sales",
           modules: [
             { name: "Leads", status: "live", tab: "leads" },
+            { name: "CRM Timeline", status: "live", tab: "crm" },
             { name: "Clients", status: "live", tab: "clients" },
             { name: "Requirements", status: "live", tab: "requirements" },
             { name: "Quotations", status: "live", tab: "quotes" },
             { name: "Proposals", status: "next" },
             { name: "Contracts", status: "later" },
-            { name: "Meetings", status: "later" },
-            { name: "Communication History", status: "later" },
+            { name: "Meetings", status: "live", tab: "crm" },
+            { name: "Communication History", status: "live", tab: "crm" },
           ],
         },
         {
@@ -3477,6 +4055,7 @@
           loadQuotes();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -3489,6 +4068,7 @@
         if (r && r.success) {
           showAlert("Questionnaire sent", "success");
           openQuestionnaire(leadId);
+          await refreshLead360IfVisible();
         }
       }
 
@@ -3594,11 +4174,14 @@
         access_control: "Access Control",
         access_review: "Access Review",
         business_continuity: "Business Continuity",
+        call: "Call",
         continuous_improvement: "Continuous Improvement",
         converted_to_invoice: "Converted to Invoice",
         corrective_action: "Corrective Action",
         customer_feedback: "Customer Feedback",
         disaster_recovery: "Disaster Recovery",
+        email: "Email",
+        follow_up: "Follow-up",
         ecommerce: "Ecommerce",
         external_audit: "External Audit",
         government_project: "Government Project",
@@ -3608,9 +4191,12 @@
         management_review: "Management Review",
         mobile_app: "Mobile App",
         non_conformity: "Non-Conformity",
+        meeting: "Meeting",
+        note: "Note",
         on_hold: "On Hold",
         partially_paid: "Partially Paid",
         password_management: "Password Management",
+        planned: "Planned",
         preventive_action: "Preventive Action",
         recovery_test: "Recovery Test",
         risk_assessment: "Risk Assessment",
@@ -3619,7 +4205,9 @@
         security_awareness: "Security Awareness",
         security_incident: "Security Incident",
         sop: "SOP",
+        task: "Task",
         training_platform: "Training Platform",
+        whatsapp: "WhatsApp",
         work_instruction: "Work Instruction",
       };
 
@@ -3671,6 +4259,8 @@
           loadModule("team");
         } else if (tabName === "leads") {
           loadModule("leads");
+        } else if (tabName === "crm") {
+          loadCrm();
         } else if (tabName === "requirements") {
           loadModule("requirements");
         } else if (tabName === "projects") {
@@ -3693,6 +4283,8 @@
           loadQuotes();
         } else if (tabName === "clients") {
           loadClients();
+        } else if (tabName === "lead360" && currentLead360) {
+          renderLead360(currentLead360);
         } else if (tabName === "client360" && currentClient360) {
           renderClient360(currentClient360);
         } else if (tabName === "receipts") {
@@ -4124,10 +4716,11 @@
         const qGen = event.target.closest("[data-q-generate]");
         if (qGen) {
           apiCall("/admin/leads/" + qGen.dataset.qGenerate + "/questionnaire", "POST").then(
-            (r) => {
+            async (r) => {
               if (r && r.url) {
                 showAlert("Questionnaire link ready", "success");
                 openQuestionnaire(qGen.dataset.qGenerate);
+                await refreshLead360IfVisible();
               }
             },
           );
@@ -4198,6 +4791,51 @@
         const leadInvoice = event.target.closest("[data-lead-invoice]");
         if (leadInvoice) {
           openInvoiceModal({ leadId: leadInvoice.dataset.leadInvoice });
+          return;
+        }
+
+        const leadView = event.target.closest("[data-lead-view]");
+        if (leadView) {
+          viewLead360(leadView.dataset.leadView);
+          return;
+        }
+
+        const leadActivity = event.target.closest("[data-lead-activity]");
+        if (leadActivity) {
+          openCrmActivityModal({ leadId: leadActivity.dataset.leadActivity, activityType: "follow_up" });
+          return;
+        }
+
+        const leadContact = event.target.closest("[data-lead-contact]");
+        if (leadContact) {
+          openCrmContactModal({ leadId: leadContact.dataset.leadContact });
+          return;
+        }
+
+        const crmContactButton = event.target.closest("[data-crm-contact-action]");
+        if (crmContactButton) {
+          const { crmContactAction, id } = crmContactButton.dataset;
+          if (crmContactAction === "edit") {
+            openCrmContactModal({ contactId: id });
+          } else if (crmContactAction === "delete") {
+            deleteCrmContact(id);
+          } else if (crmContactAction === "activity") {
+            const contact = crmContactCache.get(id);
+            openCrmActivityModal({ contact });
+          }
+          return;
+        }
+
+        const crmActivityButton = event.target.closest("[data-crm-activity-action]");
+        if (crmActivityButton) {
+          const { crmActivityAction, id } = crmActivityButton.dataset;
+          if (crmActivityAction === "edit") {
+            openCrmActivityModal({ activityId: id });
+          } else if (crmActivityAction === "done") {
+            completeCrmActivity(id);
+          } else if (crmActivityAction === "delete") {
+            deleteCrmActivity(id);
+          }
           return;
         }
 
@@ -4288,6 +4926,18 @@
           } else {
             setField("invoice_quote_id", "");
           }
+        } else if (target.id === "crm_contact_lead_source") {
+          applyLeadToCrmContact(selectedLead(target.value));
+        } else if (target.id === "crm_contact_client_source") {
+          applyClientToCrmContact(selectedClient(target.value));
+        } else if (target.id === "crm_activity_lead_source") {
+          applyLeadToCrmActivity(selectedLead(target.value));
+        } else if (target.id === "crm_activity_client_source") {
+          applyClientToCrmActivity(selectedClient(target.value));
+        } else if (target.id === "crm_activity_contact_source") {
+          applyContactToCrmActivity(crmContactCache.get(target.value));
+        } else if (target.id === "crm_activity_type") {
+          applyCrmActivityDefaults(target.value);
         }
       });
 
@@ -4546,6 +5196,526 @@
         recalcInvoiceSubtotal();
       }
 
+      function crmClientKeyFromRecord(record) {
+        if (record?.client_id) return record.client_id;
+        return record?.client_email ? `invoice:${record.client_email}` : "";
+      }
+
+      function crmLinkedName(record) {
+        return (
+          record.resolved_client_name ||
+          record.client_name ||
+          record.lead_name ||
+          record.client_email ||
+          "Linked record"
+        );
+      }
+
+      function crmDate(value) {
+        return value ? new Date(value).toLocaleDateString() : "N/A";
+      }
+
+      function setCrmLead(prefix, lead) {
+        setField(`${prefix}_lead_id`, lead?.id || "");
+        setField(`${prefix}_lead_source`, lead?.id || "");
+      }
+
+      function setCrmClient(prefix, client) {
+        const key = client ? workflowClientKey(client) : "";
+        setField(`${prefix}_client_id`, client && !client.derived_from_invoices ? client.id || "" : "");
+        setField(`${prefix}_client_email`, client?.email || "");
+        setField(`${prefix}_client_name`, client?.name || "");
+        setField(`${prefix}_client_source`, key);
+      }
+
+      function setCrmRelation(prefix, record) {
+        setField(`${prefix}_lead_id`, record?.lead_id || "");
+        setField(`${prefix}_lead_source`, record?.lead_id || "");
+        setField(`${prefix}_client_id`, record?.client_id || "");
+        setField(`${prefix}_client_email`, record?.client_email || "");
+        setField(`${prefix}_client_name`, record?.client_name || record?.resolved_client_name || "");
+        setField(`${prefix}_client_source`, crmClientKeyFromRecord(record));
+      }
+
+      async function prepareCrmSources(prefix, selected = {}) {
+        await loadWorkflowSources();
+        if (currentClient360?.profile) {
+          const key = workflowClientKey(currentClient360.profile);
+          if (!workflowClients.some((client) => workflowClientKey(client) === key)) {
+            workflowClients.unshift(currentClient360.profile);
+          }
+          clientCache.set(key, currentClient360.profile);
+        }
+        populateSourceSelect(
+          `${prefix}_lead_source`,
+          workflowLeads,
+          selected.leadId || "",
+          leadLabel,
+          "No lead",
+        );
+        populateSourceSelect(
+          `${prefix}_client_source`,
+          workflowClients,
+          selected.clientKey || "",
+          clientLabel,
+          "No client",
+        );
+      }
+
+      async function loadCrmContactsForSelect(selectedId = "") {
+        const contacts = await apiCall("/admin/crm/contacts");
+        const select = document.getElementById("crm_activity_contact_source");
+        if (!select || !Array.isArray(contacts)) {
+          return;
+        }
+        crmContactCache.clear();
+        select.innerHTML =
+          `<option value="">No contact</option>` +
+          contacts
+            .map((contact) => {
+              crmContactCache.set(contact.id, contact);
+              const linked = crmLinkedName(contact);
+              const label = `${contact.name || "Contact"}${linked ? ` - ${linked}` : ""}`;
+              return `<option value="${escapeAttr(contact.id)}" ${contact.id === selectedId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+            })
+            .join("");
+      }
+
+      function applyLeadToCrmContact(lead) {
+        if (!lead) {
+          setCrmLead("crm_contact", null);
+          return;
+        }
+        setCrmLead("crm_contact", lead);
+        setCrmClient("crm_contact", null);
+        if (!document.getElementById("crm_contact_name").value) {
+          setField("crm_contact_name", lead.contact_name || lead.company_name || "");
+        }
+        if (!document.getElementById("crm_contact_email").value) {
+          setField("crm_contact_email", lead.email || "");
+        }
+        if (!document.getElementById("crm_contact_phone").value) {
+          setField("crm_contact_phone", lead.phone || "");
+        }
+      }
+
+      function applyClientToCrmContact(client) {
+        if (!client) {
+          setCrmClient("crm_contact", null);
+          return;
+        }
+        setCrmClient("crm_contact", client);
+        setCrmLead("crm_contact", selectedLead(client.lead_id) || { id: client.lead_id || "" });
+        if (!document.getElementById("crm_contact_name").value) {
+          setField("crm_contact_name", client.name || "");
+        }
+        if (!document.getElementById("crm_contact_email").value) {
+          setField("crm_contact_email", client.email || "");
+        }
+        if (!document.getElementById("crm_contact_phone").value) {
+          setField("crm_contact_phone", client.phone || "");
+        }
+      }
+
+      function applyLeadToCrmActivity(lead) {
+        if (!lead) {
+          setCrmLead("crm_activity", null);
+          return;
+        }
+        setCrmLead("crm_activity", lead);
+        setCrmClient("crm_activity", null);
+        if (!document.getElementById("crm_activity_title").value) {
+          setField("crm_activity_title", `Follow up with ${lead.company_name || lead.contact_name || "lead"}`);
+        }
+      }
+
+      function applyClientToCrmActivity(client) {
+        if (!client) {
+          setCrmClient("crm_activity", null);
+          return;
+        }
+        setCrmClient("crm_activity", client);
+        setCrmLead("crm_activity", selectedLead(client.lead_id) || { id: client.lead_id || "" });
+        if (!document.getElementById("crm_activity_title").value) {
+          setField("crm_activity_title", `Follow up with ${client.name || client.email || "client"}`);
+        }
+      }
+
+      function applyContactToCrmActivity(contact) {
+        if (!contact) {
+          setField("crm_activity_contact_source", "");
+          return;
+        }
+        setCrmRelation("crm_activity", contact);
+        setField("crm_activity_contact_source", contact.id);
+        if (!document.getElementById("crm_activity_title").value) {
+          setField("crm_activity_title", `Follow up with ${contact.name}`);
+        }
+      }
+
+      function applyCrmActivityDefaults(type) {
+        if (currentCrmActivityId) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+        const planned = ["follow_up", "task"].includes(type);
+        setField("crm_activity_status", planned ? "planned" : "completed");
+        setField("crm_activity_due_date", planned ? tomorrow : "");
+        setField("crm_activity_occurred_at", planned ? "" : today);
+        if (!document.getElementById("crm_activity_title").value) {
+          setField("crm_activity_title", displayStatus(type));
+        }
+      }
+
+      async function loadCrm() {
+        const [summary, contacts, activities] = await Promise.all([
+          apiCall("/admin/crm/summary"),
+          apiCall("/admin/crm/contacts"),
+          apiCall("/admin/crm/activities"),
+        ]);
+        if (summary?.kpis) {
+          document.getElementById("crm-planned-count").textContent =
+            summary.kpis.planned_activities || 0;
+          document.getElementById("crm-overdue-count").textContent =
+            summary.kpis.overdue_activities || 0;
+          document.getElementById("crm-today-count").textContent =
+            summary.kpis.due_today || 0;
+          document.getElementById("crm-contact-count").textContent =
+            summary.kpis.contacts || 0;
+          renderCrmActivityTable(
+            "crm-upcoming-list",
+            summary.upcoming || [],
+            5,
+            "No upcoming CRM work yet",
+          );
+          renderCrmTimeline(
+            "crm-recent-list",
+            summary.recent || [],
+            "No recent CRM activity yet",
+          );
+        }
+        if (Array.isArray(contacts)) {
+          renderCrmContactsTable("crm-contacts-list", contacts, 6);
+        }
+        if (Array.isArray(activities) && !summary) {
+          renderCrmTimeline("crm-recent-list", activities.slice(0, 8), "No recent CRM activity yet");
+        }
+      }
+
+      function renderCrmContactsTable(listId, contacts, colspan = 6) {
+        const list = document.getElementById(listId);
+        if (!list) return;
+        crmContactCache.clear();
+        list.innerHTML = contacts.length
+          ? contacts
+              .map((contact) => {
+                crmContactCache.set(contact.id, contact);
+                return `
+          <tr>
+            <td>
+              ${displayPlain(contact.name)}
+              ${contact.is_primary ? '<div><span class="badge status-live">Primary</span></div>' : ""}
+            </td>
+            <td>${displayPlain(crmLinkedName(contact))}</td>
+            <td>${displayPlain(contact.role)}</td>
+            <td>${displayPlain(contact.email)}</td>
+            <td>${displayPlain(contact.phone)}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-primary" data-crm-contact-action="activity" data-id="${escapeAttr(contact.id)}">Activity</button>
+                <button class="btn btn-sm btn-info" data-crm-contact-action="edit" data-id="${escapeAttr(contact.id)}">Edit</button>
+                <button class="btn btn-sm btn-danger" data-crm-contact-action="delete" data-id="${escapeAttr(contact.id)}">Delete</button>
+              </div>
+            </td>
+          </tr>`;
+              })
+              .join("")
+          : exampleCrmContactRows(colspan);
+      }
+
+      function renderCrmContactCards(listId, contacts) {
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = contacts.length
+          ? contacts
+              .map((contact) => {
+                crmContactCache.set(contact.id, contact);
+                return `
+          <div class="detail-line">
+            <span>${escapeHtml(contact.role || (contact.is_primary ? "Primary contact" : "Contact"))}</span>
+            <strong>${displayPlain(contact.name)}</strong>
+            <div style="color:var(--muted);font-size:0.82rem;">
+              ${displayPlain(contact.email, "")}${contact.phone ? ` - ${escapeHtml(contact.phone)}` : ""}
+            </div>
+            <div class="action-buttons" style="margin-top:0.3rem;">
+              <button class="btn btn-sm btn-primary" data-crm-contact-action="activity" data-id="${escapeAttr(contact.id)}">Activity</button>
+              <button class="btn btn-sm btn-info" data-crm-contact-action="edit" data-id="${escapeAttr(contact.id)}">Edit</button>
+            </div>
+          </div>`;
+              })
+              .join("")
+          : `<div class="text-center" style="color:var(--muted);">No contacts recorded yet</div>`;
+      }
+
+      function renderCrmActivityTable(listId, activities, colspan = 5, emptyText = "No activities yet") {
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = activities.length
+          ? activities
+              .map(
+                (activity) => `
+          <tr>
+            <td>
+              ${displayPlain(activity.title)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayStatus(activity.activity_type)}</div>
+            </td>
+            <td>${displayPlain(crmLinkedName(activity))}</td>
+            <td>${crmDate(activity.due_date || activity.occurred_at || activity.created_at)}</td>
+            <td><span class="badge status-${safeStatusClass(activity.status)}">${displayStatus(activity.status)}</span></td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-info" data-crm-activity-action="edit" data-id="${escapeAttr(activity.id)}">Edit</button>
+                <button class="btn btn-sm btn-success" data-crm-activity-action="done" data-id="${escapeAttr(activity.id)}" ${activity.status !== "planned" ? "disabled" : ""}>Done</button>
+                <button class="btn btn-sm btn-danger" data-crm-activity-action="delete" data-id="${escapeAttr(activity.id)}">Delete</button>
+              </div>
+            </td>
+          </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="${colspan}" class="text-center">${escapeHtml(emptyText)}</td></tr>`;
+      }
+
+      function renderCrmTimeline(listId, activities, emptyText = "No activities yet") {
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = activities.length
+          ? activities
+              .map(
+                (activity) => `
+          <div class="timeline-item ${safeStatusClass(activity.status)}">
+            <div class="timeline-title">
+              <span>${displayPlain(activity.title)}</span>
+              <span class="badge status-${safeStatusClass(activity.activity_type)}">${displayStatus(activity.activity_type)}</span>
+              <span class="badge status-${safeStatusClass(activity.status)}">${displayStatus(activity.status)}</span>
+            </div>
+            <div class="timeline-meta">
+              ${displayPlain(crmLinkedName(activity), "")}
+              ${activity.contact_name ? ` - ${escapeHtml(activity.contact_name)}` : ""}
+              - ${crmDate(activity.due_date || activity.occurred_at || activity.created_at)}
+            </div>
+            ${activity.description ? `<div style="margin-top:0.35rem;">${escapeHtml(activity.description)}</div>` : ""}
+            <div class="action-buttons" style="margin-top:0.45rem;">
+              <button class="btn btn-sm btn-info" data-crm-activity-action="edit" data-id="${escapeAttr(activity.id)}">Edit</button>
+              <button class="btn btn-sm btn-success" data-crm-activity-action="done" data-id="${escapeAttr(activity.id)}" ${activity.status !== "planned" ? "disabled" : ""}>Done</button>
+            </div>
+          </div>`,
+              )
+              .join("")
+          : `<div class="text-center" style="color:var(--muted);">${escapeHtml(emptyText)}</div>`;
+      }
+
+      function exampleCrmContactRows(colspan = 6) {
+        if (colspan < 6) {
+          return `<tr><td colspan="${colspan}" class="text-center">No contacts recorded yet</td></tr>`;
+        }
+        return `
+          <tr class="example-row">
+            <td>Thandi Moyo <span class="badge status-later">Example</span></td>
+            <td>Afroscaff</td>
+            <td>Billing</td>
+            <td>accounts@afroscaff.example</td>
+            <td>+27 11 000 0000</td>
+            <td><span class="badge status-later">Example</span></td>
+          </tr>
+        `;
+      }
+
+      async function openCrmContactModal(context = {}) {
+        currentCrmContactId = context.contactId || null;
+        document.getElementById("crmContactForm").reset();
+        document.getElementById("crm-contact-modal-title").textContent =
+          currentCrmContactId ? "Edit Contact" : "New Contact";
+        await prepareCrmSources("crm_contact");
+
+        if (currentCrmContactId) {
+          const contact = await apiCall("/admin/crm/contacts/" + currentCrmContactId);
+          if (!contact) return;
+          setCrmRelation("crm_contact", contact);
+          setField("crm_contact_name", contact.name);
+          setField("crm_contact_email", contact.email);
+          setField("crm_contact_phone", contact.phone);
+          setField("crm_contact_role", contact.role);
+          setField("crm_contact_notes", contact.notes);
+          document.getElementById("crm_contact_primary").checked = !!contact.is_primary;
+        } else if (context.clientKey) {
+          applyClientToCrmContact(selectedClient(context.clientKey) || clientCache.get(context.clientKey));
+        } else if (context.leadId) {
+          applyLeadToCrmContact(selectedLead(context.leadId));
+        }
+
+        document.getElementById("crmContactModal").classList.add("show");
+      }
+
+      function closeCrmContactModal() {
+        document.getElementById("crmContactModal").classList.remove("show");
+        currentCrmContactId = null;
+      }
+
+      async function saveCrmContact() {
+        if (!document.getElementById("crmContactForm").checkValidity()) {
+          showAlert("Please enter the contact name", "danger");
+          return;
+        }
+        const data = {
+          lead_id: document.getElementById("crm_contact_lead_id").value,
+          client_id: document.getElementById("crm_contact_client_id").value,
+          client_email: document.getElementById("crm_contact_client_email").value,
+          client_name: document.getElementById("crm_contact_client_name").value,
+          name: document.getElementById("crm_contact_name").value,
+          email: document.getElementById("crm_contact_email").value,
+          phone: document.getElementById("crm_contact_phone").value,
+          role: document.getElementById("crm_contact_role").value,
+          is_primary: document.getElementById("crm_contact_primary").checked,
+          notes: document.getElementById("crm_contact_notes").value,
+        };
+        const endpoint = currentCrmContactId
+          ? "/admin/crm/contacts/" + currentCrmContactId
+          : "/admin/crm/contacts";
+        const method = currentCrmContactId ? "PUT" : "POST";
+        const result = await apiCall(endpoint, method, data);
+        if (result && (result.id || result.success)) {
+          showAlert("CRM contact saved", "success");
+          closeCrmContactModal();
+          if (!document.getElementById("crm-tab").classList.contains("hidden")) {
+            await loadCrm();
+          }
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
+        }
+      }
+
+      async function deleteCrmContact(id) {
+        if (!confirm("Delete this CRM contact?")) return;
+        const result = await apiCall("/admin/crm/contacts/" + id, "DELETE");
+        if (result && result.success) {
+          showAlert("CRM contact deleted", "success");
+          if (!document.getElementById("crm-tab").classList.contains("hidden")) {
+            await loadCrm();
+          }
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
+        }
+      }
+
+      async function openCrmActivityModal(context = {}) {
+        currentCrmActivityId = context.activityId || null;
+        document.getElementById("crmActivityForm").reset();
+        document.getElementById("crm-activity-modal-title").textContent =
+          currentCrmActivityId ? "Edit Activity" : "Add Activity";
+        await prepareCrmSources("crm_activity");
+        await loadCrmContactsForSelect("");
+
+        if (currentCrmActivityId) {
+          const activity = await apiCall("/admin/crm/activities/" + currentCrmActivityId);
+          if (!activity) return;
+          setCrmRelation("crm_activity", activity);
+          setField("crm_activity_contact_source", activity.contact_id || "");
+          setField("crm_activity_type", activity.activity_type || "note");
+          setField("crm_activity_status", activity.status || "planned");
+          setField("crm_activity_due_date", activity.due_date || "");
+          setField("crm_activity_occurred_at", activity.occurred_at || "");
+          setField("crm_activity_owner", activity.owner || "");
+          setField("crm_activity_title", activity.title || "");
+          setField("crm_activity_description", activity.description || "");
+        } else if (context.contact) {
+          applyContactToCrmActivity(context.contact);
+        } else if (context.clientKey) {
+          applyClientToCrmActivity(selectedClient(context.clientKey) || clientCache.get(context.clientKey));
+        } else if (context.leadId) {
+          applyLeadToCrmActivity(selectedLead(context.leadId));
+        }
+
+        const type = context.activityType || document.getElementById("crm_activity_type").value || "note";
+        setField("crm_activity_type", type);
+        applyCrmActivityDefaults(type);
+        document.getElementById("crmActivityModal").classList.add("show");
+      }
+
+      function closeCrmActivityModal() {
+        document.getElementById("crmActivityModal").classList.remove("show");
+        currentCrmActivityId = null;
+      }
+
+      async function saveCrmActivity() {
+        if (!document.getElementById("crmActivityForm").checkValidity()) {
+          showAlert("Please enter the activity title", "danger");
+          return;
+        }
+        const status = document.getElementById("crm_activity_status").value;
+        const today = new Date().toISOString().slice(0, 10);
+        const data = {
+          lead_id: document.getElementById("crm_activity_lead_id").value,
+          client_id: document.getElementById("crm_activity_client_id").value,
+          client_email: document.getElementById("crm_activity_client_email").value,
+          client_name: document.getElementById("crm_activity_client_name").value,
+          contact_id: document.getElementById("crm_activity_contact_source").value,
+          activity_type: document.getElementById("crm_activity_type").value,
+          status,
+          title: document.getElementById("crm_activity_title").value,
+          description: document.getElementById("crm_activity_description").value,
+          due_date: document.getElementById("crm_activity_due_date").value,
+          occurred_at: document.getElementById("crm_activity_occurred_at").value,
+          completed_at: status === "completed" ? today : "",
+          owner: document.getElementById("crm_activity_owner").value,
+        };
+        const endpoint = currentCrmActivityId
+          ? "/admin/crm/activities/" + currentCrmActivityId
+          : "/admin/crm/activities";
+        const method = currentCrmActivityId ? "PUT" : "POST";
+        const result = await apiCall(endpoint, method, data);
+        if (result && (result.id || result.success)) {
+          showAlert("CRM activity saved", "success");
+          closeCrmActivityModal();
+          if (!document.getElementById("crm-tab").classList.contains("hidden")) {
+            await loadCrm();
+          }
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
+        }
+      }
+
+      async function completeCrmActivity(id) {
+        const activity = await apiCall("/admin/crm/activities/" + id);
+        if (!activity) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const result = await apiCall("/admin/crm/activities/" + id, "PUT", {
+          ...activity,
+          status: "completed",
+          completed_at: today,
+          occurred_at: activity.occurred_at || today,
+        });
+        if (result && result.success) {
+          showAlert("CRM activity completed", "success");
+          if (!document.getElementById("crm-tab").classList.contains("hidden")) {
+            await loadCrm();
+          }
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
+        }
+      }
+
+      async function deleteCrmActivity(id) {
+        if (!confirm("Delete this CRM activity?")) return;
+        const result = await apiCall("/admin/crm/activities/" + id, "DELETE");
+        if (result && result.success) {
+          showAlert("CRM activity deleted", "success");
+          if (!document.getElementById("crm-tab").classList.contains("hidden")) {
+            await loadCrm();
+          }
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
+        }
+      }
+
       function moduleListEndpoint(config) {
         const params = new URLSearchParams(config.query || {});
         const query = params.toString();
@@ -4598,6 +5768,9 @@
           return;
         }
         list.innerHTML = config.render(rows);
+        if (moduleName === "leads") {
+          renderLeadPipeline(rows);
+        }
       }
 
       function emptyRows(rows, colspan, label) {
@@ -4607,10 +5780,16 @@
       }
 
       function renderLeadRows(rows) {
-        if (!rows.length) return exampleLeadRows();
+        leadCache.clear();
+        if (!rows.length) {
+          renderLeadPipeline([]);
+          return exampleLeadRows();
+        }
         return rows
           .map(
-            (lead) => `
+            (lead) => {
+              leadCache.set(lead.id, lead);
+              return `
           <tr>
             <td>${displayPlain(lead.company_name)}</td>
             <td>
@@ -4622,14 +5801,69 @@
             <td>${displayDate(lead.next_follow_up)}</td>
             <td>
               <div class="action-buttons">
+                <button class="btn btn-sm btn-info" data-lead-view="${escapeAttr(lead.id)}">View</button>
                 <button class="btn btn-sm btn-secondary" data-lead-q="${escapeAttr(lead.id)}">Questionnaire</button>
+                <button class="btn btn-sm btn-primary" data-lead-activity="${escapeAttr(lead.id)}">Activity</button>
+                <button class="btn btn-sm btn-secondary" data-lead-contact="${escapeAttr(lead.id)}">Contact</button>
               </div>
               ${leadWorkflowButtons(lead)}
               ${actionButtons("leads", lead.id)}
             </td>
           </tr>
-        `,
+        `;
+            },
           )
+          .join("");
+      }
+
+      function renderLeadPipeline(rows) {
+        const board = document.getElementById("lead-pipeline-board");
+        if (!board) return;
+        const stages = ["new", "qualified", "meeting", "requirements", "proposal", "won", "lost"];
+        const today = new Date().toISOString().slice(0, 10);
+        const grouped = new Map(stages.map((stage) => [stage, []]));
+        rows.forEach((lead) => {
+          const stage = stages.includes(lead.stage) ? lead.stage : "new";
+          grouped.get(stage).push(lead);
+          leadCache.set(lead.id, lead);
+        });
+
+        board.innerHTML = stages
+          .map((stage) => {
+            const leads = grouped.get(stage) || [];
+            const cards = leads.length
+              ? leads
+                  .map((lead) => {
+                    const overdue =
+                      lead.next_follow_up &&
+                      lead.next_follow_up < today &&
+                      !["won", "lost"].includes(lead.stage);
+                    return `
+              <div class="pipeline-card">
+                <div class="pipeline-card-title">${displayPlain(lead.company_name)}</div>
+                <div class="pipeline-card-meta">
+                  ${displayPlain(lead.contact_name, "")}
+                  ${lead.email ? `<div>${escapeHtml(lead.email)}</div>` : ""}
+                  <div>${money(lead.estimated_value)} - <span class="badge status-${safeStatusClass(lead.priority)}">${displayStatus(lead.priority)}</span></div>
+                  <div class="${overdue ? "overdue-text" : ""}">Follow-up: ${displayDate(lead.next_follow_up)}</div>
+                </div>
+                <div class="action-buttons" style="margin-top:0.55rem;">
+                  <button class="btn btn-sm btn-info" data-lead-view="${escapeAttr(lead.id)}">View</button>
+                  <button class="btn btn-sm btn-primary" data-lead-activity="${escapeAttr(lead.id)}">Activity</button>
+                </div>
+              </div>`;
+                  })
+                  .join("")
+              : `<div class="pipeline-card"><div class="pipeline-card-meta">No leads</div></div>`;
+            return `
+          <div class="pipeline-column">
+            <div class="pipeline-column-header">
+              <h4>${displayStatus(stage)}</h4>
+              <span class="badge status-${safeStatusClass(stage)}">${leads.length}</span>
+            </div>
+            <div class="pipeline-column-body">${cards}</div>
+          </div>`;
+          })
           .join("");
       }
 
@@ -5257,8 +6491,10 @@
           if (["leads", "clients", "quotes"].includes(moduleName)) {
             resetWorkflowSourceCache();
           }
-          loadModule(moduleName);
-          loadDashboard();
+          await loadModule(moduleName);
+          await loadDashboard();
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -5270,8 +6506,10 @@
         const result = await apiCall(moduleRecordEndpoint(config, id), "DELETE");
         if (result && result.success) {
           showAlert(config.singular + " deleted", "success");
-          loadModule(moduleName);
-          loadDashboard();
+          await loadModule(moduleName);
+          await loadDashboard();
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -5466,6 +6704,7 @@
           loadQuotes();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -5627,6 +6866,7 @@
           loadInvoices();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
         window.open(`/invoices/index.html?id=${encodeURIComponent(id)}&download=1`, "_blank");
       }
@@ -5639,6 +6879,7 @@
             loadInvoices();
             loadDashboard();
             await refreshClient360IfVisible();
+            await refreshLead360IfVisible();
           }
         }
       }
@@ -5762,6 +7003,7 @@
           loadInvoices();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
           if (result.payment && result.payment.id) {
             downloadReceipt(result.payment.id);
           }
@@ -5785,6 +7027,7 @@
           loadInvoices();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -5987,6 +7230,7 @@
           loadQuotes();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -6082,6 +7326,7 @@
           loadQuotes();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
         window.open(`/invoices/quote.html?id=${encodeURIComponent(id)}&download=1`, "_blank");
       }
@@ -6095,6 +7340,7 @@
             loadQuotes();
             loadDashboard();
             await refreshClient360IfVisible();
+            await refreshLead360IfVisible();
           }
         }
       }
@@ -6159,6 +7405,184 @@
             <td><span class="badge status-later">Example</span></td>
           </tr>
         `;
+      }
+
+      function isLead360Visible() {
+        const tab = document.getElementById("lead360-tab");
+        return !!(tab && currentLead360?.lead?.id && !tab.classList.contains("hidden"));
+      }
+
+      async function refreshLead360IfVisible() {
+        if (isLead360Visible()) {
+          await viewLead360(currentLead360.lead.id, { keepTab: true });
+        }
+      }
+
+      async function viewLead360(leadId, options = {}) {
+        if (!leadId) {
+          showAlert("Select a lead first", "danger");
+          return;
+        }
+        const data = await apiCall("/admin/leads/" + encodeURIComponent(leadId) + "/overview");
+        if (!data || !data.lead) {
+          return;
+        }
+        currentLead360 = data;
+        leadCache.set(data.lead.id, data.lead);
+        renderLead360(currentLead360);
+        if (!options.keepTab) {
+          showTab("lead360");
+        }
+      }
+
+      function renderLead360(data) {
+        const lead = data.lead || {};
+        const kpis = data.kpis || {};
+        currentLead360 = data;
+        leadCache.set(lead.id, lead);
+
+        document.getElementById("lead360-title").textContent =
+          lead.company_name || lead.contact_name || "Lead 360";
+        document.getElementById("lead360-value").textContent = money(
+          lead.estimated_value,
+        );
+        document.getElementById("lead360-quotes-count").textContent =
+          Number(kpis.quote_count || 0);
+        document.getElementById("lead360-invoiced").textContent = money(
+          kpis.total_invoiced,
+        );
+        document.getElementById("lead360-outstanding").textContent = money(
+          kpis.outstanding,
+        );
+
+        document.getElementById("lead360-profile").innerHTML = `
+          ${client360Detail("Company", lead.company_name)}
+          ${client360Detail("Contact", lead.contact_name)}
+          ${client360Detail("Email", lead.email)}
+          ${client360Detail("Phone", lead.phone)}
+          ${client360Detail("Source", lead.source)}
+          ${client360Detail("Stage", displayStatus(lead.stage))}
+          ${client360Detail("Priority", displayStatus(lead.priority))}
+          ${client360Detail("Next Follow-up", displayDate(lead.next_follow_up))}
+          ${client360Detail("Notes", lead.notes)}
+        `;
+
+        renderLead360Questionnaire(data.questionnaire, lead);
+        renderLead360Clients(data.clients || []);
+        renderCrmContactCards("lead360-contacts", data.contacts || []);
+        renderCrmTimeline(
+          "lead360-activities",
+          data.activities || [],
+          "No CRM activity recorded yet",
+        );
+        renderClient360Quotes(data.quotes || [], "lead360-quotes");
+        renderClient360Invoices(data.invoices || [], "lead360-invoices");
+        renderClient360Receipts(data.receipts || [], "lead360-receipts");
+      }
+
+      function renderLead360Questionnaire(questionnaire, lead) {
+        const panel = document.getElementById("lead360-questionnaire");
+        if (!panel) return;
+        if (!questionnaire) {
+          panel.innerHTML = `
+            <div class="detail-line">
+              <span>Status</span>
+              <strong>Not sent</strong>
+            </div>
+            <div class="action-buttons">
+              <button class="btn btn-sm btn-primary" data-q-generate="${escapeAttr(lead.id)}">Generate</button>
+              <button class="btn btn-sm btn-secondary" data-q-send="${escapeAttr(lead.id)}">Send</button>
+            </div>
+          `;
+          return;
+        }
+        panel.innerHTML = `
+          ${client360Detail("Status", displayStatus(questionnaire.status))}
+          ${client360Detail("Created", crmDate(questionnaire.created_at))}
+          ${client360Detail("Submitted", crmDate(questionnaire.submitted_at))}
+          ${client360Detail("Expires", crmDate(questionnaire.expires_at))}
+          <div class="action-buttons">
+            <button class="btn btn-sm btn-secondary" data-lead-q="${escapeAttr(lead.id)}">View</button>
+            <button class="btn btn-sm btn-primary" data-q-send="${escapeAttr(lead.id)}">Send</button>
+          </div>
+        `;
+      }
+
+      function renderLead360Clients(clients) {
+        const panel = document.getElementById("lead360-clients");
+        if (!panel) return;
+        panel.innerHTML = clients.length
+          ? clients
+              .map((client) => {
+                const key = workflowClientKey(client);
+                clientCache.set(key, client);
+                return `
+          <div class="detail-line">
+            <span>${client.id ? "Saved client" : "Client"}</span>
+            <strong>${displayPlain(client.name || client.email)}</strong>
+            <div style="color:var(--muted);font-size:0.82rem;">${displayPlain(client.email, "")}</div>
+            <div class="action-buttons" style="margin-top:0.3rem;">
+              <button class="btn btn-sm btn-info" data-client-action="view" data-client-key="${escapeAttr(key)}">Client 360</button>
+              <button class="btn btn-sm btn-secondary" data-client-action="edit" data-client-key="${escapeAttr(key)}">Edit</button>
+            </div>
+          </div>`;
+              })
+              .join("")
+          : `<div class="text-center" style="color:var(--muted);">No client profile linked yet</div>`;
+      }
+
+      function editLead360() {
+        if (currentLead360?.lead?.id) {
+          openModuleModal("leads", currentLead360.lead.id);
+        }
+      }
+
+      function contactLead360() {
+        if (currentLead360?.lead?.id) {
+          openCrmContactModal({ leadId: currentLead360.lead.id });
+        }
+      }
+
+      function noteLead360() {
+        if (currentLead360?.lead?.id) {
+          openCrmActivityModal({ leadId: currentLead360.lead.id, activityType: "note" });
+        }
+      }
+
+      function callLead360() {
+        if (currentLead360?.lead?.id) {
+          openCrmActivityModal({ leadId: currentLead360.lead.id, activityType: "call" });
+        }
+      }
+
+      function meetingLead360() {
+        if (currentLead360?.lead?.id) {
+          openCrmActivityModal({ leadId: currentLead360.lead.id, activityType: "meeting" });
+        }
+      }
+
+      function followUpLead360() {
+        if (currentLead360?.lead?.id) {
+          openCrmActivityModal({ leadId: currentLead360.lead.id, activityType: "follow_up" });
+        }
+      }
+
+      function clientLead360() {
+        if (currentLead360?.lead?.id) {
+          openClientModal({ leadId: currentLead360.lead.id });
+        }
+      }
+
+      function quoteLead360() {
+        if (currentLead360?.lead?.id) {
+          openQuoteModal({ leadId: currentLead360.lead.id });
+        }
+      }
+
+      function invoiceLead360() {
+        if (currentLead360?.lead?.id) {
+          openInvoiceModal({ leadId: currentLead360.lead.id });
+        }
       }
 
       function client360Endpoint(client) {
@@ -6262,13 +7686,20 @@
           `
           : `<div class="text-center" style="color:var(--muted);">No linked lead yet</div>`;
 
+        renderCrmContactCards("client360-contacts", data.contacts || []);
+        renderCrmTimeline(
+          "client360-activities",
+          data.activities || [],
+          "No CRM activity recorded yet",
+        );
         renderClient360Quotes(data.quotes || []);
         renderClient360Invoices(data.invoices || []);
         renderClient360Receipts(data.receipts || []);
       }
 
-      function renderClient360Quotes(quotes) {
-        const list = document.getElementById("client360-quotes");
+      function renderClient360Quotes(quotes, listId = "client360-quotes") {
+        const list = document.getElementById(listId);
+        if (!list) return;
         list.innerHTML = quotes.length
           ? quotes
               .map(
@@ -6294,8 +7725,9 @@
           : `<tr><td colspan="5" class="text-center">No linked quotes yet</td></tr>`;
       }
 
-      function renderClient360Invoices(invoices) {
-        const list = document.getElementById("client360-invoices");
+      function renderClient360Invoices(invoices, listId = "client360-invoices") {
+        const list = document.getElementById(listId);
+        if (!list) return;
         list.innerHTML = invoices.length
           ? invoices
               .map(
@@ -6323,8 +7755,9 @@
           : `<tr><td colspan="7" class="text-center">No linked invoices yet</td></tr>`;
       }
 
-      function renderClient360Receipts(receipts) {
-        const list = document.getElementById("client360-receipts");
+      function renderClient360Receipts(receipts, listId = "client360-receipts") {
+        const list = document.getElementById(listId);
+        if (!list) return;
         list.innerHTML = receipts.length
           ? receipts
               .map(
@@ -6351,6 +7784,36 @@
       function editClient360() {
         if (currentClient360?.key) {
           openClientModal(currentClient360.key);
+        }
+      }
+
+      function contactClient360() {
+        if (currentClient360?.key) {
+          openCrmContactModal({ clientKey: currentClient360.key });
+        }
+      }
+
+      function noteClient360() {
+        if (currentClient360?.key) {
+          openCrmActivityModal({ clientKey: currentClient360.key, activityType: "note" });
+        }
+      }
+
+      function callClient360() {
+        if (currentClient360?.key) {
+          openCrmActivityModal({ clientKey: currentClient360.key, activityType: "call" });
+        }
+      }
+
+      function meetingClient360() {
+        if (currentClient360?.key) {
+          openCrmActivityModal({ clientKey: currentClient360.key, activityType: "meeting" });
+        }
+      }
+
+      function followUpClient360() {
+        if (currentClient360?.key) {
+          openCrmActivityModal({ clientKey: currentClient360.key, activityType: "follow_up" });
         }
       }
 
@@ -6399,6 +7862,7 @@
           if (reopenClient360 && nextClientKey) {
             await viewClient360(nextClientKey, { keepTab: true });
           }
+          await refreshLead360IfVisible();
         }
       }
 
@@ -6417,7 +7881,9 @@
         if (result && result.success) {
           showAlert("Client deleted successfully!", "success");
           resetWorkflowSourceCache();
-          loadClients();
+          await loadClients();
+          await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         }
       }
 
@@ -6546,6 +8012,7 @@
             loadQuotes();
             loadDashboard();
             await refreshClient360IfVisible();
+            await refreshLead360IfVisible();
           }
           window.open(`/invoices/quote.html?id=${encodeURIComponent(currentViewQuoteId)}`, "_blank");
           return;
@@ -6566,6 +8033,7 @@
             loadInvoices();
             loadDashboard();
             await refreshClient360IfVisible();
+            await refreshLead360IfVisible();
           }
           window.open(`/invoices/index.html?id=${encodeURIComponent(currentViewInvoiceId)}`, "_blank");
           return;
@@ -6592,6 +8060,7 @@
           loadInvoices();
           loadDashboard();
           await refreshClient360IfVisible();
+          await refreshLead360IfVisible();
         } else if (result && result.error) {
           showAlert("Failed to send: " + result.error, "danger");
         }

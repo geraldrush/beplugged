@@ -132,6 +132,41 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS crm_contacts (
+    id TEXT PRIMARY KEY,
+    lead_id TEXT,
+    client_id TEXT,
+    client_email TEXT,
+    client_name TEXT,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    role TEXT,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS crm_activities (
+    id TEXT PRIMARY KEY,
+    lead_id TEXT,
+    client_id TEXT,
+    client_email TEXT,
+    client_name TEXT,
+    contact_id TEXT,
+    activity_type TEXT NOT NULL DEFAULT 'note' CHECK (activity_type IN ('note', 'call', 'meeting', 'email', 'whatsapp', 'follow_up', 'task')),
+    status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('planned', 'completed', 'cancelled')),
+    title TEXT NOT NULL,
+    description TEXT,
+    due_date DATE,
+    occurred_at DATE,
+    completed_at DATE,
+    owner TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Requirements capture table
 CREATE TABLE IF NOT EXISTS requirements (
     id TEXT PRIMARY KEY,
@@ -301,6 +336,20 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
 CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads (stage);
 
 CREATE INDEX IF NOT EXISTS idx_leads_follow_up ON leads (next_follow_up);
+
+CREATE INDEX IF NOT EXISTS idx_crm_contacts_lead_id ON crm_contacts (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_crm_contacts_client_id ON crm_contacts (client_id);
+
+CREATE INDEX IF NOT EXISTS idx_crm_contacts_client_email ON crm_contacts (client_email);
+
+CREATE INDEX IF NOT EXISTS idx_crm_activities_lead_id ON crm_activities (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_crm_activities_client_id ON crm_activities (client_id);
+
+CREATE INDEX IF NOT EXISTS idx_crm_activities_client_email ON crm_activities (client_email);
+
+CREATE INDEX IF NOT EXISTS idx_crm_activities_status_due ON crm_activities (status, due_date);
 
 CREATE INDEX IF NOT EXISTS idx_clients_lead_id ON clients (lead_id);
 
