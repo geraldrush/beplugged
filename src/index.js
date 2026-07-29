@@ -5652,6 +5652,139 @@ async function notifyReviewReceived(env, project, rating, answers) {
   });
 }
 
+// Everything that happened to a project, in order, gathered from the records
+// themselves rather than the audit log, so history that predates the log is
+// still shown.
+// SQLite writes "2026-07-29 16:25:01" and JavaScript writes an ISO string, so
+// sorting the raw values put every database timestamp before every application
+// one. Normalise before comparing.
+function normaliseTimestamp(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(text)) {
+    return text.replace(" ", "T").replace(/(\.\d+)?$/, "") + "Z";
+  }
+  return text;
+}
+
+// Where several things share a timestamp, fall back to the order they happen
+// in the flow so the journey still reads start to finish.
+const JOURNEY_ORDER = [
+  "lead",
+  "questionnaire",
+  "quote",
+  "accepted",
+  "declined",
+  "project",
+  "agreement",
+  "signed",
+  "milestone",
+  "invoice",
+  "payment",
+  "done",
+  "review",
+];
+
+async function loadProjectJourney(env, projectId) {
+  const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+    .bind(projectId)
+    .first();
+  if (!project) {
+    throw new RequestError("Project not found", 404);
+  }
+
+  const events = [];
+  const add = (at, kind, title, detail) => {
+    const when = normaliseTimestamp(at);
+    if (!when) return;
+    events.push({ at: when, kind, title, detail: detail || "" });
+  };
+
+  const [quotes, agreements, invoices, milestones, payments] = await Promise.all([
+    env.DB.prepare("SELECT * FROM quotes WHERE project_id = ?").bind(projectId).all(),
+    env.DB.prepare("SELECT * FROM scope_agreements WHERE linked_id = ? ORDER BY version ASC").bind(projectId).all(),
+    env.DB.prepare("SELECT * FROM invoices WHERE project_id = ? ORDER BY created_at ASC").bind(projectId).all(),
+    env.DB.prepare("SELECT * FROM project_milestones WHERE project_id = ? ORDER BY position ASC").bind(projectId).all(),
+    env.DB.prepare(
+      `SELECT p.* FROM payments p JOIN invoices i ON i.id = p.invoice_id
+       WHERE i.project_id = ? ORDER BY p.created_at ASC`,
+    ).bind(projectId).all(),
+  ]);
+
+  // Where the work came from
+  for (const q of quotes.results || []) {
+    add(q.created_at, "quote", `Quote ${q.quote_number} raised`, formatMoney(Number(q.amount || 0) + Number(q.tax || 0)));
+    add(q.accepted_at, "accepted", `Quote ${q.quote_number} accepted`, q.accepted_name ? `by ${q.accepted_name}` : "");
+    if (q.status === "rejected") {
+      add(q.created_at, "declined", `Quote ${q.quote_number} declined`, q.decline_reason || "");
+    }
+    if (q.lead_id) {
+      const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?").bind(q.lead_id).first();
+      if (lead) {
+        add(lead.created_at, "lead", `Enquiry from ${lead.company_name}`, lead.source ? `via ${lead.source}` : "");
+        const qn = await env.DB.prepare(
+          "SELECT * FROM lead_questionnaires WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1",
+        ).bind(q.lead_id).first();
+        if (qn) {
+          add(qn.created_at, "questionnaire", "Questionnaire sent", "");
+          add(qn.submitted_at, "questionnaire", "Questionnaire completed", "answers recorded");
+        }
+      }
+    }
+  }
+
+  add(project.created_at, "project", `Project ${project.project_code} created`, project.name);
+
+  for (const a of agreements.results || []) {
+    const label = Number(a.version || 1) > 1 ? `Addendum ${a.version}` : "Scope agreement";
+    add(a.sent_at, "agreement", `${label} sent for signature`, a.title);
+    add(a.signed_at, "signed", `${label} signed`, a.signed_name ? `by ${a.signed_name}` : "");
+  }
+
+  for (const m of milestones.results || []) {
+    add(m.created_at, "milestone", `Milestone added — ${m.title}`, m.source_type === "agreement" ? "from a signed agreement" : "");
+    add(m.completed_at, "done", `Milestone complete — ${m.title}`, "");
+  }
+
+  for (const i of invoices.results || []) {
+    const total = Number(i.amount || 0) + Number(i.tax || 0);
+    add(i.created_at, "invoice", `Invoice ${i.invoice_number} raised`, formatMoney(total));
+  }
+  for (const pay of payments.results || []) {
+    add(pay.created_at, "payment", "Payment received", formatMoney(Number(pay.amount || 0)));
+  }
+
+  add(project.review_sent_at, "review", "Feedback requested", "");
+  add(
+    project.review_submitted_at,
+    "review",
+    "Feedback received",
+    project.review_rating ? `rated ${project.review_rating} of 5` : "",
+  );
+
+  // Compare to the second: the database records whole seconds while the
+  // application records milliseconds, so a sub-second difference between the
+  // two is precision, not sequence. Within a second, use the order of the flow.
+  events.sort((a, b) => {
+    const sa = Math.floor(Date.parse(a.at) / 1000);
+    const sb = Math.floor(Date.parse(b.at) / 1000);
+    if (sa !== sb) return sa - sb;
+    return JOURNEY_ORDER.indexOf(a.kind) - JOURNEY_ORDER.indexOf(b.kind);
+  });
+
+  return {
+    project: {
+      id: project.id,
+      name: project.name,
+      project_code: project.project_code,
+      client_name: project.client_name,
+      status: project.status,
+      progress: project.progress,
+    },
+    events,
+  };
+}
+
 async function handlePublicProgress(env, token) {
   await ensureSchema(env);
   if (!token) {
@@ -5919,6 +6052,10 @@ async function handleProjects(request, env, path, method) {
   const segments = path.split("/");
   const projectId = segments[4];
   const action = segments[5];
+
+  if (projectId && action === "journey" && method === "GET") {
+    return json(await loadProjectJourney(env, projectId));
+  }
 
   if (projectId && action === "plan") {
     if (method === "GET") {

@@ -473,6 +473,42 @@
         color: rgba(44, 45, 63, 0.72);
       }
 
+      .jr { position: relative; padding-left: 0.25rem; }
+      .jr-row { display: flex; gap: 0.85rem; padding: 0.6rem 0; position: relative; }
+      .jr-row::before {
+        content: "";
+        position: absolute;
+        left: 13px;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--border);
+      }
+      .jr-row:first-child::before { top: 50%; }
+      .jr-row:last-child::before { bottom: 50%; }
+      .jr-dot {
+        position: relative;
+        z-index: 1;
+        flex: none;
+        width: 27px;
+        height: 27px;
+        border-radius: 50%;
+        background: #fff;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+      .jr-row.good .jr-dot { border-color: rgba(30,135,80,.4); color: var(--success); background: rgba(30,135,80,.08); }
+      .jr-row.bad .jr-dot { border-color: rgba(192,57,43,.4); color: var(--danger); background: rgba(192,57,43,.08); }
+      .jr-body { flex: 1; min-width: 0; }
+      .jr-title { font-size: 0.86rem; font-weight: 600; }
+      .jr-detail { font-size: 0.79rem; color: var(--muted); }
+      .jr-when { flex: none; font-size: 0.76rem; color: var(--muted); padding-top: 0.15rem; }
+
       .next-action {
         display: flex;
         align-items: center;
@@ -2925,6 +2961,24 @@
       </div>
     </div>
 
+    <!-- Everything that happened to a project, in order -->
+    <div id="journeyModal" class="modal">
+      <div class="modal-content" style="max-width: 720px">
+        <div class="modal-header">
+          <h5 id="journey-title">Project journey</h5>
+          <button type="button" onclick="closeJourneyModal()"
+            style="background:none;border:none;color:inherit;font-size:1.5rem;cursor:pointer;">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-meta" id="journey-meta"></div>
+          <div id="journey-body"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeJourneyModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Naming a project created from an invoice -->
     <div id="projectNameModal" class="modal">
       <div class="modal-content" style="max-width: 520px">
@@ -4118,6 +4172,60 @@
       // record; this turns it into client-facing wording to be signed.
       // Invoiced work becomes a project, so what has been paid for appears on
       // the delivery side rather than only in the finance tables.
+      const JOURNEY_ICONS = {
+        lead: "✉", questionnaire: "?", quote: "R", accepted: "✓", declined: "✕",
+        project: "▣", agreement: "§", signed: "✎", milestone: "◆", done: "✓",
+        invoice: "R", payment: "$", review: "★",
+      };
+      const JOURNEY_TONE = {
+        accepted: "good", signed: "good", done: "good", payment: "good", review: "good",
+        declined: "bad",
+      };
+
+      async function openJourney(projectId) {
+        const body = document.getElementById("journey-body");
+        body.innerHTML = "<p>Loading…</p>";
+        document.getElementById("journeyModal").classList.add("show");
+        const data = await apiCall("/admin/projects/" + projectId + "/journey");
+        if (!data) return;
+
+        document.getElementById("journey-title").textContent =
+          (data.project.name || "Project") + " — journey";
+        document.getElementById("journey-meta").innerHTML = [
+          `<span>${escapeHtml(data.project.project_code || "")}</span>`,
+          data.project.client_name ? `<span>${escapeHtml(data.project.client_name)}</span>` : "",
+          `<span class="badge status-${safeStatusClass(data.project.status)}">${displayStatus(data.project.status)}</span>`,
+          `<span>${Number(data.project.progress || 0)}% complete</span>`,
+        ].filter(Boolean).join("");
+
+        const events = data.events || [];
+        body.innerHTML = events.length
+          ? `<div class="jr">${events
+              .map(
+                (e) => `
+              <div class="jr-row ${JOURNEY_TONE[e.kind] || ""}">
+                <div class="jr-dot">${JOURNEY_ICONS[e.kind] || "·"}</div>
+                <div class="jr-body">
+                  <div class="jr-title">${escapeHtml(e.title)}</div>
+                  ${e.detail ? `<div class="jr-detail">${escapeHtml(e.detail)}</div>` : ""}
+                </div>
+                <div class="jr-when">${escapeHtml(journeyWhen(e.at))}</div>
+              </div>`,
+              )
+              .join("")}</div>`
+          : `<p style="color:var(--muted);">Nothing recorded for this project yet.</p>`;
+      }
+
+      function journeyWhen(at) {
+        const d = new Date(at);
+        if (isNaN(d)) return "";
+        return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      }
+
+      function closeJourneyModal() {
+        document.getElementById("journeyModal").classList.remove("show");
+      }
+
       let convertQuoteId = null;
       let convertQuoteTotal = 0;
 
@@ -5412,6 +5520,9 @@
 
         const goto = event.target.closest("[data-goto-tab]");
         if (goto) { showTab(goto.dataset.gotoTab); return; }
+
+        const jrBtn = event.target.closest("[data-project-journey]");
+        if (jrBtn) { openJourney(jrBtn.dataset.projectJourney); return; }
 
         const revBtn = event.target.closest("[data-project-review]");
         if (revBtn) {
@@ -6718,6 +6829,7 @@
             </td>
             <td>
               <button class="btn btn-sm btn-primary" data-project-plan="${escapeAttr(project.id)}" data-project-name="${escapeAttr(project.name)}">Plan &amp; progress</button>
+              <button class="btn btn-sm btn-secondary" data-project-journey="${escapeAttr(project.id)}">Journey</button>
               ${project.status === "completed" && !project.review_submitted_at ? `<button class="btn btn-sm btn-success" data-project-review="${escapeAttr(project.id)}">Ask for a review</button>` : ""}
               ${project.review_rating ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem;">Rated ${Number(project.review_rating)}/5</div>` : ""}
               <div class="action-buttons">
