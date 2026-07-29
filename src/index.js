@@ -5235,14 +5235,17 @@ function milestoneProgress(milestone, tasks) {
   return { percent: Math.round((done / own.length) * 100), done, total: own.length };
 }
 
+// Average of the milestones' own progress. Counting tasks project-wide looked
+// simpler but silently discarded any milestone that was done without tasks
+// under it, so completing one and then adding a task elsewhere sent the figure
+// backwards to zero.
 function projectProgress(milestones, tasks) {
   if (!milestones.length) return 0;
-  if (tasks.length) {
-    const done = tasks.filter((t) => t.status === "done").length;
-    return Math.round((done / tasks.length) * 100);
-  }
-  const done = milestones.filter((m) => m.status === "done").length;
-  return Math.round((done / milestones.length) * 100);
+  const total = milestones.reduce(
+    (sum, m) => sum + milestoneProgress(m, tasks).percent,
+    0,
+  );
+  return Math.round(total / milestones.length);
 }
 
 async function loadProjectPlan(env, projectId) {
