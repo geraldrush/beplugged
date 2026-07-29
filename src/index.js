@@ -218,6 +218,14 @@ export default {
         return await handleInvoices(request, env, path, method);
       }
 
+      if (path.startsWith("/api/admin/milestones")) {
+        return await handleMilestones(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/tasks")) {
+        return await handleTasks(request, env, path, method);
+      }
+
       if (path.startsWith("/api/admin/agreements")) {
         return await handleAgreements(request, env, path, method);
       }
@@ -252,6 +260,11 @@ export default {
       // Client-facing intake questionnaire. Reached by an unguessable token
       // rather than a login, so it must never expose anything beyond the one
       // lead the token belongs to.
+      if (path.startsWith("/api/progress/")) {
+        const token = path.split("/")[3];
+        return await handlePublicProgress(env, token);
+      }
+
       if (path.startsWith("/api/agreement/")) {
         const token = path.split("/")[3];
         return await handlePublicAgreement(request, env, token, method);
@@ -1430,6 +1443,50 @@ async function runSchemaSetup(env) {
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id)",
   ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS project_milestones (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      position INTEGER NOT NULL DEFAULT 0,
+      due_date DATE,
+      completed_at DATETIME,
+      source_type TEXT,
+      source_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS milestone_tasks (
+      id TEXT PRIMARY KEY,
+      milestone_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'todo',
+      position INTEGER NOT NULL DEFAULT 0,
+      owner TEXT,
+      due_date DATE,
+      completed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones (project_id)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON milestone_tasks (milestone_id)",
+  ).run();
+  // Read-only progress link the client can be given, and the review sent at
+  // handover. Both are unguessable tokens, like the questionnaire.
+  await ensureColumn(env, "projects", "share_token", "share_token TEXT");
+  await ensureColumn(env, "projects", "review_token", "review_token TEXT");
+  await ensureColumn(env, "projects", "review_sent_at", "review_sent_at DATETIME");
+  await ensureColumn(env, "projects", "review_rating", "review_rating INTEGER");
+  await ensureColumn(env, "projects", "review_submitted_at", "review_submitted_at DATETIME");
   // Must come after the table exists: ensureColumn returns early when
   // PRAGMA table_info finds nothing.
   await ensureColumn(
@@ -3427,6 +3484,22 @@ async function handlePublicAgreement(request, env, token, method) {
     details: { signed_name: signedName, ip, body_hash: row.body_hash },
   });
 
+  // A signed agreement becomes planned work on the project it governs.
+  try {
+    await createMilestoneFromAgreement(env, {
+      ...row,
+      signed_name: signedName,
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "milestone_from_agreement_failed",
+        agreement_id: row.id,
+        error: String(error?.message || error),
+      }),
+    );
+  }
+
   // Both parties get a copy. A failure here must not undo a valid signature.
   try {
     await sendSignedCopies(
@@ -5148,10 +5221,383 @@ async function handleRequirements(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+const MILESTONE_STATUSES = new Set(["pending", "active", "done", "blocked"]);
+const TASK_STATUSES = new Set(["todo", "doing", "done", "blocked"]);
+
+// Progress is computed from tasks where they exist, so the percentage is
+// earned rather than typed. A milestone with no tasks counts by its status.
+function milestoneProgress(milestone, tasks) {
+  const own = tasks.filter((t) => t.milestone_id === milestone.id);
+  if (!own.length) {
+    return { percent: milestone.status === "done" ? 100 : 0, done: 0, total: 0 };
+  }
+  const done = own.filter((t) => t.status === "done").length;
+  return { percent: Math.round((done / own.length) * 100), done, total: own.length };
+}
+
+function projectProgress(milestones, tasks) {
+  if (!milestones.length) return 0;
+  if (tasks.length) {
+    const done = tasks.filter((t) => t.status === "done").length;
+    return Math.round((done / tasks.length) * 100);
+  }
+  const done = milestones.filter((m) => m.status === "done").length;
+  return Math.round((done / milestones.length) * 100);
+}
+
+async function loadProjectPlan(env, projectId) {
+  const milestones = await env.DB.prepare(
+    "SELECT * FROM project_milestones WHERE project_id = ? ORDER BY position ASC, created_at ASC",
+  )
+    .bind(projectId)
+    .all();
+  const tasks = await env.DB.prepare(
+    "SELECT * FROM milestone_tasks WHERE project_id = ? ORDER BY position ASC, created_at ASC",
+  )
+    .bind(projectId)
+    .all();
+  const ms = milestones.results || [];
+  const ts = tasks.results || [];
+  return {
+    milestones: ms.map((m) => ({ ...m, ...milestoneProgress(m, ts), tasks: ts.filter((t) => t.milestone_id === m.id) })),
+    tasks: ts,
+    percent: projectProgress(ms, ts),
+  };
+}
+
+// Keeps projects.progress in step with the plan, so the dashboard and the
+// client link never disagree.
+async function syncProjectProgress(env, projectId) {
+  const plan = await loadProjectPlan(env, projectId);
+  await env.DB.prepare(
+    "UPDATE projects SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  )
+    .bind(plan.percent, projectId)
+    .run();
+  return plan;
+}
+
+async function nextPosition(env, table, column, value) {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next FROM ${table} WHERE ${column} = ?`,
+  )
+    .bind(value)
+    .first();
+  return Number(row?.next || 0);
+}
+
+// What the client sees: milestones and their state, never the task detail
+// underneath, and never anything about money.
+async function handlePublicProgress(env, token) {
+  await ensureSchema(env);
+  if (!token) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const project = await env.DB.prepare(
+    "SELECT * FROM projects WHERE share_token = ?",
+  )
+    .bind(token)
+    .first();
+  if (!project) {
+    return json({ error: "This link is no longer valid" }, { status: 404 });
+  }
+  const plan = await loadProjectPlan(env, project.id);
+  return json({
+    project_code: project.project_code,
+    name: project.name,
+    client_name: project.client_name,
+    status: project.status,
+    start_date: project.start_date,
+    due_date: project.due_date,
+    percent: plan.percent,
+    milestones: plan.milestones.map((m) => ({
+      title: m.title,
+      description: m.description,
+      status: m.status,
+      due_date: m.due_date,
+      percent: m.percent,
+      done: m.done,
+      total: m.total,
+    })),
+  });
+}
+
+async function handleMilestones(request, env, path, method) {
+  await ensureSchema(env);
+  const segments = path.split("/");
+  const milestoneId = segments[4];
+  const sub = segments[5];
+
+  if (milestoneId && sub === "tasks") {
+    return handleMilestoneTasks(request, env, milestoneId, method);
+  }
+
+  if (!milestoneId) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  const existing = await env.DB.prepare(
+    "SELECT * FROM project_milestones WHERE id = ?",
+  )
+    .bind(milestoneId)
+    .first();
+  if (!existing) {
+    throw new RequestError("Milestone not found", 404);
+  }
+
+  if (method === "PUT") {
+    const raw = await parseRequestJson(request);
+    const status = normalizeKey(raw.status, "Milestone status", MILESTONE_STATUSES, existing.status);
+    await env.DB.prepare(
+      `UPDATE project_milestones SET title = ?, description = ?, status = ?,
+         due_date = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        trimText(raw.title, "Title", { required: true, maxLength: 240 }),
+        trimText(raw.description, "Description", { maxLength: 3000 }),
+        status,
+        normalizeDate(raw.due_date, "Due date"),
+        status === "done" ? existing.completed_at || new Date().toISOString() : null,
+        milestoneId,
+      )
+      .run();
+    const plan = await syncProjectProgress(env, existing.project_id);
+    return json({ success: true, percent: plan.percent });
+  }
+
+  if (method === "DELETE") {
+    await env.DB.prepare("DELETE FROM milestone_tasks WHERE milestone_id = ?")
+      .bind(milestoneId)
+      .run();
+    await env.DB.prepare("DELETE FROM project_milestones WHERE id = ?")
+      .bind(milestoneId)
+      .run();
+    const plan = await syncProjectProgress(env, existing.project_id);
+    return json({ success: true, percent: plan.percent });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleMilestoneTasks(request, env, milestoneId, method) {
+  const milestone = await env.DB.prepare(
+    "SELECT * FROM project_milestones WHERE id = ?",
+  )
+    .bind(milestoneId)
+    .first();
+  if (!milestone) {
+    throw new RequestError("Milestone not found", 404);
+  }
+
+  if (method === "POST") {
+    const raw = await parseRequestJson(request);
+    const id = createEntityId("task");
+    await env.DB.prepare(
+      `INSERT INTO milestone_tasks (id, milestone_id, project_id, title, status, position, owner, due_date)
+       VALUES (?, ?, ?, ?, 'todo', ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        milestoneId,
+        milestone.project_id,
+        trimText(raw.title, "Task", { required: true, maxLength: 240 }),
+        await nextPosition(env, "milestone_tasks", "milestone_id", milestoneId),
+        trimText(raw.owner, "Owner", { maxLength: 200 }),
+        normalizeDate(raw.due_date, "Due date"),
+      )
+      .run();
+    const plan = await syncProjectProgress(env, milestone.project_id);
+    return json({ success: true, id, percent: plan.percent }, { status: 201 });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleTasks(request, env, path, method) {
+  await ensureSchema(env);
+  const taskId = path.split("/")[4];
+  if (!taskId) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const task = await env.DB.prepare("SELECT * FROM milestone_tasks WHERE id = ?")
+    .bind(taskId)
+    .first();
+  if (!task) {
+    throw new RequestError("Task not found", 404);
+  }
+
+  if (method === "PUT") {
+    const raw = await parseRequestJson(request);
+    const status = normalizeKey(raw.status, "Task status", TASK_STATUSES, task.status);
+    await env.DB.prepare(
+      `UPDATE milestone_tasks SET title = ?, status = ?, owner = ?, due_date = ?,
+         completed_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        trimText(raw.title ?? task.title, "Task", { required: true, maxLength: 240 }),
+        status,
+        trimText(raw.owner ?? task.owner, "Owner", { maxLength: 200 }),
+        raw.due_date === undefined ? task.due_date : normalizeDate(raw.due_date, "Due date"),
+        status === "done" ? task.completed_at || new Date().toISOString() : null,
+        taskId,
+      )
+      .run();
+    await autoCompleteMilestone(env, task.milestone_id);
+    const plan = await syncProjectProgress(env, task.project_id);
+    return json({ success: true, percent: plan.percent });
+  }
+
+  if (method === "DELETE") {
+    await env.DB.prepare("DELETE FROM milestone_tasks WHERE id = ?").bind(taskId).run();
+    const plan = await syncProjectProgress(env, task.project_id);
+    return json({ success: true, percent: plan.percent });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+// A milestone whose tasks are all done is done, and one that gains work again
+// reopens, so the two never contradict each other.
+async function autoCompleteMilestone(env, milestoneId) {
+  const rows = await env.DB.prepare(
+    "SELECT status FROM milestone_tasks WHERE milestone_id = ?",
+  )
+    .bind(milestoneId)
+    .all();
+  const tasks = rows.results || [];
+  if (!tasks.length) return;
+  const allDone = tasks.every((t) => t.status === "done");
+  const any = tasks.some((t) => t.status === "doing" || t.status === "done");
+  const status = allDone ? "done" : any ? "active" : "pending";
+  await env.DB.prepare(
+    `UPDATE project_milestones SET status = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  )
+    .bind(status, allDone ? new Date().toISOString() : null, milestoneId)
+    .run();
+}
+
+// Pulls the work items out of an agreement so an addendum listing five
+// additions becomes five tasks rather than one opaque line. Bullets under a
+// "not included" heading are skipped: they are explicitly not work.
+function workItemsFromAgreement(body) {
+  const lines = String(body || "").replace(/\r\n/g, "\n").split("\n");
+  const items = [];
+  let excluded = false;
+  for (const line of lines) {
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      excluded = /not included|exclusion|excluded|out of scope/i.test(heading[1]);
+      continue;
+    }
+    if (excluded) continue;
+    const bullet = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/);
+    if (!bullet) continue;
+    const title = bullet[1]
+      .replace(/^\[[ xX]\]\s*/, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .trim();
+    if (title && title.length <= 240) items.push(title);
+    if (items.length >= 30) break;
+  }
+  return items;
+}
+
+async function createMilestoneFromAgreement(env, agreement) {
+  if (!agreement.linked_id) return null;
+  const isAddendum = Number(agreement.version || 1) > 1;
+  const id = createEntityId("ms");
+  await env.DB.prepare(
+    `INSERT INTO project_milestones (id, project_id, title, description, status, position, source_type, source_id)
+     VALUES (?, ?, ?, ?, 'pending', ?, 'agreement', ?)`,
+  )
+    .bind(
+      id,
+      agreement.linked_id,
+      isAddendum
+        ? `Addendum ${agreement.version} — ${agreement.title}`
+        : agreement.title,
+      `Created when ${agreement.agreement_number} was confirmed by ${agreement.signed_name || "the client"}.`,
+      await nextPosition(env, "project_milestones", "project_id", agreement.linked_id),
+      agreement.id,
+    )
+    .run();
+
+  // One task per work item in the document.
+  const items = workItemsFromAgreement(agreement.body);
+  let position = 0;
+  for (const title of items) {
+    await env.DB.prepare(
+      `INSERT INTO milestone_tasks (id, milestone_id, project_id, title, status, position)
+       VALUES (?, ?, ?, ?, 'todo', ?)`,
+    )
+      .bind(createEntityId("task"), id, agreement.linked_id, title, position++)
+      .run();
+  }
+
+  await recordAudit(env, {
+    action: "milestone_created_from_agreement",
+    entity_type: "project",
+    entity_id: agreement.linked_id,
+    entity_number: agreement.agreement_number,
+    details: { milestone_id: id, tasks: items.length },
+  });
+  await syncProjectProgress(env, agreement.linked_id);
+  return id;
+}
+
 async function handleProjects(request, env, path, method) {
   await ensureSchema(env);
   const segments = path.split("/");
   const projectId = segments[4];
+  const action = segments[5];
+
+  if (projectId && action === "plan") {
+    if (method === "GET") {
+      return json(await loadProjectPlan(env, projectId));
+    }
+    if (method === "POST") {
+      const raw = await parseRequestJson(request);
+      const id = createEntityId("ms");
+      await env.DB.prepare(
+        `INSERT INTO project_milestones (id, project_id, title, description, status, position, due_date, source_type)
+         VALUES (?, ?, ?, ?, 'pending', ?, ?, 'manual')`,
+      )
+        .bind(
+          id,
+          projectId,
+          trimText(raw.title, "Title", { required: true, maxLength: 240 }),
+          trimText(raw.description, "Description", { maxLength: 3000 }),
+          await nextPosition(env, "project_milestones", "project_id", projectId),
+          normalizeDate(raw.due_date, "Due date"),
+        )
+        .run();
+      const plan = await syncProjectProgress(env, projectId);
+      return json({ success: true, id, percent: plan.percent }, { status: 201 });
+    }
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // Read-only link the client can be given to follow progress.
+  if (projectId && action === "share" && method === "POST") {
+    const token = createQuestionnaireToken();
+    await env.DB.prepare("UPDATE projects SET share_token = ? WHERE id = ?")
+      .bind(token, projectId)
+      .run();
+    await recordAudit(env, {
+      action: "progress_link_created",
+      entity_type: "project",
+      entity_id: projectId,
+    });
+    return json({
+      success: true,
+      url: `${new URL(request.url).origin}/progress/?t=${encodeURIComponent(token)}`,
+    });
+  }
 
   if (method === "GET" && !projectId) {
     // Roll up the linked invoices so a project shows what has been invoiced,

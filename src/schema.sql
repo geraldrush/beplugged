@@ -318,6 +318,38 @@ CREATE TABLE IF NOT EXISTS scope_agreements (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Milestones are what the client sees; tasks are the internal checklist
+CREATE TABLE IF NOT EXISTS project_milestones (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'done', 'blocked')),
+    position INTEGER NOT NULL DEFAULT 0,
+    due_date DATE,
+    completed_at DATETIME,
+    source_type TEXT,              -- 'agreement' when created by a signature
+    source_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects (id)
+);
+
+CREATE TABLE IF NOT EXISTS milestone_tasks (
+    id TEXT PRIMARY KEY,
+    milestone_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'doing', 'done', 'blocked')),
+    position INTEGER NOT NULL DEFAULT 0,
+    owner TEXT,
+    due_date DATE,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (milestone_id) REFERENCES project_milestones (id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 
@@ -394,3 +426,7 @@ CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members (email);
 CREATE INDEX IF NOT EXISTS idx_lead_questionnaires_lead ON lead_questionnaires (lead_id);
 
 CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id);
+
+CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones (project_id);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON milestone_tasks (milestone_id);
