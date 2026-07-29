@@ -1746,6 +1746,7 @@
                     <th>Owner</th>
                     <th>Due</th>
                     <th>Progress</th>
+                    <th>Invoiced / Paid</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -3828,6 +3829,17 @@
 
       // Drafts an agreement from a requirement. The requirement is the working
       // record; this turns it into client-facing wording to be signed.
+      // Invoiced work becomes a project, so what has been paid for appears on
+      // the delivery side rather than only in the finance tables.
+      async function createProjectFromInvoice(id) {
+        if (!confirm("Create a project from this invoice?")) return;
+        const r = await apiCall("/admin/invoices/" + id + "/project", "POST");
+        if (r && r.success) {
+          showAlert("Project " + r.project_code + " created", "success");
+          loadInvoices();
+        }
+      }
+
       function scopeFromRequirement(req) {
         const section = (heading, text) => {
           const body = String(text || "").trim();
@@ -4740,6 +4752,12 @@
 
         if (event.target.closest("#addendum-save")) {
           saveAddendum();
+          return;
+        }
+
+        const invProj = event.target.closest("[data-inv-project]");
+        if (invProj) {
+          createProjectFromInvoice(invProj.dataset.invProject);
           return;
         }
 
@@ -5913,6 +5931,11 @@
               <div class="progress-mini"><span style="width:${progress}%"></span></div>
               <div style="font-size:0.8rem;">${progress}%</div>
             </td>
+            <td>
+              ${Number(project.invoice_count || 0) > 0
+                ? `${money(project.invoiced)} <div style="font-size:0.8rem;color:var(--muted);">${money(project.paid)} paid${Number(project.outstanding || 0) > 0 ? ` · <span style="color:var(--danger);">${money(project.outstanding)} due</span>` : ""}</div>`
+                : `<span style="color:var(--muted);">no invoices</span>`}
+            </td>
             <td>${actionButtons("projects", project.id)}</td>
           </tr>
         `;
@@ -6535,6 +6558,7 @@
                 <button class="btn btn-sm btn-secondary" onclick="downloadInvoice('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')">Download</button>
                 <button class="btn btn-sm btn-primary" onclick="sendInvoice('${escapeAttr(inv.id)}')">Send</button>
                 <button class="btn btn-sm btn-success" onclick="openPaymentModal('${escapeAttr(inv.id)}', '${safeStatusClass(inv.status)}')" ${inv.status === "draft" || inv.status === "paid" ? "disabled" : ""}>Pay</button>
+                <button class="btn btn-sm btn-secondary" data-inv-project="${escapeAttr(inv.id)}" ${inv.project_id ? "disabled" : ""}>${inv.project_id ? "Has project" : "Create project"}</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')" ${inv.status === "paid" || inv.status === "partially_paid" ? "disabled" : ""}>Delete</button>
               </div>
             </td>

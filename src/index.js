@@ -634,6 +634,7 @@ function normalizeInvoicePayload(data) {
     amount_cents: amountCents,
     tax: centsToAmount(taxCents),
     tax_cents: taxCents,
+    project_id: trimText(data.project_id, "Project", { maxLength: 160 }),
     due_date: trimText(data.due_date, "Due date", { maxLength: 30 }) || null,
     payment_terms: trimText(data.payment_terms, "Banking info", {
       maxLength: 2000,
@@ -1352,6 +1353,11 @@ async function runSchemaSetup(env) {
   await ensureColumn(env, "quotes", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "quotes", "tax_cents", "tax_cents INTEGER NOT NULL DEFAULT 0");
   await ensureColumn(env, "payments", "amount_cents", "amount_cents INTEGER NOT NULL DEFAULT 0");
+  // The money side and the delivery side had no link, so work that had been
+  // invoiced and paid for never appeared as a project.
+  await ensureColumn(env, "invoices", "project_id", "project_id TEXT");
+  await ensureColumn(env, "quotes", "project_id", "project_id TEXT");
+  await ensureColumn(env, "projects", "client_id", "client_id TEXT");
   await ensureColumn(env, "clients", "lead_id", "lead_id TEXT");
   await ensureColumn(env, "quotes", "lead_id", "lead_id TEXT");
   await ensureColumn(env, "quotes", "client_id", "client_id TEXT");
@@ -1702,6 +1708,7 @@ async function ensureColumn(env, tableName, columnName, columnDefinition) {
     "quality_records",
     "security_records",
     "scope_agreements",
+    "projects",
   ]);
   if (!allowedTables.has(tableName)) {
     throw new Error("Invalid schema table");
@@ -2190,6 +2197,10 @@ async function handleInvoices(request, env, path, method) {
     });
   }
 
+  if (method === "POST" && invoiceId && action === "project") {
+    return handleCreateProjectFromInvoice(env, invoiceId);
+  }
+
   if (method === "POST" && invoiceId && action === "send") {
     return handleSendInvoice(request, env, invoiceId);
   }
@@ -2204,11 +2215,11 @@ async function handleInvoices(request, env, path, method) {
 
     await env.DB.prepare(
       `INSERT INTO invoices (
-         id, invoice_number, lead_id, client_id, quote_id, client_name,
-         client_email, client_address, amount, amount_cents, tax, tax_cents,
-         status, due_date, payment_terms, items, notes, qr_code_url
+         id, invoice_number, lead_id, client_id, quote_id, project_id,
+         client_name, client_email, client_address, amount, amount_cents, tax,
+         tax_cents, status, due_date, payment_terms, items, notes, qr_code_url
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -2216,6 +2227,7 @@ async function handleInvoices(request, env, path, method) {
         data.lead_id,
         data.client_id,
         data.quote_id,
+        data.project_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -2277,7 +2289,8 @@ async function handleInvoices(request, env, path, method) {
     // silently un-issue it.
     await env.DB.prepare(
       `UPDATE invoices SET
-         lead_id = ?, client_id = ?, quote_id = ?, client_name = ?,
+         lead_id = ?, client_id = ?, quote_id = ?, project_id = ?,
+         client_name = ?,
          client_email = ?, client_address = ?, amount = ?, amount_cents = ?,
          tax = ?, tax_cents = ?, status = ?, items = ?, notes = ?,
          due_date = ?, payment_terms = ?
@@ -2287,6 +2300,7 @@ async function handleInvoices(request, env, path, method) {
         data.lead_id,
         data.client_id,
         data.quote_id,
+        data.project_id,
         data.client_name,
         data.client_email,
         data.client_address,
@@ -2385,6 +2399,54 @@ function emailShell({ label, accent = "#F05023", bodyHtml }) {
     </td></tr>
   </table>
 </body></html>`;
+}
+
+// Turns invoiced work into a project, so what has been paid for appears on
+// the delivery side instead of only in the finance tables.
+async function handleCreateProjectFromInvoice(env, invoiceId) {
+  const invoice = await requireInvoice(env, invoiceId);
+  if (invoice.project_id) {
+    throw new RequestError("This invoice already belongs to a project", 409);
+  }
+
+  const id = createEntityId("project");
+  const projectCode = generateDocumentNumber("PRJ");
+  const amountCents = persistedCents(invoice, "amount_cents", "amount", "Invoice amount");
+  const taxCents = persistedCents(invoice, "tax_cents", "tax", "Invoice tax");
+  const budgetCents = amountCents + taxCents;
+
+  await env.DB.prepare(
+    `INSERT INTO projects (
+       id, project_code, name, client_name, client_id, status, priority,
+       start_date, budget, budget_cents, progress, notes
+     ) VALUES (?, ?, ?, ?, ?, 'planning', 'medium', ?, ?, ?, 0, ?)`,
+  )
+    .bind(
+      id,
+      projectCode,
+      `${invoice.client_name || "Client"} — ${invoice.invoice_number}`,
+      invoice.client_name || "",
+      invoice.client_id || null,
+      new Date().toISOString().slice(0, 10),
+      centsToAmount(budgetCents),
+      budgetCents,
+      `Created from invoice ${invoice.invoice_number}.`,
+    )
+    .run();
+
+  await env.DB.prepare("UPDATE invoices SET project_id = ? WHERE id = ?")
+    .bind(id, invoiceId)
+    .run();
+
+  await recordAudit(env, {
+    action: "project_created_from_invoice",
+    entity_type: "project",
+    entity_id: id,
+    entity_number: projectCode,
+    details: { invoice_id: invoiceId, invoice_number: invoice.invoice_number },
+  });
+
+  return json({ success: true, id, project_code: projectCode }, { status: 201 });
 }
 
 async function handleSendInvoice(request, env, invoiceId) {
@@ -4919,10 +4981,31 @@ async function handleProjects(request, env, path, method) {
   const projectId = segments[4];
 
   if (method === "GET" && !projectId) {
+    // Roll up the linked invoices so a project shows what has been invoiced,
+    // collected and is still outstanding against it.
     const result = await env.DB.prepare(
-      `SELECT * FROM projects
+      `SELECT p.*,
+              COALESCE(f.invoice_count, 0) AS invoice_count,
+              COALESCE(f.invoiced_cents, 0) AS invoiced_cents,
+              COALESCE(f.paid_cents, 0) AS paid_cents,
+              MAX(COALESCE(f.invoiced_cents, 0) - COALESCE(f.paid_cents, 0), 0) AS outstanding_cents
+       FROM projects p
+       LEFT JOIN (
+         SELECT i.project_id,
+                COUNT(*) AS invoice_count,
+                SUM(CASE WHEN i.amount_cents IS NOT NULL AND (i.amount_cents != 0 OR i.amount = 0) THEN i.amount_cents ELSE ROUND(i.amount * 100) END + CASE WHEN i.tax_cents IS NOT NULL AND (i.tax_cents != 0 OR i.tax = 0) THEN i.tax_cents ELSE ROUND(i.tax * 100) END) AS invoiced_cents,
+                COALESCE((
+                  SELECT SUM(CASE WHEN pay.amount_cents IS NOT NULL AND (pay.amount_cents != 0 OR pay.amount = 0) THEN pay.amount_cents ELSE ROUND(pay.amount * 100) END)
+                  FROM payments pay
+                  JOIN invoices i2 ON i2.id = pay.invoice_id
+                  WHERE i2.project_id = i.project_id
+                ), 0) AS paid_cents
+         FROM invoices i
+         WHERE i.project_id IS NOT NULL AND i.project_id != '' AND i.status != 'draft'
+         GROUP BY i.project_id
+       ) f ON f.project_id = p.id
        ORDER BY
-         CASE status
+         CASE p.status
            WHEN 'active' THEN 1
            WHEN 'planning' THEN 2
            WHEN 'on_hold' THEN 3
@@ -4930,11 +5013,18 @@ async function handleProjects(request, env, path, method) {
            WHEN 'cancelled' THEN 5
            ELSE 6
          END,
-         COALESCE(due_date, '9999-12-31') ASC,
-         updated_at DESC
+         COALESCE(p.due_date, '9999-12-31') ASC,
+         p.updated_at DESC
        LIMIT 200`,
     ).all();
-    return json(result.results || []);
+    return json(
+      (result.results || []).map((row) => ({
+        ...row,
+        invoiced: centsToAmount(Number(row.invoiced_cents || 0)),
+        paid: centsToAmount(Number(row.paid_cents || 0)),
+        outstanding: centsToAmount(Number(row.outstanding_cents || 0)),
+      })),
+    );
   }
 
   if (method === "GET" && projectId) {
