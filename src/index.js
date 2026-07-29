@@ -265,6 +265,11 @@ export default {
       // Client-facing intake questionnaire. Reached by an unguessable token
       // rather than a login, so it must never expose anything beyond the one
       // lead the token belongs to.
+      if (path.startsWith("/api/review/")) {
+        const token = path.split("/")[3];
+        return await handlePublicReview(request, env, token, method);
+      }
+
       if (path.startsWith("/api/progress/")) {
         const token = path.split("/")[3];
         return await handlePublicProgress(env, token);
@@ -5427,6 +5432,226 @@ async function nextPosition(env, table, column, value) {
 
 // What the client sees: milestones and their state, never the task detail
 // underneath, and never anything about money.
+// The three questions come from QMS-2026-FDB-001. Three get answered; ten do
+// not, which is why the register specifies these and no more.
+const REVIEW_QUESTIONS = [
+  {
+    name: "met_expectations",
+    label: "Did the finished work do what you expected it to do?",
+  },
+  {
+    name: "frustrations",
+    label: "Was anything about how we worked together frustrating?",
+  },
+];
+
+async function projectClientEmail(env, project) {
+  if (project.client_id) {
+    const client = await env.DB.prepare("SELECT email FROM clients WHERE id = ?")
+      .bind(project.client_id)
+      .first();
+    if (client?.email) return client.email;
+  }
+  // Fall back to whoever the work was invoiced to.
+  const invoice = await env.DB.prepare(
+    "SELECT client_email FROM invoices WHERE project_id = ? AND client_email != '' ORDER BY created_at DESC LIMIT 1",
+  )
+    .bind(project.id)
+    .first();
+  return invoice?.client_email || "";
+}
+
+async function handleSendReview(request, env, projectId) {
+  const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?")
+    .bind(projectId)
+    .first();
+  if (!project) {
+    throw new RequestError("Project not found", 404);
+  }
+  if (project.review_submitted_at) {
+    throw new RequestError("This client has already left a review", 409);
+  }
+
+  const to = await projectClientEmail(env, project);
+  if (!to) {
+    throw new RequestError(
+      "No client email on file for this project. Add one to the client record or invoice first.",
+      400,
+    );
+  }
+
+  const token = project.review_token || createQuestionnaireToken();
+  await env.DB.prepare(
+    "UPDATE projects SET review_token = ?, review_sent_at = CURRENT_TIMESTAMP WHERE id = ?",
+  )
+    .bind(token, projectId)
+    .run();
+
+  const url = `${new URL(request.url).origin}/review/?t=${encodeURIComponent(token)}`;
+  await sendBrevoEmail(env, {
+    to,
+    toName: project.client_name || "",
+    subject: `How did we do? — ${project.name}`,
+    htmlContent: emailShell({
+      label: "Your Feedback",
+      accent: "#1f8a52",
+      bodyHtml: `
+        <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(project.client_name || "there")},</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Now that <strong>${escapeHtml(project.name)}</strong> is complete, we would value your honest view. It is three short questions and takes about a minute.</p>
+        ${emailButton(url, "Leave feedback", "#1f8a52")}
+        <p style="margin:0 0 8px;font-size:13px;color:#7a7a80;line-height:1.7;">If the button does not work, copy this link into your browser:</p>
+        <p style="margin:0;font-size:12px;color:#7a7a80;word-break:break-all;">${escapeHtml(url)}</p>`,
+    }),
+  });
+
+  await recordAudit(env, {
+    action: "review_requested",
+    entity_type: "project",
+    entity_id: projectId,
+    entity_number: project.project_code,
+    details: { recipient: to },
+  });
+
+  return json({ success: true, url });
+}
+
+async function handlePublicReview(request, env, token, method) {
+  await ensureSchema(env);
+  if (!token) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const project = await env.DB.prepare(
+    "SELECT * FROM projects WHERE review_token = ?",
+  )
+    .bind(token)
+    .first();
+  if (!project) {
+    return json({ error: "This link is no longer valid" }, { status: 404 });
+  }
+
+  if (method === "GET") {
+    return json({
+      name: project.name,
+      client_name: project.client_name,
+      submitted: !!project.review_submitted_at,
+      questions: REVIEW_QUESTIONS,
+    });
+  }
+
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  if (project.review_submitted_at) {
+    return json({ error: "Thank you — you have already left feedback" }, { status: 409 });
+  }
+
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `r:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const raw = await parseRequestJson(request);
+  const rating = normalizeInteger(raw?.rating, "Rating", { min: 1, max: 5, fallback: 0 });
+  const answers = {};
+  for (const q of REVIEW_QUESTIONS) {
+    answers[q.name] = trimText(raw?.[q.name], q.label, { maxLength: 3000 });
+  }
+
+  const now = new Date().toISOString();
+  const result = await env.DB.prepare(
+    `UPDATE projects SET review_rating = ?, review_submitted_at = ?
+     WHERE id = ? AND review_submitted_at IS NULL`,
+  )
+    .bind(rating, now, project.id)
+    .run();
+  if (Number(result?.meta?.changes || 0) !== 1) {
+    return json({ error: "Thank you — you have already left feedback" }, { status: 409 });
+  }
+
+  // Feedback belongs in the register the SOP defines, not in a store of its own.
+  const body = [
+    `# Client feedback — ${project.name}`,
+    "",
+    `**Client:** ${project.client_name || "—"}`,
+    `**Project:** ${project.project_code || ""}`,
+    `**Received:** ${now}`,
+    `**Would recommend:** ${rating} of 5`,
+    "",
+    ...REVIEW_QUESTIONS.flatMap((q) => [
+      `## ${q.label}`,
+      "",
+      answers[q.name] || "_No answer given._",
+      "",
+    ]),
+  ].join("\n");
+
+  const recordId = createEntityId("qms");
+  await env.DB.prepare(
+    `INSERT INTO quality_records (
+       id, record_number, title, record_type, status, owner, project_name,
+       description, notes, body
+     ) VALUES (?, ?, ?, 'customer_feedback', 'active', '', ?, ?, ?, ?)`,
+  )
+    .bind(
+      recordId,
+      generateDocumentNumber("QMS"),
+      `Feedback — ${project.name}`,
+      project.name,
+      `Rated ${rating} of 5 by ${project.client_name || "the client"}.`,
+      answers.frustrations || "",
+      body,
+    )
+    .run();
+
+  await recordAudit(env, {
+    actor: "client",
+    action: "review_submitted",
+    entity_type: "project",
+    entity_id: project.id,
+    entity_number: project.project_code,
+    details: { rating, quality_record_id: recordId },
+  });
+
+  try {
+    await notifyReviewReceived(env, project, rating, answers);
+  } catch (error) {
+    console.error(
+      JSON.stringify({ message: "review_notify_failed", project_id: project.id, error: String(error?.message || error) }),
+    );
+  }
+
+  return json({ success: true });
+}
+
+async function notifyReviewReceived(env, project, rating, answers) {
+  const recipient = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+  if (!recipient) return;
+  const low = rating <= 3;
+  await sendBrevoEmail(env, {
+    to: recipient,
+    toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    subject: `Feedback ${rating}/5 — ${project.client_name || project.name}`,
+    htmlContent: emailShell({
+      label: "Client Feedback",
+      accent: low ? "#F05023" : "#1f8a52",
+      bodyHtml: `
+        <p style="margin:0 0 22px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(project.client_name || "The client")}</strong> left feedback on ${escapeHtml(project.name)}.</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${low ? "#FFF5F1" : "#eefaf2"};border-radius:8px;margin:0 0 24px;">
+          <tr><td style="padding:20px 24px;">
+            <div style="font-size:11px;color:${low ? "#a06a58" : "#2f7d55"};text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Would recommend</div>
+            <div style="font-size:30px;font-weight:bold;color:${low ? "#F05023" : "#1f8a52"};margin-top:6px;">${rating} / 5</div>
+          </td></tr>
+        </table>
+        ${REVIEW_QUESTIONS.map((q) => `${emailSectionLabel(q.label)}<p style="margin:0 0 18px;font-size:13px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(answers[q.name] || "No answer given.")}</p>`).join("")}
+        ${low ? `<table role="presentation" width="100%" style="margin:4px 0 0;"><tr><td style="background:#FFF5F1;border-left:3px solid #F05023;border-radius:4px;padding:12px 16px;font-size:13px;color:#555555;line-height:1.7;"><strong style="color:#2C2D3F;">Worth acting on</strong><br>A score of ${rating} is a signal, not a formality. QMS-2026-CAPA-001 covers raising a corrective action where a theme recurs.</td></tr></table>` : ""}
+        <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">Recorded in the customer satisfaction register.</p>`,
+    }),
+  });
+}
+
 async function handlePublicProgress(env, token) {
   await ensureSchema(env);
   if (!token) {
@@ -5719,6 +5944,10 @@ async function handleProjects(request, env, path, method) {
       return json({ success: true, id, percent: plan.percent }, { status: 201 });
     }
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (projectId && action === "review" && method === "POST") {
+    return handleSendReview(request, env, projectId);
   }
 
   // Read-only link the client can be given to follow progress.

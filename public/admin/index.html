@@ -5251,6 +5251,19 @@
           return;
         }
 
+        const revBtn = event.target.closest("[data-project-review]");
+        if (revBtn) {
+          if (confirm("Email this client a feedback request?")) {
+            apiCall("/admin/projects/" + revBtn.dataset.projectReview + "/review", "POST").then((r) => {
+              if (r && r.success) {
+                showAlert("Feedback request sent", "success");
+                loadModule("projects");
+              }
+            });
+          }
+          return;
+        }
+
         const planBtn = event.target.closest("[data-project-plan]");
         if (planBtn) {
           openProjectPlan(planBtn.dataset.projectPlan, planBtn.dataset.projectName);
@@ -6537,6 +6550,8 @@
             </td>
             <td>
               <button class="btn btn-sm btn-primary" data-project-plan="${escapeAttr(project.id)}" data-project-name="${escapeAttr(project.name)}">Plan &amp; progress</button>
+              ${project.status === "completed" && !project.review_submitted_at ? `<button class="btn btn-sm btn-success" data-project-review="${escapeAttr(project.id)}">Ask for a review</button>` : ""}
+              ${project.review_rating ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem;">Rated ${Number(project.review_rating)}/5</div>` : ""}
               <div class="action-buttons">
                 <button class="btn btn-sm btn-secondary" data-plan-share="${escapeAttr(project.id)}">Client progress link</button>
               </div>${actionButtons("projects", project.id)}
