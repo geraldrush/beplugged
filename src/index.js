@@ -2870,12 +2870,27 @@ function normalizeAgreementPayload(raw) {
       maxLength: 200,
     }),
     client_email: validateEmail(raw.client_email, "Client email"),
-    project_name: trimText(raw.project_name, "Project", { maxLength: 200 }),
-    linked_type: trimText(raw.linked_type, "Linked type", { maxLength: 40 }),
-    linked_id: trimText(raw.linked_id, "Linked id", { maxLength: 160 }),
+    project_id: trimText(raw.project_id, "Project", {
+      required: true,
+      maxLength: 160,
+    }),
     // The document itself. Written from the meeting minutes.
     body: trimText(raw.body, "Scope text", { required: true, maxLength: 100000 }),
   };
+}
+
+// An agreement always belongs to a project, so the signed scope can be traced
+// to the work it governs.
+async function resolveAgreementProject(env, projectId) {
+  const project = await env.DB.prepare(
+    "SELECT id, name, project_code, client_name FROM projects WHERE id = ?",
+  )
+    .bind(projectId)
+    .first();
+  if (!project) {
+    throw new RequestError("Select a valid project", 400);
+  }
+  return project;
 }
 
 function publicAgreement(row) {
@@ -2901,8 +2916,8 @@ async function handleAgreements(request, env, path, method) {
   if (method === "GET" && !id) {
     const result = await env.DB.prepare(
       `SELECT id, agreement_number, parent_id, version, title, client_name,
-              client_email, project_name, status, sent_at, signed_name,
-              signed_at, expires_at, created_at
+              client_email, project_name, linked_type, linked_id, status,
+              sent_at, signed_name, signed_at, expires_at, created_at
        FROM scope_agreements ORDER BY created_at DESC LIMIT 200`,
     ).all();
     return json(result.results || []);
@@ -2917,6 +2932,7 @@ async function handleAgreements(request, env, path, method) {
 
   if (method === "POST" && !id) {
     const data = normalizeAgreementPayload(await parseRequestJson(request));
+    const project = await resolveAgreementProject(env, data.project_id);
     const newId = createEntityId("agr");
     await env.DB.prepare(
       `INSERT INTO scope_agreements (
@@ -2930,9 +2946,9 @@ async function handleAgreements(request, env, path, method) {
         data.title,
         data.client_name,
         data.client_email,
-        data.project_name,
-        data.linked_type,
-        data.linked_id,
+        project.name,
+        "project",
+        project.id,
         data.body,
       )
       .run();
@@ -2964,7 +2980,13 @@ async function handleAgreements(request, env, path, method) {
       );
     }
     const rootId = existing.parent_id || existing.id;
-    const data = normalizeAgreementPayload(await parseRequestJson(request));
+    const raw = await parseRequestJson(request);
+    // An addendum belongs to the same project as the agreement it extends.
+    const data = normalizeAgreementPayload({
+      ...raw,
+      project_id: raw.project_id || existing.linked_id,
+    });
+    const project = await resolveAgreementProject(env, data.project_id);
     const highest = await env.DB.prepare(
       `SELECT MAX(version) AS v FROM scope_agreements
        WHERE id = ? OR parent_id = ?`,
@@ -2987,9 +3009,9 @@ async function handleAgreements(request, env, path, method) {
         data.title,
         data.client_name,
         data.client_email,
-        data.project_name,
-        data.linked_type,
-        data.linked_id,
+        project.name,
+        "project",
+        project.id,
         data.body,
       )
       .run();
@@ -3011,6 +3033,7 @@ async function handleAgreements(request, env, path, method) {
       );
     }
     const data = normalizeAgreementPayload(await parseRequestJson(request));
+    const project = await resolveAgreementProject(env, data.project_id);
     await env.DB.prepare(
       `UPDATE scope_agreements SET title = ?, client_name = ?, client_email = ?,
          project_name = ?, linked_type = ?, linked_id = ?, body = ?,
@@ -3021,9 +3044,9 @@ async function handleAgreements(request, env, path, method) {
         data.title,
         data.client_name,
         data.client_email,
-        data.project_name,
-        data.linked_type,
-        data.linked_id,
+        project.name,
+        "project",
+        project.id,
         data.body,
         id,
       )

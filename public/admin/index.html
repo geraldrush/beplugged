@@ -954,6 +954,9 @@
           <button class="nav-link" onclick="showTab('requirements')">
             <i class="fas fa-clipboard-list"></i> Requirements
           </button>
+          <button class="nav-link" onclick="showTab('agreements')">
+            <i class="fas fa-file-signature"></i> Agreements
+          </button>
           <button class="nav-link" onclick="showTab('quotes')">
             <i class="fas fa-quote-left"></i> Quotes
           </button>
@@ -963,9 +966,6 @@
           </button>
           <button class="nav-link" onclick="showTab('documents')">
             <i class="fas fa-folder-open"></i> Documents
-          </button>
-          <button class="nav-link" onclick="showTab('agreements')">
-            <i class="fas fa-file-signature"></i> Agreements
           </button>
           <div class="nav-section-title">Quality & Security</div>
           <button class="nav-link" onclick="showTab('policies')">
@@ -2593,9 +2593,24 @@
             { name: "title", label: "Title", required: true },
             { name: "client_name", label: "Client Name", required: true },
             { name: "client_email", label: "Client Email", type: "email", required: true },
-            { name: "project_name", label: "Project" },
+            {
+              name: "project_id",
+              label: "Project",
+              type: "select",
+              required: true,
+              choices: [],
+            },
             { name: "body", label: "Scope (Markdown — paste from your minutes)", type: "textarea", fullSpan: true },
           ],
+          // Projects change, so the list is fetched each time the form opens.
+          loadChoices: async (config) => {
+            const projects = await apiCall("/admin/projects");
+            const field = config.fields.find((f) => f.name === "project_id");
+            field.choices = (Array.isArray(projects) ? projects : []).map((p) => ({
+              value: p.id,
+              label: (p.project_code ? p.project_code + " — " : "") + (p.name || ""),
+            }));
+          },
           render: renderAgreementRows,
         },
                 documents: {
@@ -3250,7 +3265,10 @@
               ${displayPlain(a.client_name)}
               <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.client_email, "")}</div>
             </td>
-            <td>${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}</td>
+            <td>
+              ${Number(a.version || 1) > 1 ? `Addendum ${Number(a.version)}` : "Original"}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(a.project_name, "")}</div>
+            </td>
             <td><span class="badge status-${safeStatusClass(a.status)}">${displayStatus(a.status)}</span></td>
             <td>
               ${signed ? `<span style="font-family:Georgia,serif;font-style:italic;">${displayPlain(a.signed_name, "")}</span>
@@ -5027,14 +5045,21 @@
 
         document.getElementById("module-modal-title").textContent =
           (id ? "Edit " : "New ") + config.singular;
-        document.getElementById("module-form-grid").innerHTML = config.fields
+        if (config.loadChoices) {
+          await config.loadChoices(config);
+        }
+                document.getElementById("module-form-grid").innerHTML = config.fields
           .map((field) => moduleFieldHtml(field, record || {}))
           .join("");
         document.getElementById("moduleModal").classList.add("show");
       }
 
       function moduleFieldValue(field, record) {
-        const value = record[field.name];
+        // Agreements store the project as linked_id; the form field is project_id.
+        const value =
+          field.name === "project_id" && record.linked_id !== undefined
+            ? record.linked_id
+            : record[field.name];
         if (field.type === "checkbox") {
           return value === undefined ? Boolean(field.defaultValue) : Boolean(value);
         }
@@ -5056,7 +5081,19 @@
           : "";
         const common = `class="form-control" id="module_${field.name}" ${required}${placeholder}`;
         let control = "";
-        if (field.type === "select") {
+        if (field.type === "select" && Array.isArray(field.choices)) {
+          control = `
+            <select ${common}>
+              <option value="">Select…</option>
+              ${field.choices
+                .map(
+                  (choice) =>
+                    `<option value="${escapeAttr(choice.value)}" ${String(choice.value) === String(value) ? "selected" : ""}>${escapeHtml(choice.label)}</option>`,
+                )
+                .join("")}
+            </select>
+          `;
+        } else if (field.type === "select") {
           control = `
             <select ${common}>
               ${field.options
