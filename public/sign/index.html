@@ -97,6 +97,39 @@
       .note { font-size: 0.78rem; color: var(--muted); margin-top: 0.8rem; line-height: 1.7; }
       footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 1.5rem; }
       .hidden { display: none !important; }
+      .titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+      .ghost {
+        background: #fff; border: 1px solid var(--border); color: var(--dark);
+        font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem;
+        border-radius: 0.3rem; cursor: pointer; margin-top: 0; flex: none;
+      }
+      .ghost:hover { background: var(--surface); border-color: var(--border); }
+      .signed-banner {
+        display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem;
+        border-left: 3px solid var(--success);
+      }
+      .signed-banner .tick { margin: 0; flex: none; width: 38px; height: 38px; font-size: 1.2rem; }
+      .signed-banner h2 { font-size: 1rem; margin-bottom: 0.15rem; }
+      .signed-banner p { color: var(--muted); font-size: 0.82rem; }
+
+      /* Printing produces the client's copy: the document and the signature,
+         without page chrome or the confirmation controls. */
+      @media print {
+        body { background: #fff; font-size: 11pt; }
+        header { box-shadow: none; border-bottom: 2px solid var(--primary); margin-bottom: 1rem; }
+        .wrap { max-width: none; padding: 0 0 1rem; }
+        .card {
+          border: 0; box-shadow: none; padding: 0; margin-bottom: 0.75rem;
+          break-inside: auto;
+        }
+        .ghost, #confirm-card, footer, .status { display: none !important; }
+        .signed-banner { border-left: 0; padding: 0 0 0.5rem; }
+        .signed-banner .tick { display: none; }
+        .doc h1, .doc h2, .doc h3 { break-after: avoid; }
+        .doc table, .doc pre, .doc blockquote { break-inside: avoid; }
+        .sigpreview { border: 1px solid #ccc; }
+        a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #666; }
+      }
       .badge-addendum { background: rgba(240,80,35,.12); color: var(--primary); border-radius: 0.25rem; padding: 0.1rem 0.4rem; font-size: 0.72rem; font-weight: 600; }
     </style>
   </head>
@@ -119,12 +152,31 @@
       </div>
 
       <div id="main" class="hidden">
-        <h1 id="title">Scope confirmation</h1>
+        <div id="signed-banner" class="card signed-banner hidden">
+          <div class="tick">✓</div>
+          <div>
+            <h2>Confirmed</h2>
+            <p id="signed-detail"></p>
+          </div>
+        </div>
+
+        <div class="titlebar">
+          <h1 id="title">Scope confirmation</h1>
+          <button type="button" id="print" class="ghost">Print / Save as PDF</button>
+        </div>
         <div class="meta" id="meta"></div>
 
         <div class="card"><div class="doc" id="doc"></div></div>
 
-        <div class="card">
+        <div id="signature-block" class="card hidden">
+          <div class="confirm-title">Signature</div>
+          <div class="sigpreview" style="border-style:solid;">
+            <div class="sig" id="signed-sig"></div>
+            <div class="stamp" id="signed-stamp"></div>
+          </div>
+        </div>
+
+        <div class="card" id="confirm-card">
           <div class="confirm-title">Confirmation</div>
           <label class="tickrow">
             <input type="checkbox" id="confirmed" />
@@ -158,6 +210,7 @@
     <script>
       (function () {
         var token = new URLSearchParams(location.search).get("t") || "";
+        var current = {};
         var $ = function (id) { return document.getElementById(id); };
         var show = function (id) {
           ["loading", "invalid", "done", "main"].forEach(function (k) {
@@ -219,11 +272,7 @@
           .then(function (res) {
             if (!res.ok) { show("invalid"); return; }
             var a = res.b;
-            if (a.status === "signed") {
-              $("done-detail").textContent =
-                "Confirmed by " + (a.signed_name || "the client") + ". A copy was emailed for your records.";
-              show("done"); return;
-            }
+            current = a;
             $("title").textContent = a.title || "Scope confirmation";
             var bits = [];
             if (a.agreement_number) bits.push("<span>" + esc(a.agreement_number) + "</span>");
@@ -236,9 +285,34 @@
                 "I confirm this addendum is an accurate description of the additional work, and I am authorised to approve it on behalf of the client.";
             }
             $("doc").innerHTML = md(a.body || "");
+            if (a.status === "signed") markSigned(a);
             show("main");
           })
           .catch(function () { show("invalid"); });
+
+        // Once signed the page becomes the client's copy: document plus
+        // signature, no confirmation controls.
+        function markSigned(a) {
+          var when = a.signed_at
+            ? new Date(a.signed_at).toLocaleString("en-GB", {
+                day: "numeric", month: "short", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              })
+            : "";
+          $("confirm-card").classList.add("hidden");
+          $("signed-banner").classList.remove("hidden");
+          $("signed-detail").textContent =
+            "Confirmed by " + (a.signed_name || "the client") +
+            (when ? " on " + when : "") + ". A copy was emailed to you.";
+          $("signature-block").classList.remove("hidden");
+          $("signed-sig").textContent = a.signed_name || "";
+          $("signed-stamp").innerHTML =
+            (when ? esc(when) + "<br>" : "") +
+            (a.agreement_number ? "Reference " + esc(a.agreement_number) + "<br>" : "") +
+            (a.body_hash ? "Document fingerprint " + esc(String(a.body_hash).slice(0, 32)) : "");
+        }
+
+        $("print").addEventListener("click", function () { window.print(); });
 
         function refresh() {
           var name = $("signed_name").value.trim();
@@ -268,9 +342,13 @@
               });
             })
             .then(function (b) {
-              $("done-detail").textContent =
-                "Confirmed by " + b.signed_name + ". A copy has been emailed to you for your records.";
-              show("done"); window.scrollTo(0, 0);
+              markSigned({
+                signed_name: b.signed_name,
+                signed_at: b.signed_at,
+                agreement_number: current.agreement_number,
+                body_hash: current.body_hash,
+              });
+              window.scrollTo(0, 0);
             })
             .catch(function (err) {
               status.style.color = "#c0392b";

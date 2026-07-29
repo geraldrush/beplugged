@@ -3122,6 +3122,8 @@ function publicAgreement(row) {
     status: row.status,
     signed_name: row.signed_name,
     signed_at: row.signed_at,
+    // Shown on the client's printed copy so the fingerprint travels with it.
+    body_hash: row.body_hash,
   };
 }
 
