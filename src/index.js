@@ -202,7 +202,7 @@ export default {
 
     try {
       if (path === "/api/whatsapp-enquiry") {
-        return await handleWhatsAppEnquiry(request, env, method);
+        return await handleWhatsAppEnquiry(request, env, method, ctx);
       }
 
       if (path === "/api/contact") {
@@ -2393,7 +2393,7 @@ function normalizeContactPayload(raw) {
 // The visitor is handed off to WhatsApp to send the message themselves, since
 // there is no way to send on their behalf. Their details are captured first,
 // so an enquiry that never gets sent is not lost.
-async function handleWhatsAppEnquiry(request, env, method) {
+async function handleWhatsAppEnquiry(request, env, method, ctx) {
   if (method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -2470,10 +2470,13 @@ async function handleWhatsAppEnquiry(request, env, method) {
     );
   }
 
-  // Notifying is best effort; the visitor is already on their way to WhatsApp.
-  try {
+  // The visitor is waiting on this response to be sent to WhatsApp, and the
+  // Brevo call takes a second or more. Notifying happens after the response
+  // rather than before it, so the handoff is not held up by an email.
+  const notify = async () => {
     const recipient = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
-    if (recipient) {
+    if (!recipient) return;
+    try {
       await sendBrevoEmail(env, {
         to: recipient,
         toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
@@ -2497,11 +2500,17 @@ async function handleWhatsAppEnquiry(request, env, method) {
             <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">Recorded as a lead. They may or may not have gone on to send the WhatsApp message.</p>`,
         }),
       });
+    } catch (error) {
+      console.error(
+        JSON.stringify({ message: "whatsapp_notify_failed", error: String(error?.message || error) }),
+      );
     }
-  } catch (error) {
-    console.error(
-      JSON.stringify({ message: "whatsapp_notify_failed", error: String(error?.message || error) }),
-    );
+  };
+
+  if (ctx && typeof ctx.waitUntil === "function") {
+    ctx.waitUntil(notify());
+  } else {
+    await notify();
   }
 
   return json({ success: true, url: whatsappUrl(env, name, message) });

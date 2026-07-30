@@ -9,6 +9,11 @@
 (function () {
   "use strict";
 
+  // Overridable with <script src="/js/whatsapp.js" data-number="27..."></script>
+  var SCRIPT = document.currentScript;
+  var NUMBER = (SCRIPT && SCRIPT.getAttribute("data-number")) || "27659669657";
+  var WA_BASE = "https://wa.me/" + NUMBER.replace(/[^0-9]/g, "");
+
   var CSS =
     '.wa-launch{position:fixed;right:18px;bottom:18px;z-index:9998;display:flex;align-items:center;gap:9px;' +
     'background:#25D366;color:#fff;border:0;border-radius:999px;padding:12px 18px 12px 15px;cursor:pointer;' +
@@ -104,38 +109,37 @@
       if (!email || email.indexOf("@") < 1) { status.textContent = "Please add a valid email."; return; }
       if (!message) { status.textContent = "Please tell us how we can help."; return; }
 
-      status.style.color = "#555";
-      status.textContent = "One moment…";
       btn.disabled = true;
 
-      // Opened up front: a window opened later, from a network callback, is
-      // treated as a popup and blocked on most browsers.
-      var win = window.open("", "_blank");
+      // Open WhatsApp straight away. Waiting for the server first meant the
+      // visitor sat on a blank tab while an email was sent, which took longer
+      // than the handoff itself. The enquiry is still recorded: the request
+      // below runs in parallel, and keepalive lets it finish regardless.
+      var text = "Hi Beplugged, I'm " + name + ".\n\n" + message;
+      window.open(WA_BASE + "?text=" + encodeURIComponent(text), "_blank", "noopener");
 
       fetch("/api/whatsapp-enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        keepalive: true,
         body: JSON.stringify({
           name: name,
           email: email,
           message: message,
           website: document.getElementById("wa-website").value,
         }),
-      })
-        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
-        .then(function (res) {
-          if (!res.ok || !res.b.success) throw new Error(res.b.error || "Could not send");
-          if (win) { win.location = res.b.url; } else { window.location = res.b.url; }
-          status.style.color = "#1da851";
-          status.textContent = "Opening WhatsApp…";
-          setTimeout(function () { open(false); status.textContent = ""; btn.disabled = false; }, 1800);
-        })
-        .catch(function (err) {
-          if (win) win.close();
-          status.style.color = "#c0392b";
-          status.textContent = err.message;
-          btn.disabled = false;
-        });
+      }).catch(function () {
+        /* The handoff has already happened; a failure here is logged server side. */
+      });
+
+      status.style.color = "#1da851";
+      status.textContent = "Opening WhatsApp…";
+      setTimeout(function () {
+        open(false);
+        status.textContent = "";
+        btn.disabled = false;
+        document.getElementById("wa-message").value = "";
+      }, 1200);
     });
   }
 
