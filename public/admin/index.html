@@ -1460,6 +1460,9 @@
           <button class="nav-link" onclick="showTab('company')">
             <i class="fas fa-building"></i> Company
           </button>
+          <button class="nav-link" onclick="showTab('catalogue')">
+            <i class="fas fa-store"></i> Services &amp; Courses
+          </button>
           <button class="nav-link" onclick="showTab('team')">
             <i class="fas fa-user-shield"></i> Team
           </button>
@@ -2372,6 +2375,31 @@
                 </thead>
                 <tbody id="agreements-list">
                   <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="catalogue-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Services &amp; Courses</h2>
+            <button class="btn btn-primary" onclick="openModuleModal('catalogue')">
+              <i class="fas fa-plus"></i> New Page
+            </button>
+          </div>
+          <p style="color:var(--muted);font-size:0.85rem;margin:-0.5rem 0 1.25rem;">
+            Each published item becomes a page on the public site and is added
+            to the sitemap. Drafts are not visible to anyone.
+          </p>
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr><th>Title</th><th>Type</th><th>Web address</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="catalogue-list">
+                  <tr><td colspan="5" class="text-center">Loading...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -3975,6 +4003,37 @@
             }));
           },
           render: renderAgreementRows,
+        },
+                catalogue: {
+          endpoint: "/admin/catalogue",
+          listId: "catalogue-list",
+          singular: "Page",
+          fields: [
+            { name: "title", label: "Title", required: true },
+            {
+              name: "kind",
+              label: "Type",
+              type: "select",
+              defaultValue: "service",
+              options: ["service", "course"],
+            },
+            { name: "slug", label: "Web address", placeholder: "left blank, made from the title" },
+            { name: "category", label: "Category" },
+            { name: "detail_1", label: "From / Duration", placeholder: "From R45 000  ·  8 weeks" },
+            { name: "detail_2", label: "Timeline / Level", placeholder: "6-10 weeks  ·  Beginner" },
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "draft",
+              options: ["draft", "published"],
+            },
+            { name: "summary", label: "Summary — one line, used in search results", type: "textarea", fullSpan: true },
+            { name: "body", label: "Page content (Markdown)", type: "textarea", fullSpan: true },
+            { name: "seo_title", label: "Search title (optional)", fullSpan: true },
+            { name: "seo_description", label: "Search description (optional)", type: "textarea", fullSpan: true },
+          ],
+          render: renderCatalogueRows,
         },
                 documents: {
           endpoint: "/admin/documents",
@@ -5765,6 +5824,37 @@
         return `<div style="font-size:0.78rem;color:${colour};margin-top:0.15rem;">${mark} ${escapeHtml(label)}</div>`;
       }
 
+      function renderCatalogueRows(rows) {
+        if (!rows.length) {
+          return `<tr><td colspan="5" class="text-center" style="padding:1.5rem;color:var(--muted);">No services or courses yet</td></tr>`;
+        }
+        return rows
+          .map((r) => {
+            const base = r.kind === "course" ? "/training" : "/services";
+            const live = r.status === "published";
+            return `
+          <tr>
+            <td>
+              ${displayPlain(r.title)}
+              ${r.summary ? `<div style="font-size:0.78rem;color:var(--muted);">${escapeHtml(String(r.summary).slice(0, 80))}${String(r.summary).length > 80 ? "…" : ""}</div>` : ""}
+            </td>
+            <td>${r.kind === "course" ? "Course" : "Service"}</td>
+            <td>
+              ${live
+                ? `<a href="${escapeAttr(base + "/" + r.slug)}" target="_blank" rel="noopener" class="ref">${escapeHtml(base + "/" + r.slug)}</a>`
+                : `<span class="ref" style="color:var(--muted);">${escapeHtml(base + "/" + r.slug)}</span>`}
+            </td>
+            <td><span class="badge status-${live ? "won" : "later"}">${live ? "Published" : "Draft"}</span></td>
+            <td>
+              <div class="action-buttons">
+                ${live ? `<button class="btn btn-sm btn-secondary" data-cat-view="${escapeAttr(base + "/" + r.slug)}">View</button>` : ""}
+              </div>${actionButtons("catalogue", r.id)}
+            </td>
+          </tr>`;
+          })
+          .join("");
+      }
+
       function renderAgreementRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="6" class="text-center">No agreements yet</td></tr>`;
@@ -6220,6 +6310,8 @@
           loadModule("documents");
         } else if (tabName === "agreements") {
           loadModule("agreements");
+        } else if (tabName === "catalogue") {
+          loadModule("catalogue");
         } else if (tabName === "policies") {
           loadModule("policies");
         } else if (tabName === "sops") {
@@ -7054,6 +7146,9 @@
           if (tab) updatePackCount(tab.id.replace("-tab", ""));
           return;
         }
+
+        const catView = event.target.closest("[data-cat-view]");
+        if (catView) { window.open(catView.dataset.catView, "_blank", "noopener"); return; }
 
         const agrView = event.target.closest("[data-agr-view]");
         if (agrView) { viewAgreement(agrView.dataset.agrView); return; }

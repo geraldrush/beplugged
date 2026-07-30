@@ -396,6 +396,26 @@ CREATE TABLE IF NOT EXISTS business_records (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Services and courses, each rendered as its own public page
+CREATE TABLE IF NOT EXISTS catalogue_items (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'service' CHECK (kind IN ('service', 'course')),
+    slug TEXT NOT NULL UNIQUE,     -- the URL segment
+    title TEXT NOT NULL,
+    summary TEXT,                  -- one line, used in listings and meta
+    body TEXT,                     -- the page, in Markdown
+    category TEXT,
+    icon TEXT,
+    detail_1 TEXT,                 -- e.g. "From R12 000" or "8 weeks"
+    detail_2 TEXT,                 -- e.g. "4-6 weeks" or "Beginner"
+    seo_title TEXT,
+    seo_description TEXT,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 
@@ -488,3 +508,5 @@ CREATE INDEX IF NOT EXISTS idx_business_records_type ON business_records (record
 CREATE INDEX IF NOT EXISTS idx_business_records_status ON business_records (status);
 
 CREATE INDEX IF NOT EXISTS idx_business_records_due ON business_records (due_date);
+
+CREATE INDEX IF NOT EXISTS idx_catalogue_kind ON catalogue_items (kind, status, position);

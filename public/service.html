@@ -49,7 +49,20 @@
         <link rel="stylesheet" href="style.css">
         <link rel="stylesheet" href="css/responsive.css">
 		
-    </head>
+    <style>
+	.vendor-card{text-align:left;}
+	.vendor-mark{
+		display:flex;align-items:center;justify-content:center;
+		height:74px;margin:0 0 16px;border-radius:6px;
+		background:var(--brand);
+	}
+	.vendor-mark span{
+		color:#fff;font-size:23px;font-weight:700;letter-spacing:.4px;
+		font-family:Arial,Helvetica,sans-serif;
+	}
+	.vendor-row .single-service p{font-size:14px;line-height:1.75;}
+	</style>
+</head>
     <body>
 	
 		<!-- Preloader -->
@@ -287,38 +300,49 @@
 						</div>
 					</div>
 				</div>
-				<div class="row">
+				<div class="row vendor-row">
 					<div class="col-lg-4 col-md-6 col-12">
-						<div class="single-service">
-							<h4><a href="#">Cloudflare</a></h4>
+						<div class="single-service vendor-card">
+							<div class="vendor-mark" style="--brand:#F6821F;">
+								<span>Cloudflare</span>
+							</div>
 							<p>DNS, domains, CDN, website security and WAF, email routing, Workers, Pages, R2, D1, Zero Trust and performance.</p>
 						</div>
 					</div>
 					<div class="col-lg-4 col-md-6 col-12">
-						<div class="single-service">
-							<h4><a href="#">Microsoft</a></h4>
+						<div class="single-service vendor-card">
+							<div class="vendor-mark" style="--brand:#00A4EF;">
+								<span>Microsoft</span>
+							</div>
 							<p>Microsoft 365, Azure, Teams, SharePoint, Power Platform, Power Automate, Power BI and productivity training.</p>
 						</div>
 					</div>
 					<div class="col-lg-4 col-md-6 col-12">
-						<div class="single-service">
-							<h4><a href="#">Google</a></h4>
+						<div class="single-service vendor-card">
+							<div class="vendor-mark" style="--brand:#4285F4;">
+								<span>Google</span>
+							</div>
 							<p>Google Workspace, Google Cloud, AppSheet, Firebase, analytics and collaboration tools.</p>
 						</div>
 					</div>
 					<div class="col-lg-4 col-md-6 col-12">
-						<div class="single-service">
-							<h4><a href="#">Amazon Web Services</a></h4>
+						<div class="single-service vendor-card">
+							<div class="vendor-mark" style="--brand:#FF9900;">
+								<span>aws</span>
+							</div>
 							<p>Hosting, storage, databases, backups, serverless applications and cloud migration.</p>
 						</div>
 					</div>
 					<div class="col-lg-4 col-md-6 col-12">
-						<div class="single-service">
-							<h4><a href="#">Oracle</a></h4>
+						<div class="single-service vendor-card">
+							<div class="vendor-mark" style="--brand:#C74634;">
+								<span>Oracle</span>
+							</div>
 							<p>Oracle Cloud, databases, SQL, MySQL, APEX, reporting and enterprise platform support.</p>
 						</div>
 					</div>
 				</div>
+
 				<div class="row">
 					<div class="col-12">
 						<p style="text-align:center;color:#777;font-size:14px;margin-top:10px;">

@@ -277,6 +277,10 @@ export default {
         return await handleAuditLogs(env, method);
       }
 
+      if (path.startsWith("/api/admin/catalogue")) {
+        return await handleCatalogue(request, env, path, method);
+      }
+
       if (path === "/api/admin/document-pack/send") {
         return await handleSendDocumentPack(request, env, method);
       }
@@ -370,6 +374,24 @@ export default {
       if (path.startsWith("/api/questionnaire/")) {
         const token = path.split("/")[3];
         return await handlePublicQuestionnaire(request, env, token, method);
+      }
+
+      // Service and course pages, rendered from the catalogue. The bare
+      // /service and /training pages stay as static assets, so only a path
+      // with a slug after it is handled here.
+      if (method === "GET") {
+        const seg = path.split("/").filter(Boolean);
+        if (seg.length === 2) {
+          if (seg[0] === "services") {
+            return await handleCataloguePage(env, request, "service", seg[1]);
+          }
+          if (seg[0] === "training") {
+            return await handleCataloguePage(env, request, "course", seg[1]);
+          }
+        }
+        if (path === "/sitemap.xml") {
+          return await handleSitemap(env, request);
+        }
       }
 
       if (env.ASSETS) {
@@ -1203,6 +1225,12 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+// Attribute values need the same escaping as text; kept separate so the
+// intent is legible at the call site.
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
 function escapeHtmlWithBreaks(value) {
   return escapeHtml(value).replace(/\n/g, "<br>");
 }
@@ -1666,6 +1694,31 @@ async function runSchemaSetup(env) {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_scope_agreements_parent ON scope_agreements (parent_id)",
+  ).run();
+  // Services and courses are content, so a new one becomes a real page without
+  // a rebuild or a deploy.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS catalogue_items (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL DEFAULT 'service',
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      summary TEXT,
+      body TEXT,
+      category TEXT,
+      icon TEXT,
+      detail_1 TEXT,
+      detail_2 TEXT,
+      seo_title TEXT,
+      seo_description TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_catalogue_kind ON catalogue_items (kind, status, position)",
   ).run();
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS project_milestones (
@@ -7441,6 +7494,354 @@ async function handleSendDocumentPack(request, env, method) {
   }
 
   return json({ success: true, recipient: to, documents: docs.length });
+}
+
+const CATALOGUE_KINDS = new Set(["service", "course"]);
+
+function catalogueBase(kind) {
+  return kind === "course" ? "/training" : "/services";
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+// The public page. Rendered on the server so it is indexable without
+// JavaScript, and styled with the site's own stylesheets so it does not read
+// as a different site.
+function cataloguePageHtml(item, related, origin) {
+  const base = catalogueBase(item.kind);
+  const url = `${origin}${base}/${item.slug}`;
+  const isCourse = item.kind === "course";
+  const title = item.seo_title || `${item.title} | Beplugged Tech`;
+  const description =
+    item.seo_description ||
+    item.summary ||
+    `${item.title} from Beplugged Tech.`;
+
+  const nav = [
+    ["/", "Home"],
+    ["/about", "About"],
+    ["/service", "Services"],
+    ["/training", "Training"],
+    ["/portfolio-details", "Projects"],
+    ["/contact", "Contact Us"],
+  ]
+    .map(([href, label]) => `<li><a href="${href}">${label}</a></li>`)
+    .join("");
+
+  // Structured data, so search engines can read what this page is.
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": isCourse ? "Course" : "Service",
+    name: item.title,
+    description,
+    url,
+    provider: {
+      "@type": "Organization",
+      name: "Beplugged Tech",
+      url: origin,
+    },
+  };
+  if (isCourse) {
+    schema.hasCourseInstance = {
+      "@type": "CourseInstance",
+      courseMode: "Blended",
+      ...(item.detail_2 ? { courseWorkload: item.detail_2 } : {}),
+    };
+  }
+
+  const details = [
+    item.detail_1 ? `<li><strong>${escapeHtml(isCourse ? "Duration" : "From")}</strong> ${escapeHtml(item.detail_1)}</li>` : "",
+    item.detail_2 ? `<li><strong>${escapeHtml(isCourse ? "Level" : "Typical timeline")}</strong> ${escapeHtml(item.detail_2)}</li>` : "",
+    item.category ? `<li><strong>Category</strong> ${escapeHtml(item.category)}</li>` : "",
+  ].filter(Boolean).join("");
+
+  const relatedHtml = related.length
+    ? `<div class="row">
+         <div class="col-lg-12"><div class="section-title"><h2>${isCourse ? "Other Courses" : "Related Services"}</h2><img src="/img/section-img.png" alt="#"></div></div>
+         ${related
+           .map(
+             (r) => `<div class="col-lg-4 col-md-6 col-12">
+             <div class="single-service">
+               <h4><a href="${catalogueBase(r.kind)}/${escapeAttr(r.slug)}">${escapeHtml(r.title)}</a></h4>
+               <p>${escapeHtml(r.summary || "")}</p>
+             </div>
+           </div>`,
+           )
+           .join("")}
+       </div>`
+    : "";
+
+  return `<!doctype html>
+<html class="no-js" lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeAttr(description)}">
+<link rel="canonical" href="${escapeAttr(url)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escapeAttr(title)}">
+<meta property="og:description" content="${escapeAttr(description)}">
+<meta property="og:url" content="${escapeAttr(url)}">
+<meta property="og:site_name" content="Beplugged Tech">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="/img/favicon.ico">
+<link rel="stylesheet" href="/css/bootstrap.min.css">
+<link rel="stylesheet" href="/css/font-awesome.min.css">
+<link rel="stylesheet" href="/css/icofont.css">
+<link rel="stylesheet" href="/css/normalize.css">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<script type="application/ld+json">${JSON.stringify(schema)}</script>
+<style>
+  .cat-hero{background:#2c2d3f;color:#fff;padding:52px 0 44px;}
+  .cat-hero h1{color:#fff;font-size:34px;margin:0 0 10px;line-height:1.25;}
+  .cat-hero p{color:rgba(255,255,255,.82);font-size:16px;max-width:760px;margin:0;}
+  .cat-crumb{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:14px;}
+  .cat-crumb a{color:rgba(255,255,255,.75);}
+  .cat-body{padding:52px 0;}
+  .cat-body h2{font-size:23px;margin:30px 0 12px;}
+  .cat-body h3{font-size:18px;margin:24px 0 10px;}
+  .cat-body p{margin:0 0 14px;line-height:1.8;}
+  .cat-body ul,.cat-body ol{margin:0 0 16px 20px;}
+  .cat-body li{margin-bottom:7px;}
+  .cat-body table{width:100%;border-collapse:collapse;margin:0 0 18px;}
+  .cat-body th,.cat-body td{border:1px solid #e5e6ea;padding:8px 11px;text-align:left;}
+  .cat-body th{background:#fafafb;}
+  .cat-facts{background:#fafafb;border:1px solid #e5e6ea;border-radius:6px;padding:18px 20px;margin:0 0 26px;}
+  .cat-facts ul{list-style:none;margin:0;padding:0;}
+  .cat-facts li{padding:5px 0;font-size:14px;}
+  .cat-facts strong{display:inline-block;min-width:130px;color:#777;font-weight:600;}
+  .cat-cta{background:#fff5f1;border-left:3px solid #f05023;border-radius:6px;padding:22px 24px;margin:34px 0 0;}
+  .cat-cta h3{margin:0 0 8px;font-size:19px;}
+  .cat-cta p{margin:0 0 14px;color:#666;}
+</style>
+</head>
+<body>
+<header class="header"><div class="topbar"></div>
+  <div class="header-inner" style="background:#fff;border-bottom:1px solid #eee;">
+    <div class="container"><div class="row" style="align-items:center;padding:12px 0;">
+      <div class="col-lg-3 col-md-3 col-12"><a href="/"><img src="/img/logo.png" alt="Beplugged Tech" style="height:44px;"></a></div>
+      <div class="col-lg-9 col-md-9 col-12">
+        <div class="main-menu"><nav class="navigation"><ul class="nav menu" style="display:flex;flex-wrap:wrap;gap:18px;list-style:none;margin:0;justify-content:flex-end;">${nav}</ul></nav></div>
+      </div>
+    </div></div>
+  </div>
+</header>
+
+<section class="cat-hero">
+  <div class="container">
+    <div class="cat-crumb"><a href="/">Home</a> &rsaquo; <a href="${base}">${isCourse ? "Training" : "Services"}</a> &rsaquo; ${escapeHtml(item.title)}</div>
+    <h1>${escapeHtml(item.title)}</h1>
+    ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
+  </div>
+</section>
+
+<section class="cat-body">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 col-12">
+        ${details ? `<div class="cat-facts"><ul>${details}</ul></div>` : ""}
+        ${item.body ? markdownToEmailHtml(item.body) : ""}
+        <div class="cat-cta">
+          <h3>${isCourse ? "Interested in this course?" : "Want to talk about this?"}</h3>
+          <p>${isCourse ? "Tell us where you are starting from and we will suggest a route." : "Tell us what you need and we will come back with an honest answer on scope and cost."}</p>
+          <a href="/contact" class="btn">Get in touch</a>
+        </div>
+      </div>
+    </div>
+    ${relatedHtml}
+  </div>
+</section>
+
+<footer class="footer" style="background:#2c2d3f;color:rgba(255,255,255,.7);padding:34px 0;margin-top:40px;">
+  <div class="container">
+    <p style="margin:0;font-size:14px;">&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
+      <a href="mailto:info@beplugged.co.za" style="color:#f05023;">info@beplugged.co.za</a> &middot;
+      <a href="${base}" style="color:rgba(255,255,255,.75);">All ${isCourse ? "courses" : "services"}</a>
+    </p>
+  </div>
+</footer>
+</body></html>`;
+}
+
+// The sitemap is generated so a new service or course is discoverable the
+// moment it is published, rather than when someone remembers to edit a file.
+function normalizeCataloguePayload(raw, existing) {
+  const title = trimText(raw.title, "Title", { required: true, maxLength: 200 });
+  return {
+    kind: normalizeKey(raw.kind, "Kind", CATALOGUE_KINDS, existing?.kind || "service"),
+    slug: slugify(raw.slug || existing?.slug || title),
+    title,
+    summary: trimText(raw.summary, "Summary", { maxLength: 300 }),
+    body: trimText(raw.body, "Page content", { maxLength: 60000 }),
+    category: trimText(raw.category, "Category", { maxLength: 100 }),
+    icon: trimText(raw.icon, "Icon", { maxLength: 60 }),
+    detail_1: trimText(raw.detail_1, "Detail", { maxLength: 100 }),
+    detail_2: trimText(raw.detail_2, "Detail", { maxLength: 100 }),
+    seo_title: trimText(raw.seo_title, "SEO title", { maxLength: 200 }),
+    seo_description: trimText(raw.seo_description, "SEO description", { maxLength: 300 }),
+    status: normalizeKey(raw.status, "Status", new Set(["draft", "published"]), "draft"),
+    position: normalizeInteger(raw.position === undefined ? 0 : raw.position, "Position", {
+      min: 0,
+      max: 999,
+      fallback: 0,
+    }),
+  };
+}
+
+async function handleCatalogue(request, env, path, method) {
+  await ensureSchema(env);
+  const id = path.split("/")[4];
+
+  if (method === "GET" && !id) {
+    const rows = await env.DB.prepare(
+      "SELECT * FROM catalogue_items ORDER BY kind ASC, position ASC, title ASC LIMIT 200",
+    ).all();
+    return json(rows.results || []);
+  }
+
+  if (method === "GET" && id) {
+    const row = await env.DB.prepare("SELECT * FROM catalogue_items WHERE id = ?")
+      .bind(id)
+      .first();
+    return json(row || { error: "Not found" }, row ? {} : { status: 404 });
+  }
+
+  if (method === "POST" && !id) {
+    const data = normalizeCataloguePayload(await parseRequestJson(request));
+    const newId = createEntityId("cat");
+    await runOrConflict(
+      env.DB.prepare(
+        `INSERT INTO catalogue_items (id, kind, slug, title, summary, body, category,
+           icon, detail_1, detail_2, seo_title, seo_description, status, position)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        newId, data.kind, data.slug, data.title, data.summary, data.body,
+        data.category, data.icon, data.detail_1, data.detail_2,
+        data.seo_title, data.seo_description, data.status, data.position,
+      ),
+      "Another item already uses that web address",
+    );
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "catalogue_item",
+      entity_id: newId,
+      entity_number: data.slug,
+    });
+    return json({ id: newId, ...data, url: `${catalogueBase(data.kind)}/${data.slug}` }, { status: 201 });
+  }
+
+  const existing = id
+    ? await env.DB.prepare("SELECT * FROM catalogue_items WHERE id = ?").bind(id).first()
+    : null;
+  if (id && !existing) {
+    throw new RequestError("Not found", 404);
+  }
+
+  if (method === "PUT" && id) {
+    const data = normalizeCataloguePayload({ ...existing, ...(await parseRequestJson(request)) }, existing);
+    await runOrConflict(
+      env.DB.prepare(
+        `UPDATE catalogue_items SET kind = ?, slug = ?, title = ?, summary = ?, body = ?,
+           category = ?, icon = ?, detail_1 = ?, detail_2 = ?, seo_title = ?,
+           seo_description = ?, status = ?, position = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+      ).bind(
+        data.kind, data.slug, data.title, data.summary, data.body, data.category,
+        data.icon, data.detail_1, data.detail_2, data.seo_title,
+        data.seo_description, data.status, data.position, id,
+      ),
+      "Another item already uses that web address",
+    );
+    return json({ success: true, url: `${catalogueBase(data.kind)}/${data.slug}` });
+  }
+
+  if (method === "DELETE" && id) {
+    await env.DB.prepare("DELETE FROM catalogue_items WHERE id = ?").bind(id).run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "catalogue_item",
+      entity_id: id,
+      entity_number: existing.slug,
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleSitemap(env, request) {
+  await ensureSchema(env);
+  const origin = new URL(request.url).origin;
+  const rows = await env.DB.prepare(
+    `SELECT kind, slug, updated_at FROM catalogue_items
+     WHERE status = 'published' ORDER BY kind, position`,
+  ).all();
+
+  const statics = ["/", "/about", "/service", "/training", "/portfolio-details", "/contact"];
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = (loc, mod, priority) =>
+    `  <url>\n    <loc>${escapeHtml(loc)}</loc>\n    <lastmod>${escapeHtml(String(mod).slice(0, 10))}</lastmod>\n    <priority>${priority}</priority>\n  </url>`;
+
+  const body = [
+    ...statics.map((u) => entry(origin + u, today, u === "/" ? "1.0" : "0.8")),
+    ...(rows.results || []).map((r) =>
+      entry(`${origin}${catalogueBase(r.kind)}/${r.slug}`, r.updated_at || today, "0.7"),
+    ),
+  ].join("\n");
+
+  return new Response(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>`,
+    {
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      },
+    },
+  );
+}
+
+async function handleCataloguePage(env, request, kind, slug) {
+  await ensureSchema(env);
+  const item = await env.DB.prepare(
+    "SELECT * FROM catalogue_items WHERE slug = ? AND kind = ? AND status = 'published'",
+  )
+    .bind(slug, kind)
+    .first();
+
+  if (!item) {
+    return new Response("Not found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const rest = await env.DB.prepare(
+    `SELECT kind, slug, title, summary FROM catalogue_items
+     WHERE kind = ? AND status = 'published' AND id != ?
+     ORDER BY position ASC, title ASC LIMIT 3`,
+  )
+    .bind(kind, item.id)
+    .all();
+
+  const origin = new URL(request.url).origin;
+  return new Response(cataloguePageHtml(item, rest.results || [], origin), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // Public marketing pages, so let the edge serve them.
+      "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 async function handleQualityRecords(request, env, path, method) {
