@@ -2354,7 +2354,8 @@
           <div class="pack-bar" id="quality-packbar">
             <span class="pack-count" id="quality-packcount">No documents selected</span>
             <button class="btn btn-sm btn-secondary" data-pack-all="quality">Select all</button>
-            <button class="btn btn-sm btn-primary" data-pack-export="quality">Export pack</button>
+            <button class="btn btn-sm btn-secondary" data-pack-export="quality">Download</button>
+            <button class="btn btn-sm btn-primary" data-pack-send="quality">Send to…</button>
           </div>
 
           <div class="card">
@@ -2396,7 +2397,8 @@
           <div class="pack-bar" id="security-packbar">
             <span class="pack-count" id="security-packcount">No documents selected</span>
             <button class="btn btn-sm btn-secondary" data-pack-all="security">Select all</button>
-            <button class="btn btn-sm btn-primary" data-pack-export="security">Export pack</button>
+            <button class="btn btn-sm btn-secondary" data-pack-export="security">Download</button>
+            <button class="btn btn-sm btn-primary" data-pack-send="security">Send to…</button>
           </div>
 
           <div class="card">
@@ -3238,6 +3240,42 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeConvertModal()">Cancel</button>
           <button type="button" class="btn btn-primary" id="convert-save">Create project</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sending documentation to a prospect -->
+    <div id="packSendModal" class="modal">
+      <div class="modal-content" style="max-width: 560px">
+        <div class="modal-header">
+          <h5>Send documentation</h5>
+          <button type="button" onclick="closePackSendModal()"
+            style="background:none;border:none;color:inherit;font-size:1.5rem;cursor:pointer;">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-meta" id="pack-send-context"></div>
+          <div class="form-group">
+            <label class="form-label" for="pack-to">Send to</label>
+            <input class="form-control" id="pack-to" type="email" placeholder="procurement@company.com" list="pack-to-options" />
+            <datalist id="pack-to-options"></datalist>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pack-to-name">Their name</label>
+            <input class="form-control" id="pack-to-name" placeholder="Jane Buyer" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pack-message">Covering note</label>
+            <textarea class="form-control" id="pack-message" rows="3"
+              placeholder="As discussed on our call this morning."></textarea>
+            <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted);">
+              The documents go as one attachment. The email lists what is
+              included with references and versions.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closePackSendModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" id="pack-send-go">Send</button>
         </div>
       </div>
     </div>
@@ -6167,6 +6205,11 @@
           return;
         }
 
+        if (event.target.closest("#pack-send-go")) { sendPack(); return; }
+
+        const packSend = event.target.closest("[data-pack-send]");
+        if (packSend) { openPackSend(packSend.dataset.packSend); return; }
+
         const packAll = event.target.closest("[data-pack-all]");
         if (packAll) {
           const target = packAll.dataset.packAll;
@@ -7495,6 +7538,68 @@
         el.textContent = n
           ? `${n} document${n === 1 ? "" : "s"} selected`
           : "No documents selected";
+      }
+
+      let packSendTarget = null;
+
+      async function openPackSend(target) {
+        const ids = packSelection(target);
+        if (!ids.length) {
+          showAlert("Select the documents to include", "danger");
+          return;
+        }
+        packSendTarget = target;
+        document.getElementById("pack-send-context").innerHTML =
+          `<span>${ids.length} document${ids.length === 1 ? "" : "s"} selected</span>`;
+        document.getElementById("pack-to").value = "";
+        document.getElementById("pack-to-name").value = "";
+        document.getElementById("pack-message").value = "";
+
+        // Offer people already on file rather than asking for an address twice.
+        const [leads, clients] = await Promise.all([
+          apiCall("/admin/leads"),
+          apiCall("/admin/clients"),
+        ]);
+        const seen = new Set();
+        const opts = [];
+        [...(Array.isArray(leads) ? leads : []), ...(Array.isArray(clients) ? clients : [])].forEach((r) => {
+          const email = r.email || r.client_email;
+          if (email && !seen.has(email)) {
+            seen.add(email);
+            opts.push(`<option value="${escapeAttr(email)}">${escapeAttr(r.company_name || r.name || "")}</option>`);
+          }
+        });
+        document.getElementById("pack-to-options").innerHTML = opts.join("");
+
+        document.getElementById("packSendModal").classList.add("show");
+        document.getElementById("pack-to").focus();
+      }
+
+      function closePackSendModal() {
+        document.getElementById("packSendModal").classList.remove("show");
+        packSendTarget = null;
+      }
+
+      async function sendPack() {
+        if (!packSendTarget) return;
+        const to = document.getElementById("pack-to").value.trim();
+        if (!to) {
+          showAlert("Enter an email address", "danger");
+          return;
+        }
+        const btn = document.getElementById("pack-send-go");
+        btn.disabled = true;
+        const r = await apiCall("/admin/document-pack/send", "POST", {
+          ids: packSelection(packSendTarget),
+          to,
+          to_name: document.getElementById("pack-to-name").value.trim(),
+          message: document.getElementById("pack-message").value.trim(),
+        });
+        btn.disabled = false;
+        if (r && r.success) {
+          showAlert(`${r.documents} document${r.documents === 1 ? "" : "s"} sent to ${r.recipient}`, "success");
+          closePackSendModal();
+        }
       }
 
       async function exportPack(target) {

@@ -226,6 +226,10 @@ export default {
         return await handleDocuments(request, env, path, method);
       }
 
+      if (path === "/api/admin/document-pack/send") {
+        return await handleSendDocumentPack(request, env, method);
+      }
+
       if (path === "/api/admin/document-pack") {
         return await handleDocumentPack(request, env, method);
       }
@@ -6900,12 +6904,8 @@ ${body}
 </body></html>`;
 }
 
-async function handleDocumentPack(request, env, method) {
-  if (method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
-  }
-  const raw = await parseRequestJson(request);
-  const ids = Array.isArray(raw?.ids) ? raw.ids.slice(0, 40) : [];
+async function collectPackDocuments(env, rawIds) {
+  const ids = Array.isArray(rawIds) ? rawIds.slice(0, 40) : [];
   if (!ids.length) {
     throw new RequestError("Select at least one document");
   }
@@ -6933,6 +6933,16 @@ async function handleDocumentPack(request, env, method) {
     "SELECT company_name, email FROM company_profile WHERE id = 'default'",
   ).first();
 
+  return { docs, company };
+}
+
+async function handleDocumentPack(request, env, method) {
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  const raw = await parseRequestJson(request);
+  const { docs, company } = await collectPackDocuments(env, raw?.ids);
+
   await recordAudit(env, {
     action: "document_pack_exported",
     entity_type: "quality_record",
@@ -6948,6 +6958,104 @@ async function handleDocumentPack(request, env, method) {
       "Content-Disposition": `attachment; filename="document-pack-${new Date().toISOString().slice(0, 10)}.html"`,
     },
   });
+}
+
+// Sending the pack to a prospect. The covering note stays short and the
+// documents travel as one attachment, since a due-diligence request is
+// usually filed rather than read in the mail client.
+async function handleSendDocumentPack(request, env, method) {
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  const raw = await parseRequestJson(request);
+  const to = validateEmail(raw?.to, "Recipient email");
+  const toName = trimText(raw?.to_name, "Recipient name", { maxLength: 200 });
+  const note = trimText(raw?.message, "Message", { maxLength: 2000 });
+
+  const { docs, company } = await collectPackDocuments(env, raw?.ids);
+  const name = company?.company_name || "Beplugged Tech";
+  const issued = new Date().toISOString().slice(0, 10);
+  const fileName = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-documents-${issued}.html`;
+
+  const index = docs
+    .map(
+      (d, i) => `<tr style="background:${i % 2 ? "#ffffff" : "#fbfbfc"};">
+        <td style="padding:8px 12px;font-size:12px;font-family:monospace;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(d.record_number)}</td>
+        <td style="padding:8px 12px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(d.title)}</td>
+        <td style="padding:8px 12px;font-size:12px;font-family:monospace;color:#555555;border-bottom:1px solid #eeeeee;">v${escapeHtml(d.version || "1.0")}</td>
+      </tr>`,
+    )
+    .join("");
+
+  await sendBrevoEmail(env, {
+    to,
+    toName,
+    subject: `${name} — requested documentation`,
+    attachments: [
+      { name: fileName, content: toBase64(documentPackHtml(docs, company)) },
+    ],
+    htmlContent: emailShell({
+      label: "Documentation",
+      accent: "#F05023",
+      bodyHtml: `
+        <p style="margin:0 0 6px;font-size:16px;color:#2C2D3F;">Hi ${escapeHtml(toName || "there")},</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#555555;line-height:1.7;">Please find our documentation attached, as requested. It contains ${docs.length} document${docs.length === 1 ? "" : "s"}, each with its reference, version and approval details.</p>
+        ${note ? `<table role="presentation" width="100%" style="margin:0 0 22px;"><tr><td style="background:#FFF5F1;border-left:3px solid #F05023;border-radius:4px;padding:12px 16px;font-size:14px;color:#555555;line-height:1.7;">${escapeHtmlWithBreaks(note)}</td></tr></table>` : ""}
+        ${emailSectionLabel("Included")}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
+          <tbody>${index}</tbody>
+        </table>
+        <p style="margin:0;font-size:13px;color:#7a7a80;line-height:1.7;">The attachment opens in any browser and can be saved as a PDF. Versions current at ${escapeHtml(issued)}; later revisions supersede this pack. Happy to answer anything in more detail.</p>`,
+    }),
+  });
+
+  await recordAudit(env, {
+    action: "document_pack_sent",
+    entity_type: "quality_record",
+    entity_id: "pack",
+    entity_number: `${docs.length} documents`,
+    details: { recipient: to, references: docs.map((d) => d.record_number) },
+  });
+
+  // Recorded against the relationship too, so the CRM shows what was sent.
+  try {
+    const key = String(to).trim().toLowerCase();
+    const lead = await env.DB.prepare(
+      "SELECT id, company_name FROM leads WHERE LOWER(TRIM(email)) = ? LIMIT 1",
+    )
+      .bind(key)
+      .first();
+    const contact = lead
+      ? null
+      : await env.DB.prepare(
+          "SELECT lead_id, client_id, client_name FROM crm_contacts WHERE LOWER(TRIM(email)) = ? LIMIT 1",
+        )
+          .bind(key)
+          .first();
+    if (lead || contact) {
+      await env.DB.prepare(
+        `INSERT INTO crm_activities (id, lead_id, client_id, client_email, client_name,
+           activity_type, status, title, description, occurred_at)
+         VALUES (?, ?, ?, ?, ?, 'email', 'completed', ?, ?, CURRENT_TIMESTAMP)`,
+      )
+        .bind(
+          createEntityId("act"),
+          lead?.id || contact?.lead_id || null,
+          contact?.client_id || null,
+          to,
+          lead?.company_name || contact?.client_name || "",
+          `Documentation sent — ${docs.length} document${docs.length === 1 ? "" : "s"}`,
+          docs.map((d) => `${d.record_number} v${d.version || "1.0"}`).join(", "),
+        )
+        .run();
+    }
+  } catch (error) {
+    console.error(
+      JSON.stringify({ message: "pack_activity_log_failed", error: String(error?.message || error) }),
+    );
+  }
+
+  return json({ success: true, recipient: to, documents: docs.length });
 }
 
 async function handleQualityRecords(request, env, path, method) {
