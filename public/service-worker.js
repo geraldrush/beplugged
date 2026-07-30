@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v3";
+const CACHE_VERSION = "beplugged-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -14,6 +14,7 @@ const CORE_ASSETS = [
   "/service",
   "/portfolio-details",
   "/contact",
+  "/training",
   OFFLINE_URL,
   "/style.css",
   "/css/bootstrap.min.css",
