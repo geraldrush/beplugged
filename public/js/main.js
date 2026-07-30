@@ -294,14 +294,8 @@ Version:	1.1
 		/*===================
 			Scroll Up JS
 		=====================*/
-		if ($.scrollUp) {
-			$.scrollUp({
-				scrollText: '<span><i class="fa fa-angle-up"></i></span>',
-				easingType: 'easeInOutExpo',
-				scrollSpeed: 900,
-				animation: 'fade'
-			}); 
-		}
+		// Back-to-top removed.
+
 
 		/*=======================
 			Animate Scroll JS
