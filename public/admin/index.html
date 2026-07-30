@@ -413,11 +413,15 @@
       .status-proposal,
       .status-on_hold,
       .status-open,
+      .status-pending,
+      .status-in_progress,
+      .status-submitted,
       .status-monitoring,
       .status-planned,
       .status-follow_up,
       .status-task,
       .status-assessing,
+      .status-unpaid,
       .status-high,
       .status-medium {
         background-color: rgba(224, 165, 0, 0.18);
@@ -426,6 +430,8 @@
 
       .status-won,
       .status-accepted,
+      .status-paid,
+      .status-awarded,
       .status-completed,
       .status-approved,
       .status-closed,
@@ -1457,6 +1463,15 @@
           <button class="nav-link" onclick="showTab('team')">
             <i class="fas fa-user-shield"></i> Team
           </button>
+          <button class="nav-link" onclick="showBusinessModule('branches')">
+            <i class="fas fa-code-branch"></i> Branches
+          </button>
+          <button class="nav-link" onclick="showBusinessModule('departments')">
+            <i class="fas fa-layer-group"></i> Departments
+          </button>
+          <button class="nav-link" onclick="showTab('system-logs')">
+            <i class="fas fa-clock-rotate-left"></i> System Logs
+          </button>
           <div class="nav-section-title">Sales</div>
           <button class="nav-link" onclick="showTab('leads')">
             <i class="fas fa-bullseye"></i> Leads
@@ -1505,6 +1520,22 @@
           </button>
           <button class="nav-link" onclick="showTab('receipts')">
             <i class="fas fa-receipt"></i> Receipts
+          </button>
+          <button class="nav-link" onclick="showBusinessModule('expenses')">
+            <i class="fas fa-wallet"></i> Expenses
+          </button>
+          <button class="nav-link" onclick="showBusinessModule('suppliers')">
+            <i class="fas fa-truck-field"></i> Suppliers
+          </button>
+          <div class="nav-section-title">Growth</div>
+          <button class="nav-link" onclick="showBusinessModule('training')">
+            <i class="fas fa-graduation-cap"></i> Training
+          </button>
+          <button class="nav-link" onclick="showBusinessModule('supportTickets')">
+            <i class="fas fa-headset"></i> Support Tickets
+          </button>
+          <button class="nav-link" onclick="showBusinessModule('tenders')">
+            <i class="fas fa-file-contract"></i> Tenders
           </button>
           <div class="nav-section-title">Session</div>
           <button class="nav-link" onclick="logout()">
@@ -2216,6 +2247,76 @@
                 <tbody id="project-risks-list">
                   <tr>
                     <td colspan="7" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Business Records Tab -->
+        <div id="business-records-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <div>
+              <h2 id="business-records-title">Business Records</h2>
+              <p id="business-records-subtitle" style="color:var(--muted);margin:0;">
+                Editable operating register
+              </p>
+            </div>
+            <button class="btn btn-primary" id="business-records-new">
+              <i class="fas fa-plus"></i> New Record
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Record</th>
+                    <th>Organisation / Contact</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Dates</th>
+                    <th>Amount</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="business-records-list">
+                  <tr>
+                    <td colspan="8" class="text-center">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Logs Tab -->
+        <div id="system-logs-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>System Logs</h2>
+            <button class="btn btn-secondary" onclick="loadSystemLogs()">
+              <i class="fas fa-rotate"></i> Refresh
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Record</th>
+                    <th>Actor</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="system-logs-list">
+                  <tr>
+                    <td colspan="5" class="text-center">Loading...</td>
                   </tr>
                 </tbody>
               </table>
@@ -3661,6 +3762,7 @@
       let currentCrmActivityId = null;
       let currentModuleName = null;
       let currentModuleRecordId = null;
+      let currentBusinessModule = null;
       const leadCache = new Map();
       const clientCache = new Map();
       const crmContactCache = new Map();
@@ -4088,16 +4190,566 @@
         },
       };
 
+      const BUSINESS_STATUS_OPTIONS = [
+        "draft",
+        "open",
+        "pending",
+        "active",
+        "in_progress",
+        "submitted",
+        "approved",
+        "completed",
+        "closed",
+        "archived",
+        "cancelled",
+      ];
+
+      const TRAINING_AUDIENCE_OPTIONS = [
+        "individual",
+        "organisation",
+        "school",
+        "team",
+        "cohort",
+      ];
+
+      const BUSINESS_MODULE_DEFS = {
+        branches: {
+          recordType: "branch",
+          title: "Branches",
+          singular: "Branch",
+          subtitle: "Operating locations, regional ownership and branch-level budgets.",
+          titleLabel: "Branch Name",
+          categoryLabel: "Region",
+          organizationLabel: "Company / Entity",
+          contactLabel: "Branch Manager",
+          ownerLabel: "Operations Owner",
+          amountLabel: "Monthly Budget",
+          referenceLabel: "Branch Code",
+          defaultStatus: "active",
+          example: {
+            title: "Johannesburg Delivery Hub",
+            organization_name: "Beplugged",
+            contact_name: "Operations Lead",
+            category: "Gauteng",
+            status: "active",
+            owner: "Gerald",
+            amount: 15000,
+            reference: "BR-JHB",
+            location: "Johannesburg",
+            description: "Primary service delivery branch for local projects and training.",
+          },
+        },
+        departments: {
+          recordType: "department",
+          title: "Departments",
+          singular: "Department",
+          subtitle: "Internal teams, responsibilities, ownership and budget notes.",
+          titleLabel: "Department",
+          categoryLabel: "Function",
+          organizationLabel: "Company / Entity",
+          contactLabel: "Department Head",
+          ownerLabel: "Executive Owner",
+          amountLabel: "Budget",
+          referenceLabel: "Department Code",
+          defaultStatus: "active",
+          example: {
+            title: "Training & Skills",
+            organization_name: "Beplugged",
+            contact_name: "Training Lead",
+            category: "Growth",
+            status: "active",
+            owner: "Gerald",
+            reference: "DEP-TRAIN",
+            description: "Runs coding, computing and organisation training programmes.",
+          },
+        },
+        costCentres: {
+          recordType: "cost_centre",
+          title: "Cost Centres",
+          singular: "Cost Centre",
+          subtitle: "Track operational spend areas for reporting and accountability.",
+          titleLabel: "Cost Centre",
+          categoryLabel: "Department",
+          organizationLabel: "Company / Entity",
+          contactLabel: "Approver",
+          ownerLabel: "Budget Owner",
+          amountLabel: "Budget",
+          referenceLabel: "Cost Centre Code",
+          defaultStatus: "active",
+          example: {
+            title: "Training Delivery",
+            organization_name: "Beplugged",
+            contact_name: "Finance",
+            category: "Training & Skills",
+            status: "active",
+            owner: "Gerald",
+            amount: 25000,
+            reference: "CC-TRN",
+            description: "Venue, trainer, tools and learning material costs.",
+          },
+        },
+        proposals: {
+          recordType: "proposal",
+          title: "Proposals",
+          singular: "Proposal",
+          subtitle: "Sales proposals before they become signed agreements or projects.",
+          titleLabel: "Proposal Title",
+          categoryLabel: "Service Line",
+          organizationLabel: "Client / Lead",
+          contactLabel: "Decision Maker",
+          ownerLabel: "Sales Owner",
+          amountLabel: "Proposed Value",
+          referenceLabel: "Proposal Ref",
+          defaultStatus: "draft",
+          example: {
+            title: "School Coding Programme Proposal",
+            organization_name: "Northside School",
+            contact_name: "Maria Jacobs",
+            category: "Training",
+            status: "draft",
+            owner: "Gerald",
+            amount: 48000,
+            due_date: new Date(Date.now() + 86400000 * 10).toISOString().slice(0, 10),
+            description: "Proposal for learner coding, computing fundamentals and staff digital skills sessions.",
+          },
+        },
+        contracts: {
+          recordType: "contract",
+          title: "Contracts",
+          singular: "Contract",
+          subtitle: "Commercial obligations that sit alongside signed agreements.",
+          titleLabel: "Contract Title",
+          categoryLabel: "Contract Type",
+          organizationLabel: "Client / Supplier",
+          contactLabel: "Counterparty Contact",
+          ownerLabel: "Contract Owner",
+          amountLabel: "Contract Value",
+          referenceLabel: "Contract Ref",
+          defaultStatus: "active",
+          example: {
+            title: "Managed Website Support Contract",
+            organization_name: "Afroscaff",
+            contact_name: "Accounts",
+            category: "Support",
+            status: "active",
+            owner: "Operations",
+            amount: 12000,
+            review_date: new Date(Date.now() + 86400000 * 60).toISOString().slice(0, 10),
+            description: "Monthly support, hosting checks and content updates.",
+          },
+        },
+        projectIssues: {
+          recordType: "project_issue",
+          title: "Project Issues",
+          singular: "Project Issue",
+          subtitle: "Delivery issues that need owner, due date and closure tracking.",
+          titleLabel: "Issue",
+          categoryLabel: "Impact Area",
+          organizationLabel: "Client / Project",
+          contactLabel: "Reported By",
+          ownerLabel: "Issue Owner",
+          amountLabel: "Cost Impact",
+          referenceLabel: "Issue Ref",
+          defaultStatus: "open",
+          example: {
+            title: "Content approval delayed",
+            organization_name: "Website Refresh",
+            contact_name: "Client Marketing",
+            category: "Timeline",
+            status: "open",
+            owner: "Project Lead",
+            due_date: new Date(Date.now() + 86400000 * 4).toISOString().slice(0, 10),
+            description: "Final page copy is not signed off, so QA cannot close.",
+          },
+        },
+        changeRequests: {
+          recordType: "change_request",
+          title: "Change Requests",
+          singular: "Change Request",
+          subtitle: "Tracks requested scope, cost or timeline changes before an addendum is signed.",
+          titleLabel: "Change Request",
+          categoryLabel: "Change Type",
+          organizationLabel: "Client / Project",
+          contactLabel: "Requester",
+          ownerLabel: "Decision Owner",
+          amountLabel: "Price Impact",
+          referenceLabel: "Change Ref",
+          defaultStatus: "pending",
+          example: {
+            title: "Add online booking module",
+            organization_name: "Client Portal Setup",
+            contact_name: "Project Sponsor",
+            category: "Scope",
+            status: "pending",
+            owner: "Gerald",
+            amount: 8500,
+            due_date: new Date(Date.now() + 86400000 * 6).toISOString().slice(0, 10),
+            description: "If approved, create an agreement addendum for the signed commercial change.",
+          },
+        },
+        testingDeployment: {
+          recordType: "testing_deployment",
+          title: "Testing & Deployment",
+          singular: "Testing & Deployment Record",
+          subtitle: "Test passes, release readiness, deployment dates and rollback notes.",
+          titleLabel: "Release / Test",
+          categoryLabel: "Environment",
+          organizationLabel: "Client / Project",
+          contactLabel: "Tester / Approver",
+          ownerLabel: "Release Owner",
+          amountLabel: "Release Cost",
+          referenceLabel: "Release Ref",
+          defaultStatus: "pending",
+          example: {
+            title: "Admin CRM release",
+            organization_name: "Beplugged Enterprise",
+            contact_name: "Gerald",
+            category: "Production",
+            status: "pending",
+            owner: "Developer",
+            due_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+            description: "Final checks before deploying CRM linking, client balances and admin registers.",
+          },
+        },
+        expenses: {
+          recordType: "expense",
+          title: "Expenses",
+          singular: "Expense",
+          subtitle: "Operating expenses with supplier, approver, amount and status.",
+          titleLabel: "Expense",
+          categoryLabel: "Expense Category",
+          organizationLabel: "Supplier / Payee",
+          contactLabel: "Submitted By",
+          ownerLabel: "Approver",
+          amountLabel: "Amount",
+          referenceLabel: "Receipt / Ref",
+          defaultStatus: "pending",
+          example: {
+            title: "Training venue deposit",
+            organization_name: "Community Hall",
+            contact_name: "Training Lead",
+            category: "Training",
+            status: "pending",
+            owner: "Finance",
+            amount: 3000,
+            due_date: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
+            description: "Venue deposit for learner coding workshop.",
+          },
+        },
+        creditNotes: {
+          recordType: "credit_note",
+          title: "Credit Notes",
+          singular: "Credit Note",
+          subtitle: "Credits against client invoices and billing adjustments.",
+          titleLabel: "Credit Note",
+          categoryLabel: "Reason",
+          organizationLabel: "Client",
+          contactLabel: "Client Contact",
+          ownerLabel: "Finance Owner",
+          amountLabel: "Credit Amount",
+          referenceLabel: "Invoice Ref",
+          defaultStatus: "draft",
+          example: {
+            title: "Training seat cancellation credit",
+            organization_name: "Northside School",
+            contact_name: "Maria Jacobs",
+            category: "Seat reduction",
+            status: "draft",
+            owner: "Finance",
+            amount: 1200,
+            reference: "INV-TRAIN-001",
+            description: "Credit for one cancelled seat before programme start.",
+          },
+        },
+        purchaseOrders: {
+          recordType: "purchase_order",
+          title: "Purchase Orders",
+          singular: "Purchase Order",
+          subtitle: "Supplier purchase commitments and approval tracking.",
+          titleLabel: "Purchase Order",
+          categoryLabel: "Purchase Category",
+          organizationLabel: "Supplier",
+          contactLabel: "Supplier Contact",
+          ownerLabel: "Approver",
+          amountLabel: "Order Value",
+          referenceLabel: "PO Number",
+          defaultStatus: "draft",
+          example: {
+            title: "Laptop hire for training",
+            organization_name: "Tech Supplier",
+            contact_name: "Sales Desk",
+            category: "Equipment",
+            status: "draft",
+            owner: "Operations",
+            amount: 7200,
+            due_date: new Date(Date.now() + 86400000 * 12).toISOString().slice(0, 10),
+            description: "Temporary laptops for a two-day organisation training cohort.",
+          },
+        },
+        suppliers: {
+          recordType: "supplier",
+          title: "Suppliers",
+          singular: "Supplier",
+          subtitle: "Supplier profiles, categories, contacts and review dates.",
+          titleLabel: "Supplier Name",
+          categoryLabel: "Supplier Category",
+          organizationLabel: "Registered Name",
+          contactLabel: "Contact Person",
+          ownerLabel: "Relationship Owner",
+          amountLabel: "Monthly Spend",
+          referenceLabel: "Supplier Code",
+          defaultStatus: "active",
+          example: {
+            title: "Cloud Hosting Supplier",
+            organization_name: "Cloudflare",
+            contact_name: "Support",
+            category: "Cloud",
+            status: "active",
+            owner: "Technical Lead",
+            review_date: new Date(Date.now() + 86400000 * 90).toISOString().slice(0, 10),
+            description: "Hosting, DNS, email routing and deployment platform.",
+          },
+        },
+        vatReports: {
+          recordType: "vat_report",
+          title: "VAT & Reports",
+          singular: "VAT / Finance Report",
+          subtitle: "Tax, management and finance reporting checkpoints.",
+          titleLabel: "Report",
+          categoryLabel: "Report Type",
+          organizationLabel: "Company / Entity",
+          contactLabel: "Prepared By",
+          ownerLabel: "Reviewer",
+          amountLabel: "Reported Amount",
+          referenceLabel: "Period",
+          defaultStatus: "pending",
+          example: {
+            title: "Monthly finance summary",
+            organization_name: "Beplugged",
+            contact_name: "Finance",
+            category: "Management Report",
+            status: "pending",
+            owner: "Gerald",
+            amount: 58000,
+            reference: "2026-07",
+            due_date: new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 10),
+            description: "Revenue, receipts, expenses and outstanding client balances.",
+          },
+        },
+        supportTickets: {
+          recordType: "support_ticket",
+          title: "Support Tickets",
+          singular: "Support Ticket",
+          subtitle: "Client support issues, ownership, due dates and closure notes.",
+          titleLabel: "Ticket",
+          categoryLabel: "Support Category",
+          organizationLabel: "Client",
+          contactLabel: "Requester",
+          ownerLabel: "Support Owner",
+          amountLabel: "Billable Amount",
+          referenceLabel: "Ticket Ref",
+          defaultStatus: "open",
+          example: {
+            title: "Email deliverability check",
+            organization_name: "Afroscaff",
+            contact_name: "Accounts",
+            category: "Email",
+            status: "open",
+            owner: "Support",
+            due_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+            description: "Investigate SPF/DKIM alignment and outgoing invoice email delivery.",
+          },
+        },
+        tenders: {
+          recordType: "tender",
+          title: "Tender Management",
+          singular: "Tender",
+          subtitle: "Tender opportunities, deadlines, values and submission status.",
+          titleLabel: "Tender",
+          categoryLabel: "Sector",
+          organizationLabel: "Issuer / Organisation",
+          contactLabel: "Tender Contact",
+          ownerLabel: "Bid Owner",
+          amountLabel: "Bid Value",
+          referenceLabel: "Tender Ref",
+          defaultStatus: "submitted",
+          example: {
+            title: "Digital Skills Training Tender",
+            organization_name: "Municipality",
+            contact_name: "Supply Chain Office",
+            category: "Training",
+            status: "submitted",
+            owner: "Gerald",
+            amount: 180000,
+            due_date: new Date(Date.now() + 86400000 * 14).toISOString().slice(0, 10),
+            description: "Proposal for community coding and computing training.",
+          },
+        },
+        partners: {
+          recordType: "partner",
+          title: "Partner Management",
+          singular: "Partner",
+          subtitle: "Implementation, referral, training and delivery partners.",
+          titleLabel: "Partner",
+          categoryLabel: "Partner Type",
+          organizationLabel: "Organisation",
+          contactLabel: "Partner Contact",
+          ownerLabel: "Relationship Owner",
+          amountLabel: "Opportunity Value",
+          referenceLabel: "Partner Ref",
+          defaultStatus: "active",
+          example: {
+            title: "Training Venue Partner",
+            organization_name: "Local College",
+            contact_name: "Programme Coordinator",
+            category: "Education",
+            status: "active",
+            owner: "Gerald",
+            description: "Venue and learner recruitment partner for coding courses.",
+          },
+        },
+        cloudManagement: {
+          recordType: "cloud_management",
+          title: "Cloud Management",
+          singular: "Cloud Management Record",
+          subtitle: "Domains, hosting, Workers, backups, access and cloud operations.",
+          titleLabel: "Cloud Item",
+          categoryLabel: "Cloud Area",
+          organizationLabel: "Client / Account",
+          contactLabel: "Account Contact",
+          ownerLabel: "Technical Owner",
+          amountLabel: "Monthly Cost",
+          referenceLabel: "Resource Ref",
+          defaultStatus: "active",
+          example: {
+            title: "Production Workers deployment",
+            organization_name: "Beplugged",
+            contact_name: "Gerald",
+            category: "Cloudflare",
+            status: "active",
+            owner: "Developer",
+            review_date: new Date(Date.now() + 86400000 * 30).toISOString().slice(0, 10),
+            description: "Track deployed admin runtime, DNS, environment variables and logs.",
+          },
+        },
+        training: {
+          recordType: "training",
+          title: "Training",
+          singular: "Training Programme",
+          subtitle: "Coding, computing and skills training for students, cohorts, schools, teams and organisations.",
+          titleLabel: "Course / Programme",
+          categoryLabel: "Topic",
+          organizationLabel: "Student / Organisation / School",
+          contactLabel: "Student / Training Contact",
+          ownerLabel: "Trainer",
+          amountLabel: "Fee / Budget",
+          referenceLabel: "Programme Ref",
+          defaultStatus: "active",
+          includeAudience: true,
+          includeSeats: true,
+          example: {
+            title: "Coding & Computing Fundamentals",
+            organization_name: "Community Cohort",
+            contact_name: "Training Coordinator",
+            category: "Coding",
+            audience_type: "cohort",
+            seats: 12,
+            status: "active",
+            owner: "Trainer",
+            amount: 6500,
+            start_date: new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 10),
+            due_date: new Date(Date.now() + 86400000 * 37).toISOString().slice(0, 10),
+            description: "HTML, CSS, JavaScript and practical computing skills for individual learners or organisations.",
+          },
+        },
+        knowledgeBase: {
+          recordType: "knowledge_base",
+          title: "Knowledge Base",
+          singular: "Knowledge Base Article",
+          subtitle: "Reusable internal and client-facing operating knowledge.",
+          titleLabel: "Article / Guide",
+          categoryLabel: "Knowledge Area",
+          organizationLabel: "Audience / Client",
+          contactLabel: "Reviewer",
+          ownerLabel: "Content Owner",
+          amountLabel: "Value / Cost",
+          referenceLabel: "Article Ref",
+          defaultStatus: "active",
+          example: {
+            title: "Invoice payment troubleshooting",
+            organization_name: "Internal Team",
+            contact_name: "Finance Reviewer",
+            category: "Finance",
+            status: "active",
+            owner: "Operations",
+            review_date: new Date(Date.now() + 86400000 * 60).toISOString().slice(0, 10),
+            description: "Steps to follow when a client has not received or paid an invoice.",
+          },
+        },
+        aiAssistant: {
+          recordType: "ai_assistant",
+          title: "AI Assistant",
+          singular: "AI Assistant Item",
+          subtitle: "AI use cases, prompts, automations, risks and improvement ideas.",
+          titleLabel: "Assistant Use Case",
+          categoryLabel: "Automation Area",
+          organizationLabel: "Team / Client",
+          contactLabel: "Requester",
+          ownerLabel: "Owner",
+          amountLabel: "Estimated Value",
+          referenceLabel: "Use Case Ref",
+          defaultStatus: "open",
+          example: {
+            title: "Admin next-step assistant",
+            organization_name: "Beplugged",
+            contact_name: "Gerald",
+            category: "Operations",
+            status: "open",
+            owner: "Developer",
+            description: "Suggest operational next steps from CRM, projects, invoices, documents and risks.",
+          },
+        },
+        executiveReports: {
+          recordType: "executive_report",
+          title: "Executive Reports",
+          singular: "Executive Report",
+          subtitle: "Management snapshots across sales, delivery, finance, quality and security.",
+          titleLabel: "Report",
+          categoryLabel: "Report Area",
+          organizationLabel: "Company / Client",
+          contactLabel: "Prepared By",
+          ownerLabel: "Reviewer",
+          amountLabel: "Reported Value",
+          referenceLabel: "Report Period",
+          defaultStatus: "open",
+          example: {
+            title: "Weekly business review",
+            organization_name: "Beplugged",
+            contact_name: "Operations",
+            category: "Executive",
+            status: "open",
+            owner: "Gerald",
+            reference: "WEEK-2026-30",
+            due_date: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10),
+            description: "Pipeline, project delivery, outstanding invoices, risks and next actions.",
+          },
+        },
+      };
+
+      Object.entries(BUSINESS_MODULE_DEFS).forEach(([key, def]) => {
+        MODULES[key] = businessRecordModule({ key, ...def });
+      });
+
       const ENTERPRISE_MODULES = [
         {
           group: "Administration",
           modules: [
             { name: "Company Profile", status: "live", tab: "company" },
             { name: "Team & Roles", status: "live", tab: "team" },
-            { name: "Branches", status: "next" },
-            { name: "Departments", status: "next" },
-            { name: "Cost Centres", status: "later" },
-            { name: "System Logs", status: "later" },
+            { name: "Branches", status: "live", businessModule: "branches" },
+            { name: "Departments", status: "live", businessModule: "departments" },
+            { name: "Cost Centres", status: "live", businessModule: "costCentres" },
+            { name: "System Logs", status: "live", tab: "system-logs" },
           ],
         },
         {
@@ -4108,8 +4760,8 @@
             { name: "Clients", status: "live", tab: "clients" },
             { name: "Requirements", status: "live", tab: "requirements" },
             { name: "Quotations", status: "live", tab: "quotes" },
-            { name: "Proposals", status: "next" },
-            { name: "Contracts", status: "later" },
+            { name: "Proposals", status: "live", businessModule: "proposals" },
+            { name: "Contracts", status: "live", businessModule: "contracts" },
             { name: "Meetings", status: "live", tab: "crm" },
             { name: "Communication History", status: "live", tab: "crm" },
           ],
@@ -4122,9 +4774,9 @@
             { name: "Tasks", status: "live", tab: "projects" },
             { name: "Milestones", status: "live", tab: "projects" },
             { name: "Project Risks", status: "live", tab: "project-risks" },
-            { name: "Issues", status: "later" },
-            { name: "Change Requests", status: "later" },
-            { name: "Testing & Deployment", status: "later" },
+            { name: "Issues", status: "live", businessModule: "projectIssues" },
+            { name: "Change Requests", status: "live", businessModule: "changeRequests" },
+            { name: "Testing & Deployment", status: "live", businessModule: "testingDeployment" },
           ],
         },
         {
@@ -4133,11 +4785,11 @@
             { name: "Invoices", status: "live", tab: "invoices" },
             { name: "Receipts", status: "live", tab: "receipts" },
             { name: "Payments", status: "live", tab: "invoices" },
-            { name: "Expenses", status: "next" },
-            { name: "Credit Notes", status: "next" },
-            { name: "Purchase Orders", status: "later" },
-            { name: "Suppliers", status: "later" },
-            { name: "VAT & Reports", status: "later" },
+            { name: "Expenses", status: "live", businessModule: "expenses" },
+            { name: "Credit Notes", status: "live", businessModule: "creditNotes" },
+            { name: "Purchase Orders", status: "live", businessModule: "purchaseOrders" },
+            { name: "Suppliers", status: "live", businessModule: "suppliers" },
+            { name: "VAT & Reports", status: "live", businessModule: "vatReports" },
           ],
         },
         {
@@ -4179,14 +4831,14 @@
         {
           group: "Growth",
           modules: [
-            { name: "Support Tickets", status: "later" },
-            { name: "Tender Management", status: "later" },
-            { name: "Partner Management", status: "later" },
-            { name: "Cloud Management", status: "later" },
-            { name: "Training", status: "later" },
-            { name: "Knowledge Base", status: "later" },
-            { name: "AI Assistant", status: "later" },
-            { name: "Executive Reports", status: "later" },
+            { name: "Support Tickets", status: "live", businessModule: "supportTickets" },
+            { name: "Tender Management", status: "live", businessModule: "tenders" },
+            { name: "Partner Management", status: "live", businessModule: "partners" },
+            { name: "Cloud Management", status: "live", businessModule: "cloudManagement" },
+            { name: "Training", status: "live", businessModule: "training" },
+            { name: "Knowledge Base", status: "live", businessModule: "knowledgeBase" },
+            { name: "AI Assistant", status: "live", businessModule: "aiAssistant" },
+            { name: "Executive Reports", status: "live", businessModule: "executiveReports" },
           ],
         },
       ];
@@ -5431,24 +6083,43 @@
       }
 
       const DISPLAY_LABELS = {
+        ai_assistant: "AI Assistant",
         ai_project: "AI Project",
+        active: "Active",
+        approved: "Approved",
+        archived: "Archived",
         asset_register: "Asset Register",
         access_control: "Access Control",
         access_review: "Access Review",
+        branch: "Branch",
         business_continuity: "Business Continuity",
         call: "Call",
+        cancelled: "Cancelled",
+        change_request: "Change Request",
+        closed: "Closed",
+        cloud_management: "Cloud Management",
+        cohort: "Cohort",
         continuous_improvement: "Continuous Improvement",
         converted_to_invoice: "Converted to Invoice",
         corrective_action: "Corrective Action",
+        cost_centre: "Cost Centre",
+        credit_note: "Credit Note",
         customer_feedback: "Customer Feedback",
+        department: "Department",
         disaster_recovery: "Disaster Recovery",
+        draft: "Draft",
         email: "Email",
+        executive_report: "Executive Report",
+        expense: "Expense",
         follow_up: "Follow-up",
         ecommerce: "Ecommerce",
         external_audit: "External Audit",
         government_project: "Government Project",
+        in_progress: "In Progress",
+        individual: "Individual",
         internal_audit: "Internal Audit",
         kpi: "KPI",
+        knowledge_base: "Knowledge Base",
         lesson_learned: "Lesson Learned",
         management_review: "Management Review",
         mobile_app: "Mobile App",
@@ -5456,19 +6127,35 @@
         meeting: "Meeting",
         note: "Note",
         on_hold: "On Hold",
+        open: "Open",
+        organisation: "Organisation",
+        partner: "Partner",
         partially_paid: "Partially Paid",
         password_management: "Password Management",
+        pending: "Pending",
         planned: "Planned",
         preventive_action: "Preventive Action",
+        project_issue: "Project Issue",
+        proposal: "Proposal",
+        purchase_order: "Purchase Order",
         recovery_test: "Recovery Test",
         risk_assessment: "Risk Assessment",
         risk_register: "Risk Register",
+        school: "School",
         school_system: "School System",
         security_awareness: "Security Awareness",
         security_incident: "Security Incident",
         sop: "SOP",
+        submitted: "Submitted",
+        supplier: "Supplier",
+        support_ticket: "Support Ticket",
         task: "Task",
+        team: "Team",
+        tender: "Tender",
+        testing_deployment: "Testing & Deployment",
+        training: "Training",
         training_platform: "Training Platform",
+        vat_report: "VAT / Report",
         whatsapp: "WhatsApp",
         work_instruction: "Work Instruction",
       };
@@ -5541,6 +6228,10 @@
           loadModule("quality");
         } else if (tabName === "security") {
           loadModule("security");
+        } else if (tabName === "business-records") {
+          loadCurrentBusinessModule();
+        } else if (tabName === "system-logs") {
+          loadSystemLogs();
         } else if (tabName === "invoices") {
           loadInvoices();
         } else if (tabName === "quotes") {
@@ -5554,6 +6245,57 @@
         } else if (tabName === "receipts") {
           loadReceipts();
         }
+      }
+
+      function showBusinessModule(moduleName) {
+        if (!MODULES[moduleName]) {
+          return;
+        }
+        currentBusinessModule = moduleName;
+        showTab("business-records");
+        const activeButton = Array.from(
+          document.querySelectorAll(".sidebar .nav-link"),
+        ).find((button) => button.getAttribute("onclick") === `showBusinessModule('${moduleName}')`);
+        if (activeButton) {
+          activeButton.classList.add("active");
+        }
+      }
+
+      async function loadCurrentBusinessModule() {
+        if (!currentBusinessModule || !MODULES[currentBusinessModule]) {
+          currentBusinessModule = "branches";
+        }
+        const config = MODULES[currentBusinessModule];
+        const title = document.getElementById("business-records-title");
+        const subtitle = document.getElementById("business-records-subtitle");
+        const addButton = document.getElementById("business-records-new");
+        if (title) {
+          title.textContent = config.businessTitle || config.singular;
+        }
+        if (subtitle) {
+          subtitle.textContent = config.businessSubtitle || "Editable operating register";
+        }
+        if (addButton) {
+          addButton.innerHTML =
+            `<i class="fas fa-plus"></i> New ${escapeHtml(config.singular)}`;
+        }
+        await loadModule(currentBusinessModule);
+      }
+
+      function openCurrentBusinessModule() {
+        if (!currentBusinessModule || !MODULES[currentBusinessModule]) {
+          currentBusinessModule = "branches";
+        }
+        openModuleModal(currentBusinessModule);
+      }
+
+      async function loadSystemLogs() {
+        const rows = await apiCall("/admin/audit-logs");
+        const list = document.getElementById("system-logs-list");
+        if (!list || !Array.isArray(rows)) {
+          return;
+        }
+        list.innerHTML = renderSystemLogRows(rows);
       }
 
       // API Calls
@@ -5898,9 +6640,12 @@
 
       function renderEnterpriseModuleRow(module) {
         const statusLabel = MODULE_STATUS_LABELS[module.status] || "Later";
-        const title = module.tab
-          ? `<button class="btn btn-sm btn-secondary" onclick="showTab('${escapeAttr(module.tab)}')">${escapeHtml(module.name)}</button>`
-          : `<span>${escapeHtml(module.name)}</span>`;
+        let title = `<span>${escapeHtml(module.name)}</span>`;
+        if (module.businessModule) {
+          title = `<button class="btn btn-sm btn-secondary" onclick="showBusinessModule('${escapeAttr(module.businessModule)}')">${escapeHtml(module.name)}</button>`;
+        } else if (module.tab) {
+          title = `<button class="btn btn-sm btn-secondary" onclick="showTab('${escapeAttr(module.tab)}')">${escapeHtml(module.name)}</button>`;
+        }
         return `
           <div class="module-row">
             ${title}
@@ -5911,6 +6656,10 @@
 
       function displayDate(value) {
         return value ? new Date(value).toLocaleDateString() : "N/A";
+      }
+
+      function displayDateTime(value) {
+        return value ? new Date(value).toLocaleString() : "N/A";
       }
 
       function displayPlain(value, fallback = "N/A") {
@@ -5941,6 +6690,82 @@
             <button class="btn btn-sm btn-danger" data-module-action="delete" data-module="${safeModule}" data-id="${safeId}">Delete</button>
           </div>
         `;
+      }
+
+      function businessRecordModule(def) {
+        return {
+          endpoint: "/admin/business-records",
+          query: { record_type: def.recordType },
+          fixedValues: { record_type: def.recordType },
+          listId: "business-records-list",
+          singular: def.singular,
+          businessTitle: def.title,
+          businessSubtitle: def.subtitle,
+          businessExample: def.example,
+          fields: businessRecordFields(def),
+          render: (rows) => renderBusinessRecordRows(rows, def),
+        };
+      }
+
+      function businessRecordFields(def) {
+        const fields = [
+          { name: "title", label: def.titleLabel || "Title", required: true },
+          {
+            name: "status",
+            label: "Status",
+            type: "select",
+            defaultValue: def.defaultStatus || "open",
+            options: def.statusOptions || BUSINESS_STATUS_OPTIONS,
+          },
+          { name: "category", label: def.categoryLabel || "Category" },
+          { name: "organization_name", label: def.organizationLabel || "Organisation / Client" },
+          { name: "contact_name", label: def.contactLabel || "Contact" },
+          { name: "email", label: "Email", type: "email" },
+          { name: "phone", label: "Phone", type: "tel" },
+        ];
+
+        if (def.includeAudience) {
+          fields.push({
+            name: "audience_type",
+            label: "Audience",
+            type: "select",
+            defaultValue: "individual",
+            options: TRAINING_AUDIENCE_OPTIONS,
+          });
+        }
+        if (def.includeSeats) {
+          fields.push({
+            name: "seats",
+            label: "Seats / Learners",
+            type: "number",
+            step: "1",
+            min: "0",
+            defaultValue: "0",
+          });
+        }
+
+        fields.push(
+          { name: "owner", label: def.ownerLabel || "Owner" },
+          {
+            name: "amount",
+            label: def.amountLabel || "Amount / Budget",
+            type: "number",
+            step: "0.01",
+            min: "0",
+            defaultValue: "0",
+          },
+          { name: "start_date", label: def.startLabel || "Start Date", type: "date" },
+          { name: "due_date", label: def.dueLabel || "Due Date", type: "date" },
+          { name: "review_date", label: def.reviewLabel || "Review Date", type: "date" },
+          { name: "reference", label: def.referenceLabel || "Reference" },
+          { name: "linked_type", label: "Linked Type" },
+          { name: "linked_id", label: "Linked ID" },
+          { name: "location", label: "Location" },
+          { name: "description", label: "Description / Scope", type: "textarea", fullSpan: true },
+          { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+        );
+
+        return fields;
       }
 
       function clientActionButtons(client) {
@@ -6329,6 +7154,11 @@
         const docBtn = event.target.closest("[data-doc-view]");
         if (docBtn) {
           viewDocument(docBtn.dataset.docView, docBtn.dataset.id);
+          return;
+        }
+
+        if (event.target.closest("#business-records-new")) {
+          openCurrentBusinessModule();
           return;
         }
 
@@ -7447,6 +8277,123 @@
             <td>${displayPlain(risk.owner)}</td>
             <td>${displayDate(risk.due_date)}</td>
             <td>${actionButtons("projectRisks", risk.id)}</td>
+          </tr>
+        `,
+          )
+          .join("");
+      }
+
+      function businessDateLines(record) {
+        return [
+          record.start_date ? `Start: ${displayDate(record.start_date)}` : "",
+          record.due_date ? `Due: ${displayDate(record.due_date)}` : "",
+          record.review_date ? `Review: ${displayDate(record.review_date)}` : "",
+        ]
+          .filter(Boolean)
+          .map((line) => `<div>${escapeHtml(line)}</div>`)
+          .join("") || "N/A";
+      }
+
+      function businessRelationshipLines(record) {
+        const details = [
+          record.contact_name,
+          record.email,
+          record.phone,
+          record.audience_type ? `Audience: ${displayStatus(record.audience_type)}` : "",
+          Number(record.seats || 0) ? `Seats: ${Number(record.seats || 0)}` : "",
+        ].filter(Boolean);
+        return `
+          ${displayPlain(record.organization_name || record.contact_name)}
+          ${details.length ? `<div style="font-size:0.8rem;color:var(--muted);">${details.map(escapeHtml).join("<br>")}</div>` : ""}
+        `;
+      }
+
+      function renderBusinessRecordRows(rows, def) {
+        if (!rows.length) {
+          return exampleBusinessRecordRows(def);
+        }
+        return rows
+          .map((record) => {
+            const amount = Number(record.amount || 0);
+            return `
+          <tr>
+            <td>
+              ${displayPlain(record.title)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(record.record_number, "")}</div>
+              ${record.description ? `<div style="font-size:0.8rem;color:var(--muted);">${displayPlain(record.description, "")}</div>` : ""}
+            </td>
+            <td>${businessRelationshipLines(record)}</td>
+            <td>
+              ${displayPlain(record.category)}
+              ${record.reference ? `<div style="font-size:0.8rem;color:var(--muted);">${displayPlain(record.reference, "")}</div>` : ""}
+            </td>
+            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${businessDateLines(record)}</td>
+            <td>${amount ? money(amount) : '<span style="color:var(--muted);">N/A</span>'}</td>
+            <td>${actionButtons(def.key, record.id)}</td>
+          </tr>
+        `;
+          })
+          .join("");
+      }
+
+      function exampleBusinessRecordRows(def) {
+        const record = def.example || {};
+        const amount = Number(record.amount || 0);
+        const status = record.status || def.defaultStatus || "open";
+        return `
+          <tr class="example-row">
+            <td>
+              ${displayPlain(record.title || def.singular)} <span class="badge status-later">Example</span>
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(record.reference || def.recordType, "")}</div>
+              ${record.description ? `<div style="font-size:0.8rem;color:var(--muted);">${displayPlain(record.description, "")}</div>` : ""}
+            </td>
+            <td>${businessRelationshipLines(record)}</td>
+            <td>${displayPlain(record.category)}</td>
+            <td><span class="badge status-${safeStatusClass(status)}">${displayStatus(status)}</span></td>
+            <td>${displayPlain(record.owner)}</td>
+            <td>${businessDateLines(record)}</td>
+            <td>${amount ? money(amount) : '<span style="color:var(--muted);">N/A</span>'}</td>
+            <td><button class="btn btn-sm btn-info" disabled>Edit</button></td>
+          </tr>
+        `;
+      }
+
+      function auditDetailsText(details) {
+        let parsed = details || {};
+        if (typeof parsed === "string") {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch (error) {
+            return parsed;
+          }
+        }
+        if (!parsed || typeof parsed !== "object") {
+          return "";
+        }
+        return Object.entries(parsed)
+          .filter(([, value]) => value !== undefined && value !== null && value !== "")
+          .map(([key, value]) => `${displayStatus(key)}: ${Array.isArray(value) ? value.join(", ") : value}`)
+          .join("; ");
+      }
+
+      function renderSystemLogRows(rows) {
+        if (!rows.length) {
+          return `<tr><td colspan="5" class="text-center">No system logs yet</td></tr>`;
+        }
+        return rows
+          .map(
+            (log) => `
+          <tr>
+            <td>${displayDateTime(log.created_at)}</td>
+            <td><span class="badge status-${safeStatusClass(log.action)}">${displayStatus(log.action)}</span></td>
+            <td>
+              ${displayPlain(log.entity_type)}
+              <div style="font-size:0.8rem;color:var(--muted);">${displayPlain(log.entity_number || log.entity_id, "")}</div>
+            </td>
+            <td>${displayPlain(log.actor)}</td>
+            <td>${displayPlain(auditDetailsText(log.details))}</td>
           </tr>
         `,
           )

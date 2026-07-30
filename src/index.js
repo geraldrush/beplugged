@@ -125,6 +125,49 @@ const PROJECT_RISK_STATUSES = new Set([
   "mitigated",
   "closed",
 ]);
+const BUSINESS_RECORD_TYPES = new Set([
+  "branch",
+  "department",
+  "cost_centre",
+  "proposal",
+  "contract",
+  "project_issue",
+  "change_request",
+  "testing_deployment",
+  "expense",
+  "credit_note",
+  "purchase_order",
+  "supplier",
+  "vat_report",
+  "support_ticket",
+  "tender",
+  "partner",
+  "cloud_management",
+  "training",
+  "knowledge_base",
+  "ai_assistant",
+  "executive_report",
+]);
+const BUSINESS_RECORD_STATUSES = new Set([
+  "draft",
+  "open",
+  "pending",
+  "active",
+  "in_progress",
+  "submitted",
+  "approved",
+  "completed",
+  "closed",
+  "archived",
+  "cancelled",
+]);
+const TRAINING_AUDIENCES = new Set([
+  "individual",
+  "organisation",
+  "school",
+  "team",
+  "cohort",
+]);
 
 class RequestError extends Error {
   constructor(message, status = 400) {
@@ -224,6 +267,14 @@ export default {
 
       if (path.startsWith("/api/admin/documents")) {
         return await handleDocuments(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/business-records")) {
+        return await handleBusinessRecords(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/audit-logs")) {
+        return await handleAuditLogs(env, method);
       }
 
       if (path === "/api/admin/document-pack/send") {
@@ -882,6 +933,88 @@ function normalizeProjectRiskPayload(raw) {
     contingency: trimText(raw.contingency, "Contingency", { maxLength: 4000 }),
     notes: trimText(raw.notes, "Risk notes", { maxLength: 3000 }),
   };
+}
+
+function normalizeBusinessRecordPayload(raw) {
+  const amountCents = amountToCents(raw.amount || 0, "Amount");
+  const recordType = normalizeKey(
+    raw.record_type,
+    "Record type",
+    BUSINESS_RECORD_TYPES,
+    "support_ticket",
+  );
+  const audienceType = recordType === "training"
+    ? normalizeKey(
+        raw.audience_type,
+        "Training audience",
+        TRAINING_AUDIENCES,
+        "individual",
+      )
+    : trimText(raw.audience_type, "Audience", { maxLength: 80 });
+  return {
+    record_type: recordType,
+    title: trimText(raw.title, "Title", {
+      required: true,
+      maxLength: 240,
+    }),
+    status: normalizeKey(
+      raw.status,
+      "Status",
+      BUSINESS_RECORD_STATUSES,
+      "open",
+    ),
+    owner: trimText(raw.owner, "Owner", { maxLength: 200 }),
+    organization_name: trimText(raw.organization_name, "Organisation", {
+      maxLength: 240,
+    }),
+    contact_name: trimText(raw.contact_name, "Contact", { maxLength: 200 }),
+    email: normalizeOptionalEmail(raw.email, "Email"),
+    phone: trimText(raw.phone, "Phone", { maxLength: 100 }),
+    category: trimText(raw.category, "Category", { maxLength: 160 }),
+    audience_type: audienceType,
+    seats: normalizeInteger(raw.seats, "Seats", {
+      min: 0,
+      max: 100000,
+      fallback: 0,
+    }),
+    amount: centsToAmount(amountCents),
+    amount_cents: amountCents,
+    start_date: normalizeDate(raw.start_date, "Start date"),
+    due_date: normalizeDate(raw.due_date, "Due date"),
+    review_date: normalizeDate(raw.review_date, "Review date"),
+    reference: trimText(raw.reference, "Reference", { maxLength: 180 }),
+    linked_type: trimText(raw.linked_type, "Linked type", { maxLength: 80 }),
+    linked_id: trimText(raw.linked_id, "Linked id", { maxLength: 160 }),
+    location: trimText(raw.location, "Location", { maxLength: 240 }),
+    description: trimText(raw.description, "Description", { maxLength: 4000 }),
+    notes: trimText(raw.notes, "Notes", { maxLength: 4000 }),
+  };
+}
+
+function businessRecordPrefix(recordType) {
+  return {
+    branch: "BRN",
+    department: "DEP",
+    cost_centre: "CC",
+    proposal: "PROP",
+    contract: "CON",
+    project_issue: "ISS",
+    change_request: "CR",
+    testing_deployment: "TD",
+    expense: "EXP",
+    credit_note: "CN",
+    purchase_order: "PO",
+    supplier: "SUP",
+    vat_report: "VAT",
+    support_ticket: "SUPT",
+    tender: "TEN",
+    partner: "PAR",
+    cloud_management: "CLD",
+    training: "TRN",
+    knowledge_base: "KB",
+    ai_assistant: "AI",
+    executive_report: "EXR",
+  }[recordType] || "BR";
 }
 
 function normalizeDocumentPayload(raw) {
@@ -1583,6 +1716,36 @@ async function runSchemaSetup(env) {
     )`,
   ).run();
   await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS business_records (
+      id TEXT PRIMARY KEY,
+      record_number TEXT NOT NULL UNIQUE,
+      record_type TEXT NOT NULL CHECK (record_type IN ('branch', 'department', 'cost_centre', 'proposal', 'contract', 'project_issue', 'change_request', 'testing_deployment', 'expense', 'credit_note', 'purchase_order', 'supplier', 'vat_report', 'support_ticket', 'tender', 'partner', 'cloud_management', 'training', 'knowledge_base', 'ai_assistant', 'executive_report')),
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('draft', 'open', 'pending', 'active', 'in_progress', 'submitted', 'approved', 'completed', 'closed', 'archived', 'cancelled')),
+      owner TEXT,
+      organization_name TEXT,
+      contact_name TEXT,
+      email TEXT,
+      phone TEXT,
+      category TEXT,
+      audience_type TEXT,
+      seats INTEGER NOT NULL DEFAULT 0,
+      amount REAL NOT NULL DEFAULT 0,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      start_date DATE,
+      due_date DATE,
+      review_date DATE,
+      reference TEXT,
+      linked_type TEXT,
+      linked_id TEXT,
+      location TEXT,
+      description TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_milestones_project ON project_milestones (project_id)",
   ).run();
   await env.DB.prepare(
@@ -1596,6 +1759,15 @@ async function runSchemaSetup(env) {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_project_risks_level ON project_risks (risk_level)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_business_records_type ON business_records (record_type)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_business_records_status ON business_records (status)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_business_records_due ON business_records (due_date)",
   ).run();
   // Read-only progress link the client can be given, and the review sent at
   // handover. Both are unguessable tokens, like the questionnaire.
@@ -6681,6 +6853,219 @@ async function handleProjects(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleBusinessRecords(request, env, path, method) {
+  await ensureSchema(env);
+  const recordId = path.split("/")[4];
+  const url = new URL(request.url);
+
+  if (method === "GET" && !recordId) {
+    const filterValue = trimText(url.searchParams.get("record_type"), "Record type", {
+      maxLength: 80,
+    });
+    const recordTypeFilter = filterValue
+      ? normalizeKey(
+          filterValue,
+          "Record type",
+          BUSINESS_RECORD_TYPES,
+          "support_ticket",
+        )
+      : "";
+    const statement = env.DB.prepare(
+      `SELECT * FROM business_records
+       ${recordTypeFilter ? "WHERE record_type = ?" : ""}
+       ORDER BY
+         CASE status
+           WHEN 'open' THEN 1
+           WHEN 'in_progress' THEN 2
+           WHEN 'pending' THEN 3
+           WHEN 'submitted' THEN 4
+           WHEN 'draft' THEN 5
+           WHEN 'active' THEN 6
+           WHEN 'approved' THEN 7
+           WHEN 'completed' THEN 8
+           WHEN 'closed' THEN 9
+           WHEN 'cancelled' THEN 10
+           WHEN 'archived' THEN 11
+           ELSE 12
+         END,
+         COALESCE(due_date, review_date, '9999-12-31') ASC,
+         updated_at DESC
+       LIMIT 200`,
+    );
+    const rows = recordTypeFilter
+      ? await statement.bind(recordTypeFilter).all()
+      : await statement.all();
+    return json(
+      (rows.results || []).map((row) => ({
+        ...row,
+        amount: centsToAmount(Number(row.amount_cents || 0)),
+      })),
+    );
+  }
+
+  if (method === "GET" && recordId) {
+    const record = await env.DB.prepare("SELECT * FROM business_records WHERE id = ?")
+      .bind(recordId)
+      .first();
+    return json(
+      record
+        ? { ...record, amount: centsToAmount(Number(record.amount_cents || 0)) }
+        : { error: "Business record not found" },
+      record ? {} : { status: 404 },
+    );
+  }
+
+  if (method === "POST" && !recordId) {
+    const data = normalizeBusinessRecordPayload(await parseRequestJson(request));
+    const id = createEntityId("biz");
+    const recordNumber = generateDocumentNumber(businessRecordPrefix(data.record_type));
+    await env.DB.prepare(
+      `INSERT INTO business_records (
+         id, record_number, record_type, title, status, owner,
+         organization_name, contact_name, email, phone, category, audience_type,
+         seats, amount, amount_cents, start_date, due_date, review_date,
+         reference, linked_type, linked_id, location, description, notes
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        recordNumber,
+        data.record_type,
+        data.title,
+        data.status,
+        data.owner,
+        data.organization_name,
+        data.contact_name,
+        data.email,
+        data.phone,
+        data.category,
+        data.audience_type,
+        data.seats,
+        data.amount,
+        data.amount_cents,
+        data.start_date,
+        data.due_date,
+        data.review_date,
+        data.reference,
+        data.linked_type,
+        data.linked_id,
+        data.location,
+        data.description,
+        data.notes,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "created",
+      entity_type: "business_record",
+      entity_id: id,
+      entity_number: recordNumber,
+      details: {
+        record_type: data.record_type,
+        status: data.status,
+        organization_name: data.organization_name,
+      },
+    });
+    return json({ id, record_number: recordNumber, ...data }, { status: 201 });
+  }
+
+  if (method === "PUT" && recordId) {
+    const existing = await env.DB.prepare("SELECT * FROM business_records WHERE id = ?")
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Business record not found", 404);
+    }
+    const data = normalizeBusinessRecordPayload({
+      ...existing,
+      ...(await parseRequestJson(request)),
+    });
+    await env.DB.prepare(
+      `UPDATE business_records SET
+         record_type = ?, title = ?, status = ?, owner = ?,
+         organization_name = ?, contact_name = ?, email = ?, phone = ?,
+         category = ?, audience_type = ?, seats = ?, amount = ?,
+         amount_cents = ?, start_date = ?, due_date = ?, review_date = ?,
+         reference = ?, linked_type = ?, linked_id = ?, location = ?,
+         description = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    )
+      .bind(
+        data.record_type,
+        data.title,
+        data.status,
+        data.owner,
+        data.organization_name,
+        data.contact_name,
+        data.email,
+        data.phone,
+        data.category,
+        data.audience_type,
+        data.seats,
+        data.amount,
+        data.amount_cents,
+        data.start_date,
+        data.due_date,
+        data.review_date,
+        data.reference,
+        data.linked_type,
+        data.linked_id,
+        data.location,
+        data.description,
+        data.notes,
+        recordId,
+      )
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "business_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+      details: {
+        previous_status: existing.status,
+        status: data.status,
+        record_type: data.record_type,
+      },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && recordId) {
+    const existing = await env.DB.prepare("SELECT * FROM business_records WHERE id = ?")
+      .bind(recordId)
+      .first();
+    if (!existing) {
+      throw new RequestError("Business record not found", 404);
+    }
+    await env.DB.prepare("DELETE FROM business_records WHERE id = ?")
+      .bind(recordId)
+      .run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "business_record",
+      entity_id: recordId,
+      entity_number: existing.record_number,
+      details: { record_type: existing.record_type },
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function handleAuditLogs(env, method) {
+  await ensureSchema(env);
+  if (method !== "GET") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  const rows = await env.DB.prepare(
+    `SELECT * FROM audit_logs
+     ORDER BY created_at DESC
+     LIMIT 250`,
+  ).all();
+  return json(rows.results || []);
 }
 
 async function handleDocuments(request, env, path, method) {

@@ -367,6 +367,35 @@ CREATE TABLE IF NOT EXISTS project_risks (
     FOREIGN KEY (project_id) REFERENCES projects (id)
 );
 
+CREATE TABLE IF NOT EXISTS business_records (
+    id TEXT PRIMARY KEY,
+    record_number TEXT NOT NULL UNIQUE,
+    record_type TEXT NOT NULL CHECK (record_type IN ('branch', 'department', 'cost_centre', 'proposal', 'contract', 'project_issue', 'change_request', 'testing_deployment', 'expense', 'credit_note', 'purchase_order', 'supplier', 'vat_report', 'support_ticket', 'tender', 'partner', 'cloud_management', 'training', 'knowledge_base', 'ai_assistant', 'executive_report')),
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('draft', 'open', 'pending', 'active', 'in_progress', 'submitted', 'approved', 'completed', 'closed', 'archived', 'cancelled')),
+    owner TEXT,
+    organization_name TEXT,
+    contact_name TEXT,
+    email TEXT,
+    phone TEXT,
+    category TEXT,
+    audience_type TEXT,
+    seats INTEGER NOT NULL DEFAULT 0,
+    amount NUMERIC NOT NULL DEFAULT 0,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    start_date DATE,
+    due_date DATE,
+    review_date DATE,
+    reference TEXT,
+    linked_type TEXT,
+    linked_id TEXT,
+    location TEXT,
+    description TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 
@@ -453,3 +482,9 @@ CREATE INDEX IF NOT EXISTS idx_project_risks_project ON project_risks (project_i
 CREATE INDEX IF NOT EXISTS idx_project_risks_status ON project_risks (status);
 
 CREATE INDEX IF NOT EXISTS idx_project_risks_level ON project_risks (risk_level);
+
+CREATE INDEX IF NOT EXISTS idx_business_records_type ON business_records (record_type);
+
+CREATE INDEX IF NOT EXISTS idx_business_records_status ON business_records (status);
+
+CREATE INDEX IF NOT EXISTS idx_business_records_due ON business_records (due_date);
