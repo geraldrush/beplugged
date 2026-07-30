@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v4";
+const CACHE_VERSION = "beplugged-v5";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -24,6 +24,7 @@ const CORE_ASSETS = [
   "/js/bootstrap.min.js",
   "/js/main.js",
   "/js/pwa.js",
+  "/js/whatsapp.js",
   "/img/logo.png",
   "/img/favicon.ico",
   "/img/android-chrome-192x192.png",

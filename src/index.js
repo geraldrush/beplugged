@@ -201,6 +201,10 @@ export default {
     }
 
     try {
+      if (path === "/api/whatsapp-enquiry") {
+        return await handleWhatsAppEnquiry(request, env, method);
+      }
+
       if (path === "/api/contact") {
         return await handleContactMessage(request, env, method);
       }
@@ -2384,6 +2388,131 @@ function normalizeContactPayload(raw) {
     newsletter: Boolean(raw.news),
     website: trimText(raw.website, "Website", { maxLength: 200 }),
   };
+}
+
+// The visitor is handed off to WhatsApp to send the message themselves, since
+// there is no way to send on their behalf. Their details are captured first,
+// so an enquiry that never gets sent is not lost.
+async function handleWhatsAppEnquiry(request, env, method) {
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `w:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many messages. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const raw = await parseRequestJson(request);
+  if (trimText(raw?.website, "Website", { maxLength: 200 })) {
+    // Honeypot filled, so behave as though it worked.
+    return json({ success: true, url: whatsappUrl(env, "", "") });
+  }
+
+  const name = trimText(raw?.name, "Name", { required: true, maxLength: 200 });
+  const email = validateEmail(raw?.email, "Email");
+  const message = trimText(raw?.message, "Message", {
+    required: true,
+    maxLength: 1000,
+  });
+
+  await ensureSchema(env);
+
+  // Recorded as a lead so it appears in the pipeline rather than only in a
+  // mailbox. A repeat enquiry updates the note instead of duplicating.
+  let leadId = null;
+  try {
+    const existing = await env.DB.prepare(
+      "SELECT id FROM leads WHERE LOWER(TRIM(email)) = ? LIMIT 1",
+    )
+      .bind(email.toLowerCase())
+      .first();
+    if (existing) {
+      leadId = existing.id;
+      // Append rather than replace: a second enquiry must not wipe the first,
+      // nor anything written against the lead by hand. Identity fields are
+      // left alone, since a public form should not rewrite CRM records.
+      const stamp = new Date().toISOString().slice(0, 10);
+      await env.DB.prepare(
+        `UPDATE leads
+         SET notes = SUBSTR(
+               TRIM(COALESCE(notes, '') || CHAR(10) || CHAR(10) || ?),
+               1, 5000
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+      )
+        .bind(`WhatsApp enquiry ${stamp}: ${message}`, leadId)
+        .run();
+    } else {
+      leadId = createEntityId("lead");
+      await env.DB.prepare(
+        `INSERT INTO leads (id, company_name, contact_name, email, source, stage, notes)
+         VALUES (?, ?, ?, ?, 'WhatsApp', 'new', ?)`,
+      )
+        .bind(leadId, name, name, email, `WhatsApp enquiry: ${message}`.slice(0, 3000))
+        .run();
+    }
+    await recordAudit(env, {
+      actor: "public",
+      action: "whatsapp_enquiry",
+      entity_type: "lead",
+      entity_id: leadId,
+      entity_number: name,
+      details: { email },
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({ message: "whatsapp_lead_failed", error: String(error?.message || error) }),
+    );
+  }
+
+  // Notifying is best effort; the visitor is already on their way to WhatsApp.
+  try {
+    const recipient = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+    if (recipient) {
+      await sendBrevoEmail(env, {
+        to: recipient,
+        toName: env.BREVO_SENDER_NAME || "Beplugged Tech",
+        subject: `WhatsApp enquiry — ${name}`,
+        htmlContent: emailShell({
+          label: "WhatsApp Enquiry",
+          accent: "#25D366",
+          bodyHtml: `
+            <p style="margin:0 0 22px;font-size:16px;color:#2C2D3F;"><strong>${escapeHtml(name)}</strong> started a WhatsApp enquiry.</p>
+            ${emailSectionLabel("Their details")}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
+              <tbody>
+                <tr><td style="padding:9px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;width:110px;">Name</td><td style="padding:9px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(name)}</td></tr>
+                <tr><td style="padding:9px 14px;font-size:13px;color:#555555;">Email</td><td style="padding:9px 14px;font-size:13px;color:#2C2D3F;">${escapeHtml(email)}</td></tr>
+              </tbody>
+            </table>
+            ${emailSectionLabel("Message")}
+            <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;">
+              <tr><td style="padding:16px 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(message)}</td></tr>
+            </table>
+            <p style="margin:22px 0 0;font-size:13px;color:#7a7a80;line-height:1.7;">Recorded as a lead. They may or may not have gone on to send the WhatsApp message.</p>`,
+        }),
+      });
+    }
+  } catch (error) {
+    console.error(
+      JSON.stringify({ message: "whatsapp_notify_failed", error: String(error?.message || error) }),
+    );
+  }
+
+  return json({ success: true, url: whatsappUrl(env, name, message) });
+}
+
+function whatsappUrl(env, name, message) {
+  const number = String(env.WHATSAPP_NUMBER || "27659669657").replace(/[^0-9]/g, "");
+  const text = name
+    ? `Hi Beplugged, I'm ${name}.\n\n${message}`
+    : "Hi Beplugged,";
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 }
 
 async function handleContactMessage(request, env, method) {
@@ -7670,6 +7799,7 @@ function cataloguePageHtml(item, related, origin) {
     </p>
   </div>
 </footer>
+<script src="/js/whatsapp.js"></script>
 </body></html>`;
 }
 
