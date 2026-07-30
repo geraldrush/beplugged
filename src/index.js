@@ -918,6 +918,9 @@ function normalizeQualityPayload(raw) {
     notes: trimText(raw.notes, "Quality notes", { maxLength: 3000 }),
     // The document body, in Markdown. Generous limit: a full SOP runs to
     // several thousand words.
+    version: trimText(raw.version || "1.0", "Version", { maxLength: 20 }) || "1.0",
+    approved_by: trimText(raw.approved_by, "Approved by", { maxLength: 200 }),
+    approved_at: normalizeDate(raw.approved_at, "Approval date"),
     body: trimText(raw.body, "Document body", { maxLength: 100000 }),
   };
 }
@@ -944,6 +947,9 @@ function normalizeSecurityPayload(raw) {
     description: trimText(raw.description, "Description", { maxLength: 4000 }),
     mitigation: trimText(raw.mitigation, "Mitigation", { maxLength: 4000 }),
     notes: trimText(raw.notes, "Security notes", { maxLength: 3000 }),
+    version: trimText(raw.version || "1.0", "Version", { maxLength: 20 }) || "1.0",
+    approved_by: trimText(raw.approved_by, "Approved by", { maxLength: 200 }),
+    approved_at: normalizeDate(raw.approved_at, "Approval date"),
     body: trimText(raw.body, "Document body", { maxLength: 100000 }),
   };
 }
@@ -1451,6 +1457,13 @@ async function runSchemaSetup(env) {
   // they live behind the admin login rather than as public files.
   await ensureColumn(env, "quality_records", "body", "body TEXT");
   await ensureColumn(env, "security_records", "body", "body TEXT");
+  // A controlled document without a version and an approval is not controlled.
+  // These are what an auditor asks for first.
+  for (const table of ["quality_records", "security_records"]) {
+    await ensureColumn(env, table, "version", "version TEXT NOT NULL DEFAULT '1.0'");
+    await ensureColumn(env, table, "approved_by", "approved_by TEXT");
+    await ensureColumn(env, table, "approved_at", "approved_at DATETIME");
+  }
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_clients_lead_id ON clients (lead_id)",
   ).run();
@@ -6849,9 +6862,10 @@ async function handleQualityRecords(request, env, path, method) {
     await env.DB.prepare(
       `INSERT INTO quality_records (
          id, record_number, title, record_type, status, owner, project_name,
-         due_date, review_date, evidence_url, description, notes, body
+         due_date, review_date, evidence_url, description, notes, body,
+         version, approved_by, approved_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -6867,6 +6881,9 @@ async function handleQualityRecords(request, env, path, method) {
         data.description,
         data.notes,
         data.body,
+        data.version,
+        data.approved_by,
+        data.approved_at,
       )
       .run();
     await recordAudit(env, {
@@ -6893,7 +6910,7 @@ async function handleQualityRecords(request, env, path, method) {
       `UPDATE quality_records SET
          title = ?, record_type = ?, status = ?, owner = ?, project_name = ?,
          due_date = ?, review_date = ?, evidence_url = ?, description = ?,
-         notes = ?, body = ?, updated_at = CURRENT_TIMESTAMP
+         notes = ?, body = ?, version = ?, approved_by = ?, approved_at = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
       .bind(
@@ -6908,6 +6925,9 @@ async function handleQualityRecords(request, env, path, method) {
         data.description,
         data.notes,
         data.body,
+        data.version,
+        data.approved_by,
+        data.approved_at,
         recordId,
       )
       .run();
@@ -6997,9 +7017,9 @@ async function handleSecurityRecords(request, env, path, method) {
       `INSERT INTO security_records (
          id, record_number, title, record_type, status, risk_level, owner,
          asset_name, due_date, review_date, evidence_url, description,
-         mitigation, notes, body
+         mitigation, notes, body, version, approved_by, approved_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -7017,6 +7037,9 @@ async function handleSecurityRecords(request, env, path, method) {
         data.mitigation,
         data.notes,
         data.body,
+        data.version,
+        data.approved_by,
+        data.approved_at,
       )
       .run();
     await recordAudit(env, {
@@ -7047,7 +7070,7 @@ async function handleSecurityRecords(request, env, path, method) {
       `UPDATE security_records SET
          title = ?, record_type = ?, status = ?, risk_level = ?, owner = ?,
          asset_name = ?, due_date = ?, review_date = ?, evidence_url = ?,
-         description = ?, mitigation = ?, notes = ?, body = ?,
+         description = ?, mitigation = ?, notes = ?, body = ?, version = ?, approved_by = ?, approved_at = ?,
          updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
     )
@@ -7065,6 +7088,9 @@ async function handleSecurityRecords(request, env, path, method) {
         data.mitigation,
         data.notes,
         data.body,
+        data.version,
+        data.approved_by,
+        data.approved_at,
         recordId,
       )
       .run();

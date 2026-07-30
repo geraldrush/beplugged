@@ -512,6 +512,76 @@
 
       /* A single continuous rail rather than a row of cards: the process is
          one path, and the eye should follow it rather than count boxes. */
+      /* Compliance register: reference numbers are cited in audits, so they
+         are set in a monospaced face and read as identifiers rather than text. */
+      .reg-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .reg-stat {
+        flex: 1 1 120px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        padding: 0.6rem 0.85rem;
+      }
+
+      .reg-stat b {
+        display: block;
+        font-size: 1.35rem;
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .reg-stat span {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      .reg-stat.alert { border-left: 3px solid var(--danger); }
+      .reg-stat.alert b { color: var(--danger); }
+
+      .ref {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.76rem;
+        color: var(--dark);
+        white-space: nowrap;
+      }
+
+      .ver {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.76rem;
+        color: var(--muted);
+      }
+
+      .reg-type {
+        font-size: 0.76rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .reg-sub {
+        font-size: 0.76rem;
+        color: var(--muted);
+        margin-top: 0.1rem;
+      }
+
+      /* A lapsed review is a finding in an audit, so it is impossible to miss. */
+      .rev.overdue { color: var(--danger); font-weight: 600; }
+      .rev.soon { color: var(--warning); }
+      .reg-flag {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+
       .rail-header {
         display: flex;
         align-items: baseline;
@@ -2258,17 +2328,19 @@
             </button>
           </div>
 
+          <div class="reg-summary" id="quality-summary"></div>
+
           <div class="card">
             <div class="table-responsive">
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Record</th>
+                    <th>Reference</th>
+                    <th>Document</th>
                     <th>Type</th>
-                    <th>Status</th>
-                    <th>Owner</th>
-                    <th>Project</th>
-                    <th>Review</th>
+                    <th>Ver</th>
+                    <th>Control</th>
+                    <th>Next review</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -2291,18 +2363,19 @@
             </button>
           </div>
 
+          <div class="reg-summary" id="security-summary"></div>
+
           <div class="card">
             <div class="table-responsive">
               <table class="table">
                 <thead>
                   <tr>
-                    <th>Record</th>
+                    <th>Reference</th>
+                    <th>Document</th>
                     <th>Type</th>
-                    <th>Risk</th>
-                    <th>Status</th>
-                    <th>Owner</th>
-                    <th>Asset</th>
-                    <th>Review</th>
+                    <th>Ver</th>
+                    <th>Control</th>
+                    <th>Next review</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -3745,6 +3818,9 @@
             },
             { name: "version", label: "Version", defaultValue: "1.0" },
             { name: "review_date", label: "Review Date", type: "date" },
+            { name: "version", label: "Version", placeholder: "1.0" },
+            { name: "approved_by", label: "Approved by" },
+            { name: "approved_at", label: "Approval date", type: "date" },
             { name: "linked_type", label: "Linked Type" },
             { name: "linked_id", label: "Linked ID" },
             { name: "location_url", label: "Location URL", type: "url", fullSpan: true },
@@ -3771,6 +3847,9 @@
             { name: "project_name", label: "Applies To" },
             { name: "due_date", label: "Action Due Date", type: "date" },
             { name: "review_date", label: "Review Date", type: "date" },
+            { name: "version", label: "Version", placeholder: "1.0" },
+            { name: "approved_by", label: "Approved by" },
+            { name: "approved_at", label: "Approval date", type: "date" },
             { name: "evidence_url", label: "Policy URL", type: "url", fullSpan: true },
             { name: "description", label: "Policy Statement / Purpose", type: "textarea", fullSpan: true },
             { name: "notes", label: "Review Notes", type: "textarea", fullSpan: true },
@@ -3797,6 +3876,9 @@
             { name: "project_name", label: "Process Area / Project" },
             { name: "due_date", label: "Action Due Date", type: "date" },
             { name: "review_date", label: "Review Date", type: "date" },
+            { name: "version", label: "Version", placeholder: "1.0" },
+            { name: "approved_by", label: "Approved by" },
+            { name: "approved_at", label: "Approval date", type: "date" },
             { name: "evidence_url", label: "SOP URL", type: "url", fullSpan: true },
             { name: "description", label: "Procedure Summary", type: "textarea", fullSpan: true },
             { name: "notes", label: "Steps / Notes", type: "textarea", fullSpan: true },
@@ -3845,6 +3927,9 @@
             { name: "project_name", label: "Project" },
             { name: "due_date", label: "Due Date", type: "date" },
             { name: "review_date", label: "Review Date", type: "date" },
+            { name: "version", label: "Version", placeholder: "1.0" },
+            { name: "approved_by", label: "Approved by" },
+            { name: "approved_at", label: "Approval date", type: "date" },
             { name: "evidence_url", label: "Evidence URL", type: "url", fullSpan: true },
             { name: "description", label: "Description", type: "textarea", fullSpan: true },
             { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
@@ -3898,6 +3983,9 @@
             { name: "asset_name", label: "Asset" },
             { name: "due_date", label: "Due Date", type: "date" },
             { name: "review_date", label: "Review Date", type: "date" },
+            { name: "version", label: "Version", placeholder: "1.0" },
+            { name: "approved_by", label: "Approved by" },
+            { name: "approved_at", label: "Approval date", type: "date" },
             { name: "evidence_url", label: "Evidence URL", type: "url", fullSpan: true },
             { name: "description", label: "Description", type: "textarea", fullSpan: true },
             { name: "mitigation", label: "Mitigation", type: "textarea", fullSpan: true },
@@ -7330,49 +7418,93 @@
           .join("");
       }
 
-      function renderQualityRows(rows) {
-        if (!rows.length) return exampleQualityRows();
+      // A compliance register, not a list. An auditor scans by reference,
+      // asks whether a document is approved and current, and looks for reviews
+      // that have lapsed — so those are the columns, in that order.
+      // What an auditor establishes first: how much is approved, what is still
+      // draft, and what has lapsed.
+      function renderRegisterSummary(target, rows) {
+        const el = document.getElementById(target + "-summary");
+        if (!el) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const approved = rows.filter((r) => controlState(r).label === "Approved").length;
+        const draft = rows.filter((r) => controlState(r).label === "Draft").length;
+        const overdue = rows.filter((r) => {
+          const d = r.review_date || r.due_date;
+          return d && d < today;
+        }).length;
+        el.innerHTML = `
+          <div class="reg-stat"><b>${rows.length}</b><span>documents</span></div>
+          <div class="reg-stat"><b>${approved}</b><span>approved</span></div>
+          <div class="reg-stat"><b>${draft}</b><span>draft</span></div>
+          <div class="reg-stat${overdue ? " alert" : ""}"><b>${overdue}</b><span>review overdue</span></div>`;
+      }
+
+      function reviewState(record) {
+        const due = record.review_date || record.due_date;
+        if (!due) return { tone: "none", label: "—" };
+        const today = new Date().toISOString().slice(0, 10);
+        const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        if (due < today) return { tone: "overdue", label: displayDate(due), note: "overdue" };
+        if (due <= soon) return { tone: "soon", label: displayDate(due), note: "due soon" };
+        return { tone: "ok", label: displayDate(due) };
+      }
+
+      function controlState(record) {
+        const st = String(record.status || "draft");
+        if (st === "active" || st === "approved") {
+          return record.approved_at
+            ? { cls: "won", label: "Approved" }
+            : { cls: "next", label: "In force" };
+        }
+        if (st === "review") return { cls: "next", label: "Under review" };
+        if (st === "archived" || st === "closed") return { cls: "later", label: "Superseded" };
+        return { cls: "later", label: "Draft" };
+      }
+
+      function registerRows(rows, moduleName, emptyLabel) {
+        if (!rows.length) {
+          return `<tr><td colspan="7" class="text-center" style="padding:1.5rem;color:var(--muted);">No ${escapeHtml(emptyLabel)} recorded</td></tr>`;
+        }
         return rows
-          .map(
-            (record) => `
+          .map((r) => {
+            const rev = reviewState(r);
+            const ctl = controlState(r);
+            return `
           <tr>
+            <td><span class="ref">${displayPlain(r.record_number, "—")}</span></td>
             <td>
-              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
-              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
+              ${r.evidence_url ? `<a href="${escapeAttr(r.evidence_url)}" target="_blank" rel="noopener">${displayPlain(r.title)}</a>` : displayPlain(r.title)}
+              ${r.description ? `<div class="reg-sub">${escapeHtml(String(r.description).slice(0, 90))}${String(r.description).length > 90 ? "…" : ""}</div>` : ""}
             </td>
-            <td>${displayStatus(record.record_type)}</td>
-            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
-            <td>${displayPlain(record.owner)}</td>
-            <td>${displayPlain(record.project_name)}</td>
-            <td>${displayDate(record.review_date || record.due_date)}</td>
-            <td>${actionButtons("quality", record.id)}</td>
-          </tr>
-        `,
-          )
+            <td><span class="reg-type">${displayStatus(r.record_type)}</span></td>
+            <td><span class="ver">v${displayPlain(r.version, "1.0")}</span></td>
+            <td>
+              <span class="badge status-${ctl.cls}">${ctl.label}</span>
+              ${r.approved_by ? `<div class="reg-sub">${escapeHtml(r.approved_by)}</div>` : ""}
+            </td>
+            <td class="rev ${rev.tone}">
+              ${rev.label}
+              ${rev.note ? `<div class="reg-flag">${rev.note}</div>` : ""}
+            </td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-secondary" data-doc-view="${escapeAttr(moduleName)}" data-id="${escapeAttr(r.id)}">View</button>
+              </div>${actionButtons(moduleName, r.id)}
+            </td>
+          </tr>`;
+          })
           .join("");
       }
 
+      function renderQualityRows(rows) {
+        renderRegisterSummary("quality", rows);
+        return registerRows(rows, "quality", "quality records");
+      }
+
       function renderSecurityRows(rows) {
-        if (!rows.length) return exampleSecurityRows();
-        return rows
-          .map(
-            (record) => `
-          <tr>
-            <td>
-              ${record.evidence_url ? `<a href="${escapeAttr(record.evidence_url)}" target="_blank" rel="noopener">${displayPlain(record.title)}</a>` : displayPlain(record.title)}
-              <div style="font-size:0.8rem;color:rgba(44,45,63,0.65);">${displayPlain(record.record_number, "")}</div>
-            </td>
-            <td>${displayStatus(record.record_type)}</td>
-            <td><span class="badge status-${safeStatusClass(record.risk_level)}">${displayStatus(record.risk_level)}</span></td>
-            <td><span class="badge status-${safeStatusClass(record.status)}">${displayStatus(record.status)}</span></td>
-            <td>${displayPlain(record.owner)}</td>
-            <td>${displayPlain(record.asset_name)}</td>
-            <td>${displayDate(record.review_date || record.due_date)}</td>
-            <td>${actionButtons("security", record.id)}</td>
-          </tr>
-        `,
-          )
-          .join("");
+        renderRegisterSummary("security", rows);
+        return registerRows(rows, "security", "security records");
       }
 
       function renderTeamRows(rows) {
