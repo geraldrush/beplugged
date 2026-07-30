@@ -226,6 +226,10 @@ export default {
         return await handleDocuments(request, env, path, method);
       }
 
+      if (path === "/api/admin/document-pack") {
+        return await handleDocumentPack(request, env, method);
+      }
+
       if (path.startsWith("/api/admin/quality")) {
         return await handleQualityRecords(request, env, path, method);
       }
@@ -6801,6 +6805,149 @@ async function handleDocuments(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+// A document pack is what a due-diligence request actually wants: one file
+// with a covering index, then the documents, each carrying the control header
+// that makes it a controlled document rather than prose.
+function documentControlHeader(doc) {
+  const rows = [
+    ["Reference", doc.record_number],
+    ["Version", doc.version || "1.0"],
+    ["Owner", doc.owner],
+    ["Approved by", doc.approved_by],
+    ["Approval date", doc.approved_at],
+    ["Next review", doc.review_date],
+  ].filter(([, v]) => String(v || "").trim());
+
+  return `<table class="ctl">${rows
+    .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
+    .join("")}</table>`;
+}
+
+function documentPackHtml(docs, company) {
+  const issued = new Date().toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const name = company?.company_name || "Beplugged Tech";
+
+  const index = `
+    <table class="idx">
+      <thead><tr><th>Reference</th><th>Document</th><th>Version</th><th>Approved</th></tr></thead>
+      <tbody>${docs
+        .map(
+          (d) => `<tr>
+            <td class="mono">${escapeHtml(d.record_number)}</td>
+            <td>${escapeHtml(d.title)}</td>
+            <td class="mono">${escapeHtml(d.version || "1.0")}</td>
+            <td>${escapeHtml(d.approved_at || "—")}</td>
+          </tr>`,
+        )
+        .join("")}</tbody>
+    </table>`;
+
+  const body = docs
+    .map(
+      (d) => `
+      <section class="doc">
+        <h2>${escapeHtml(d.title)}</h2>
+        ${documentControlHeader(d)}
+        ${d.body ? markdownToEmailHtml(d.body) : `<p>${escapeHtml(d.description || "")}</p>`}
+      </section>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(name)} — Document Pack</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    color:#2C2D3F;line-height:1.65;font-size:14px;max-width:820px;margin:0 auto;padding:36px 24px;}
+  .cover{border-bottom:3px solid #F05023;padding-bottom:18px;margin-bottom:24px;}
+  .cover h1{font-size:22px;margin:0 0 6px;}
+  .cover .meta{color:#6b6b76;font-size:12px;}
+  h2{font-size:17px;margin:0 0 12px;}
+  table{border-collapse:collapse;width:100%;margin:0 0 18px;}
+  th,td{border:1px solid #e5e6ea;padding:7px 10px;font-size:12px;text-align:left;vertical-align:top;}
+  th{background:#fafafb;font-weight:600;}
+  .ctl{width:auto;min-width:60%;margin-bottom:20px;}
+  .ctl th{width:130px;color:#6b6b76;font-weight:600;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;}
+  .doc{border-top:1px solid #e5e6ea;padding-top:26px;margin-top:26px;}
+  .note{margin-top:32px;padding-top:14px;border-top:1px solid #e5e6ea;font-size:11px;color:#6b6b76;}
+  @media print{
+    body{padding:0;}
+    .doc{break-before:page;page-break-before:always;}
+    table,pre,blockquote{break-inside:avoid;}
+    h2{break-after:avoid;}
+  }
+</style></head><body>
+<div class="cover">
+  <h1>${escapeHtml(name)} — Document Pack</h1>
+  <div class="meta">Issued ${escapeHtml(issued)} &middot; ${docs.length} document${docs.length === 1 ? "" : "s"}</div>
+</div>
+<h2>Contents</h2>
+${index}
+${body}
+<p class="note">
+  Issued by ${escapeHtml(name)}${company?.email ? ` &middot; ${escapeHtml(company.email)}` : ""}.
+  Each document is listed with the version current at the date of issue. Later
+  versions supersede this pack.
+</p>
+</body></html>`;
+}
+
+async function handleDocumentPack(request, env, method) {
+  if (method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 });
+  }
+  const raw = await parseRequestJson(request);
+  const ids = Array.isArray(raw?.ids) ? raw.ids.slice(0, 40) : [];
+  if (!ids.length) {
+    throw new RequestError("Select at least one document");
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = await env.DB.prepare(
+    `SELECT record_number, title, version, owner, approved_by, approved_at,
+            review_date, description, body
+     FROM quality_records WHERE id IN (${placeholders})
+     UNION ALL
+     SELECT record_number, title, version, owner, approved_by, approved_at,
+            review_date, description, body
+     FROM security_records WHERE id IN (${placeholders})`,
+  )
+    .bind(...ids, ...ids)
+    .all();
+
+  const docs = rows.results || [];
+  if (!docs.length) {
+    throw new RequestError("No documents found", 404);
+  }
+  docs.sort((a, b) => String(a.record_number).localeCompare(String(b.record_number)));
+
+  const company = await env.DB.prepare(
+    "SELECT company_name, email FROM company_profile WHERE id = 'default'",
+  ).first();
+
+  await recordAudit(env, {
+    action: "document_pack_exported",
+    entity_type: "quality_record",
+    entity_id: "pack",
+    entity_number: `${docs.length} documents`,
+    details: { references: docs.map((d) => d.record_number) },
+  });
+
+  return new Response(documentPackHtml(docs, company), {
+    headers: {
+      ...getSecurityHeaders(),
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Disposition": `attachment; filename="document-pack-${new Date().toISOString().slice(0, 10)}.html"`,
+    },
+  });
 }
 
 async function handleQualityRecords(request, env, path, method) {
