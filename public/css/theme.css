@@ -187,6 +187,11 @@ a:focus-visible {
 	background: none;
 }
 
+/* The template already marks the current page with an orange bar of its own,
+   drawn on ::before and sitting below the item. Ours replaces it rather than
+   joining it, otherwise the active link carries two orange lines. */
+.header .main-menu .nav.menu > li > a::before { display: none !important; }
+
 .header .main-menu .nav.menu > li > a::after {
 	content: "";
 	position: absolute;
