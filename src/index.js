@@ -2693,12 +2693,19 @@ function ensureAuthSchema(env) {
         `CREATE TABLE IF NOT EXISTS admin_credentials (
           id TEXT PRIMARY KEY,
           username TEXT NOT NULL UNIQUE,
+          email TEXT,
           password_hash TEXT NOT NULL,
           salt TEXT NOT NULL,
           iterations INTEGER NOT NULL,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
       ).run();
+      // The table shipped without this column, so bring older databases up.
+      try {
+        await env.DB.prepare("ALTER TABLE admin_credentials ADD COLUMN email TEXT").run();
+      } catch {
+        // Already present.
+      }
       await env.DB.prepare(
         `CREATE TABLE IF NOT EXISTS admin_reset_tokens (
           token_hash TEXT PRIMARY KEY,
@@ -2778,8 +2785,7 @@ async function handleForgotPassword(request, env) {
     message: "If that account exists, a reset link has been sent to the registered address.",
   });
 
-  const to = adminNotifyAddress(env);
-  if (!env.BREVO_API_KEY || !to) {
+  if (!env.BREVO_API_KEY) {
     console.error(JSON.stringify({ message: "reset_email_not_configured" }));
     return generic;
   }
@@ -2792,6 +2798,15 @@ async function handleForgotPassword(request, env) {
     await ensureAuthSchema(env);
     const stored = await loadAdminCredential(env, supplied);
     if (!stored && supplied !== configuredAdminUsername(env)) {
+      return generic;
+    }
+
+    // Destination comes from the account record, falling back to the address
+    // in config. Never from the request, so a reset can only ever be sent to
+    // an address already stored on the server.
+    const to = (stored && stored.email) || adminNotifyAddress(env);
+    if (!to) {
+      console.error(JSON.stringify({ message: "reset_no_destination", username: supplied }));
       return generic;
     }
 
