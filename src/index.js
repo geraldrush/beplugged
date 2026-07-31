@@ -223,6 +223,14 @@ export default {
         return await handleLogin(request, env);
       }
 
+      if (path === "/api/auth/forgot" && method === "POST") {
+        return await handleForgotPassword(request, env);
+      }
+
+      if (path === "/api/auth/reset" && method === "POST") {
+        return await handleResetPassword(request, env);
+      }
+
       if (path === "/api/admin/dashboard" && method === "GET") {
         return await handleDashboardStats(env);
       }
@@ -2673,6 +2681,207 @@ async function createLeadFromContact(env, data) {
   }
 }
 
+// Credentials and reset tokens live in D1 so the password can be changed from
+// the browser. runSchemaSetup would also create these, but it runs the whole
+// DDL and costs seconds on a cold isolate, so auth creates just what it needs.
+let authSchemaPromise = null;
+
+function ensureAuthSchema(env) {
+  if (!authSchemaPromise) {
+    authSchemaPromise = (async () => {
+      await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS admin_credentials (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          salt TEXT NOT NULL,
+          iterations INTEGER NOT NULL,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+      ).run();
+      await env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS admin_reset_tokens (
+          token_hash TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          used_at INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+      ).run();
+    })().catch((error) => {
+      authSchemaPromise = null;
+      throw error;
+    });
+  }
+  return authSchemaPromise;
+}
+
+const PBKDF2_ITERATIONS = 100000;
+
+function toHex(buffer) {
+  return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function derivePasswordHash(password, saltHex, iterations) {
+  const encoder = new TextEncoder();
+  const salt = Uint8Array.from(saltHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
+  const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, [
+    "deriveBits",
+  ]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    key,
+    256,
+  );
+  return toHex(bits);
+}
+
+async function hashResetToken(token) {
+  return toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
+}
+
+function configuredAdminUsername(env) {
+  return String(env.ADMIN_USERNAME || "admin").trim().toLowerCase();
+}
+
+// The address a reset link is sent to. Deliberately read from config and never
+// from the request, so a reset can only ever reach the mailbox that already
+// owns the site.
+function adminNotifyAddress(env) {
+  return env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL || "";
+}
+
+async function loadAdminCredential(env, username) {
+  try {
+    return await env.DB.prepare("SELECT * FROM admin_credentials WHERE username = ?")
+      .bind(username)
+      .first();
+  } catch (err) {
+    console.error("credential lookup failed", err);
+    return null;
+  }
+}
+
+async function handleForgotPassword(request, env) {
+  if (env.LOGIN_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.LOGIN_LIMITER.limit({ key: `forgot:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many requests. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  // Always the same answer whether or not the username exists, so this cannot
+  // be used to discover the admin username.
+  const generic = json({
+    success: true,
+    message: "If that account exists, a reset link has been sent to the registered address.",
+  });
+
+  const to = adminNotifyAddress(env);
+  if (!env.BREVO_API_KEY || !to) {
+    console.error(JSON.stringify({ message: "reset_email_not_configured" }));
+    return generic;
+  }
+
+  const { username } = await parseRequestJson(request);
+  const supplied = String(username || "").trim().toLowerCase();
+  if (!supplied) return generic;
+
+  try {
+    await ensureAuthSchema(env);
+    const stored = await loadAdminCredential(env, supplied);
+    if (!stored && supplied !== configuredAdminUsername(env)) {
+      return generic;
+    }
+
+    const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60;
+
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO admin_reset_tokens (token_hash, username, expires_at, used_at) VALUES (?, ?, ?, NULL)",
+    )
+      .bind(await hashResetToken(token), supplied, expiresAt)
+      .run();
+
+    const origin = new URL(request.url).origin;
+    const link = `${origin}/admin/reset.html?token=${token}`;
+    await sendBrevoEmail(env, {
+      to,
+      subject: "Reset your Beplugged admin password",
+      htmlContent: `
+        <p>A password reset was requested for the Beplugged admin area.</p>
+        <p><a href="${escapeAttr(link)}" style="color:#F05023;">Set a new password</a></p>
+        <p>This link expires in 30 minutes and can only be used once.</p>
+        <p style="color:#777;font-size:13px;">If you did not request this, ignore this email. Your current password still works.</p>
+      `,
+    });
+  } catch (err) {
+    console.error("password reset request failed", err);
+  }
+
+  return generic;
+}
+
+async function handleResetPassword(request, env) {
+  if (env.LOGIN_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.LOGIN_LIMITER.limit({ key: `reset:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many attempts. Please try again shortly." }, { status: 429 });
+    }
+  }
+
+  const { token, password } = await parseRequestJson(request);
+  const newPassword = String(password || "");
+
+  if (newPassword.length < 12) {
+    return json({ error: "Choose a password of at least 12 characters." }, { status: 400 });
+  }
+  if (!token) {
+    return json({ error: "This reset link is not valid." }, { status: 400 });
+  }
+
+  try {
+    await ensureAuthSchema(env);
+    const now = Math.floor(Date.now() / 1000);
+    const row = await env.DB.prepare(
+      "SELECT * FROM admin_reset_tokens WHERE token_hash = ?",
+    )
+      .bind(await hashResetToken(String(token)))
+      .first();
+
+    if (!row || row.used_at || row.expires_at < now) {
+      return json({ error: "This reset link has expired or already been used." }, { status: 400 });
+    }
+
+    const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await derivePasswordHash(newPassword, salt, PBKDF2_ITERATIONS);
+
+    await env.DB.prepare(
+      `INSERT INTO admin_credentials (id, username, password_hash, salt, iterations, updated_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(username) DO UPDATE SET
+         password_hash = excluded.password_hash,
+         salt = excluded.salt,
+         iterations = excluded.iterations,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(`admin_${row.username}`, row.username, hash, salt, PBKDF2_ITERATIONS)
+      .run();
+
+    // Single use, and every other outstanding token for this account dies too.
+    await env.DB.prepare("DELETE FROM admin_reset_tokens WHERE username = ?")
+      .bind(row.username)
+      .run();
+
+    return json({ success: true });
+  } catch (err) {
+    console.error("password reset failed", err);
+    return json({ error: "Could not reset the password." }, { status: 500 });
+  }
+}
+
 async function handleLogin(request, env) {
   if (!env.ADMIN_PASSWORD) {
     return json({ error: "ADMIN_PASSWORD is not configured" }, { status: 500 });
@@ -2696,11 +2905,39 @@ async function handleLogin(request, env) {
     console.error(JSON.stringify({ message: "login_rate_limiter_missing" }));
   }
 
-  const { password } = await parseRequestJson(request);
-  if (await safeCompareText(String(password || ""), env.ADMIN_PASSWORD)) {
+  const { username, password } = await parseRequestJson(request);
+  const suppliedUser = String(username || "").trim().toLowerCase();
+  const suppliedPass = String(password || "");
+
+  // A password set through the reset flow lives in D1 and wins. Until one has
+  // been set, the ADMIN_PASSWORD secret still works, so existing access is not
+  // broken by deploying this.
+  let stored = null;
+  try {
+    await ensureAuthSchema(env);
+    stored = await loadAdminCredential(env, suppliedUser);
+  } catch (err) {
+    console.error("auth schema unavailable", err);
+  }
+
+  if (stored) {
+    const candidate = await derivePasswordHash(suppliedPass, stored.salt, stored.iterations);
+    if (await safeCompareText(candidate, stored.password_hash)) {
+      return json(await createSessionToken(env));
+    }
+    return json({ error: "Invalid username or password" }, { status: 401 });
+  }
+
+  if (
+    suppliedUser === configuredAdminUsername(env) &&
+    (await safeCompareText(suppliedPass, env.ADMIN_PASSWORD))
+  ) {
     return json(await createSessionToken(env));
   }
-  return json({ error: "Invalid password" }, { status: 401 });
+
+  // One message for both cases, so a wrong username cannot be told apart from
+  // a wrong password.
+  return json({ error: "Invalid username or password" }, { status: 401 });
 }
 
 async function handleInvoices(request, env, path, method) {

@@ -18,6 +18,9 @@ run_worker_first = ["/service", "/training"]
 
 [vars]
 ENVIRONMENT = "production"
+# Only used until a password is set through the reset flow, after which the
+# username and password hash both live in D1. Not a secret on its own.
+ADMIN_USERNAME = "admin"
 BREVO_REPLY_TO = "info@beplugged.co.za"
 BREVO_SENDER_EMAIL = "info@beplugged.co.za"
 BREVO_SENDER_NAME = "BepluggedTech"
