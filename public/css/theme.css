@@ -38,6 +38,10 @@
    Base typography
    -------------------------------------------------------------------------- */
 
+/* Entrance animations translate elements in from off-screen, which briefly
+   widens the document and lets a phone scroll sideways mid-load. */
+html, body { overflow-x: hidden; }
+
 body {
 	font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 	font-size: 16px;
@@ -87,6 +91,7 @@ section.section,
 	border-radius: var(--radius);
 	background: var(--brand);
 	color: #fff;
+	max-width: 100%;
 	font-size: 15px;
 	font-weight: 600;
 	letter-spacing: .01em;
@@ -571,6 +576,29 @@ a:focus-visible {
 .schedule .single-schedule a:hover { color: var(--brand-dark); }
 .schedule .single-schedule a i { margin-left: 7px; }
 
+/* Closing call to action on the about page, in place of a booking form that
+   posted nowhere. */
+.appointment-cta {
+	text-align: center;
+	padding: 40px 28px;
+	background: var(--surface-alt);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+}
+
+.appointment-cta .btn { height: 52px; padding: 0 32px; font-size: 16px; }
+
+.pricing-table .appointment-cta { margin-top: 22px; }
+
+.appointment-cta > p {
+	margin: 18px 0 0;
+	font-size: 15px;
+	color: var(--ink-400);
+}
+
+.appointment-cta > p a { color: var(--ink-700); font-weight: 500; }
+.appointment-cta > p a:hover { color: var(--brand); }
+
 /* --------------------------------------------------------------------------
    Stats band
    -------------------------------------------------------------------------- */
@@ -1002,6 +1030,16 @@ a:focus-visible {
 @media (max-width: 767px) {
 	body { font-size: 15.5px; }
 	section.section, .section { padding: 54px 0; }
+	/* A long label on a fixed-height button cannot shrink, so it pushes past
+	   the viewport and the page scrolls sideways. Let it wrap instead. */
+	.btn {
+		height: auto;
+		min-height: 48px;
+		padding: 13px 22px;
+		white-space: normal;
+		text-align: center;
+	}
+	.appointment-cta .btn { height: auto; min-height: 52px; padding: 15px 26px; }
 	.hero-slider .single-slider { height: auto; padding: 96px 0 84px; }
 	.hero-slider .single-slider .text h1 { font-size: 31px; }
 	.hero-slider .single-slider .text p { font-size: 16px; margin-bottom: 26px; }
@@ -1057,6 +1095,14 @@ a:focus-visible {
 		color: var(--brand);
 		background: none;
 	}
+}
+
+/* An Owl stage is deliberately wider than its viewport; if the outer wrapper
+   is not clipping, every off-screen slide adds to the page width and the whole
+   document scrolls sideways on a phone. */
+.owl-carousel .owl-stage-outer,
+.owl-stage-outer {
+	overflow: hidden;
 }
 
 /* Respect users who ask for less motion. */
