@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v6";
+const CACHE_VERSION = "beplugged-v8";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -20,6 +20,7 @@ const CORE_ASSETS = [
   "/css/bootstrap.min.css",
   "/css/normalize.css",
   "/css/responsive.css",
+  "/css/theme.css",
   "/js/jquery.min.js",
   "/js/bootstrap.min.js",
   "/js/main.js",

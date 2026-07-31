@@ -2,13 +2,19 @@ name = "beplugged-invoicing"
 workers_dev = true
 preview_urls = true
 main = "src/index.js"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
-assets = { directory = "public", binding = "ASSETS" }
-
 routes = [
   { pattern = "beplugged.co.za/*", zone_name = "beplugged.co.za" }
 ]
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+# Static assets are normally served at the edge without running the Worker.
+# These two pages have their card grids filled in from the catalogue, so the
+# Worker has to see the request before the asset is returned.
+run_worker_first = ["/service", "/training"]
 
 [vars]
 ENVIRONMENT = "production"

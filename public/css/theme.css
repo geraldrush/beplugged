@@ -1,0 +1,1006 @@
+/* ==========================================================================
+   BePlugged theme layer
+   --------------------------------------------------------------------------
+   Loaded after style.css and responsive.css, so it restyles the original
+   template rather than replacing it. Everything targets classes the template
+   already emits, which means the server-rendered catalogue pages pick the
+   same design up without their own stylesheet.
+
+   Design language follows professional training and consultancy sites:
+   restrained palette, strong typographic hierarchy, generous whitespace and
+   structured card grids. The accent stays the orange from the logo.
+   ========================================================================== */
+
+:root {
+	--ink-900: #0d1826;
+	--ink-800: #14233a;
+	--ink-700: #1f3049;
+	--ink-500: #4a5568;
+	--ink-400: #6b7688;
+	--ink-300: #99a2b3;
+	--line: #e3e8ef;
+	--line-soft: #eef2f7;
+	--surface: #ffffff;
+	--surface-alt: #f7f9fc;
+	--brand: #f05023;
+	--brand-dark: #d23f14;
+	--brand-tint: #fdefe9;
+	--radius: 6px;
+	--radius-lg: 10px;
+	--shadow-sm: 0 1px 2px rgba(13, 24, 38, .06);
+	--shadow-md: 0 6px 20px rgba(13, 24, 38, .08);
+	--shadow-lg: 0 18px 44px rgba(13, 24, 38, .12);
+	--ease: cubic-bezier(.4, 0, .2, 1);
+	--maxw: 1180px;
+}
+
+/* --------------------------------------------------------------------------
+   Base typography
+   -------------------------------------------------------------------------- */
+
+body {
+	font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+	font-size: 16px;
+	line-height: 1.65;
+	color: var(--ink-500);
+	background: var(--surface);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6,
+.section-title h2 {
+	font-family: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+	color: var(--ink-900);
+	font-weight: 700;
+	letter-spacing: -.02em;
+	line-height: 1.22;
+}
+
+p { color: var(--ink-500); }
+
+a { transition: color .18s var(--ease), background-color .18s var(--ease), border-color .18s var(--ease); }
+
+.container { max-width: var(--maxw); }
+
+section.section,
+.section { padding: 92px 0; }
+
+/* Alternating section tone, so long pages read as distinct bands. */
+.services.section,
+.pricing-table.section { background: var(--surface); }
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.btn,
+.button .btn,
+.get-quote .btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 48px;
+	padding: 0 26px;
+	border: 1px solid var(--brand);
+	border-radius: var(--radius);
+	background: var(--brand);
+	color: #fff;
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: .01em;
+	text-transform: none;
+	line-height: 1;
+	box-shadow: none;
+	transition: background-color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+
+.btn:hover,
+.button .btn:hover,
+.get-quote .btn:hover {
+	background: var(--brand-dark);
+	border-color: var(--brand-dark);
+	color: #fff;
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
+.btn:focus-visible,
+a:focus-visible {
+	outline: 3px solid rgba(240, 80, 35, .35);
+	outline-offset: 2px;
+}
+
+/* Secondary / ghost button, used as the second hero action. */
+.btn.primary,
+.button .btn.primary {
+	background: transparent;
+	border-color: rgba(255, 255, 255, .55);
+	color: #fff;
+}
+
+.btn.primary:hover,
+.button .btn.primary:hover {
+	background: rgba(255, 255, 255, .12);
+	border-color: #fff;
+	color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Topbar + header
+   -------------------------------------------------------------------------- */
+
+.header { box-shadow: none; }
+
+.header .topbar {
+	background: var(--ink-900);
+	padding: 0;
+	border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.header .topbar .top-link,
+.header .topbar .top-contact {
+	padding: 11px 0;
+	margin: 0;
+}
+
+.header .topbar .top-link li a,
+.header .topbar .top-contact li,
+.header .topbar .top-contact li a {
+	color: rgba(255, 255, 255, .72);
+	font-size: 13.5px;
+	font-weight: 400;
+	letter-spacing: .01em;
+}
+
+.header .topbar .top-link li a:hover,
+.header .topbar .top-contact li a:hover { color: #fff; }
+
+.header .topbar .top-contact li i {
+	color: var(--brand);
+	margin-right: 7px;
+}
+
+.header .header-inner {
+	background: var(--surface);
+	border-bottom: 1px solid var(--line);
+	box-shadow: var(--shadow-sm);
+}
+
+.header .header-inner .inner { padding: 6px 0; }
+
+.header .logo { padding: 12px 0; }
+.header .logo img { max-height: 62px; width: auto !important; }
+
+/* Navigation */
+.header .main-menu .nav.menu > li { margin: 0 2px; }
+
+.header .main-menu .nav.menu > li > a {
+	position: relative;
+	padding: 30px 15px;
+	color: var(--ink-700);
+	font-size: 15px;
+	font-weight: 500;
+	letter-spacing: .005em;
+	text-transform: none;
+	background: none;
+}
+
+.header .main-menu .nav.menu > li > a::after {
+	content: "";
+	position: absolute;
+	left: 15px;
+	right: 15px;
+	bottom: 22px;
+	height: 2px;
+	background: var(--brand);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform .22s var(--ease);
+}
+
+.header .main-menu .nav.menu > li.active > a {
+	color: var(--ink-900);
+	background: none;
+}
+
+.header .main-menu .nav.menu > li.active > a::after { transform: scaleX(1); }
+
+/* Hover is gated on a real pointer. A tap leaves :hover stuck on the item that
+   was pressed, so on a touch device the underline stayed on the previous link
+   as well as the current page's, showing two active tabs at once. */
+@media (hover: hover) and (pointer: fine) {
+	.header .main-menu .nav.menu > li:hover > a {
+		color: var(--ink-900);
+		background: none;
+	}
+
+	.header .main-menu .nav.menu > li:hover > a::after { transform: scaleX(1); }
+}
+
+.header .get-quote { padding: 22px 0; }
+.header .get-quote .btn { height: 44px; padding: 0 22px; font-size: 14.5px; }
+
+/* --------------------------------------------------------------------------
+   Hero
+   -------------------------------------------------------------------------- */
+
+.hero-slider .single-slider {
+	position: relative;
+	height: 640px;
+	background-size: cover;
+	background-position: center;
+}
+
+.hero-slider .single-slider::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	/* The template runs this scrim at opacity .5, which halves it and leaves
+	   white headings sitting on the lighter slides. Some slide images are
+	   nearly white, so the right-hand stop stays dark enough to read on. */
+	opacity: 1;
+	background: linear-gradient(100deg, rgba(9, 17, 28, .93) 0%, rgba(9, 17, 28, .84) 42%, rgba(9, 17, 28, .62) 100%);
+}
+
+.hero-slider .single-slider .container { position: relative; z-index: 2; }
+
+.hero-slider .single-slider .text { padding: 0; }
+
+.hero-slider .single-slider .text h1 {
+	color: #fff;
+	font-size: 52px;
+	font-weight: 700;
+	line-height: 1.14;
+	letter-spacing: -.025em;
+	margin-bottom: 22px;
+	text-transform: none;
+}
+
+.hero-slider .single-slider .text p {
+	color: rgba(255, 255, 255, .82);
+	font-size: 18.5px;
+	line-height: 1.62;
+	max-width: 640px;
+	margin-bottom: 34px;
+}
+
+.hero-slider .single-slider .text .button { display: flex; flex-wrap: wrap; gap: 14px; }
+
+/* The template sets .slider .single-slider .btn to inline-block, which outranks
+   the base .btn rule; as a flex item that blockifies to `block`, so the flex
+   centring never applies and the label sits at the top of a 48px box. Matching
+   that selector's specificity puts the label back in the middle. */
+.slider .single-slider .btn,
+.hero-slider .single-slider .text .button .btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	line-height: 1;
+}
+
+/* Carousel controls, toned down to match the rest of the page. */
+.hero-slider .owl-dot span,
+.hero-slider .owl-dots .owl-dot span {
+	background: rgba(255, 255, 255, .45) !important;
+	border: none !important;
+}
+
+.hero-slider .owl-dot.active span,
+.hero-slider .owl-dots .owl-dot.active span { background: var(--brand) !important; }
+
+/* --------------------------------------------------------------------------
+   Breadcrumbs
+   -------------------------------------------------------------------------- */
+
+.breadcrumbs {
+	position: relative;
+	padding: 82px 0;
+	background-color: var(--ink-900);
+	background-size: cover;
+	background-position: center;
+}
+
+.breadcrumbs::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	/* opacity is forced to .8 by the template's .overlay rule; reset it so the
+	   heading keeps its contrast whatever the background photo is. */
+	opacity: 1;
+	background: linear-gradient(100deg, rgba(9, 17, 28, .94) 0%, rgba(9, 17, 28, .82) 100%);
+}
+
+.breadcrumbs .bread-inner { position: relative; z-index: 2; }
+
+.breadcrumbs h2 {
+	color: #fff;
+	font-size: 40px;
+	font-weight: 700;
+	letter-spacing: -.022em;
+	margin-bottom: 12px;
+	text-transform: none;
+}
+
+.breadcrumbs .bread-list { margin: 0; padding: 0; }
+
+.breadcrumbs .bread-list li,
+.breadcrumbs .bread-list li a {
+	color: rgba(255, 255, 255, .7);
+	font-size: 14.5px;
+}
+
+.breadcrumbs .bread-list li a:hover { color: #fff; }
+.breadcrumbs .bread-list li.active { color: var(--brand); }
+
+/* --------------------------------------------------------------------------
+   Section headings
+   -------------------------------------------------------------------------- */
+
+.section-title {
+	max-width: 720px;
+	margin: 0 auto 54px;
+	padding: 0;
+	text-align: center;
+}
+
+.section-title h2 {
+	font-size: 34px;
+	font-weight: 700;
+	letter-spacing: -.022em;
+	margin-bottom: 16px;
+	text-transform: none;
+}
+
+.section-title h2::before,
+.section-title h2::after { display: none; }
+
+/* The template's decorative squiggle reads as dated next to flat cards. */
+.section-title > img { display: none; }
+
+.section-title p {
+	font-size: 16.5px;
+	line-height: 1.68;
+	color: var(--ink-400);
+	margin: 0;
+}
+
+/* A thin accent rule under the heading, in place of the old graphic. */
+.section-title h2 + p { position: relative; padding-top: 20px; }
+
+.section-title h2 + p::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 52px;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--brand);
+}
+
+/* --------------------------------------------------------------------------
+   Service / course cards
+   -------------------------------------------------------------------------- */
+
+.services .single-service,
+.single-service {
+	position: relative;
+	height: 100%;
+	margin: 0 0 30px;
+	padding: 34px 30px 30px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-sm);
+	text-align: left;
+	overflow: hidden;
+	transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+
+.single-service::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	background: var(--brand);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform .25s var(--ease);
+}
+
+.single-service:hover {
+	transform: translateY(-4px);
+	border-color: #d8dee8;
+	box-shadow: var(--shadow-lg);
+}
+
+.single-service:hover::after { transform: scaleX(1); }
+
+/* Icon sits in a tinted tile rather than floating loose. */
+.single-service i,
+.services .single-service i {
+	/* The template pins this absolutely at left:0, which sits it on top of the
+	   heading once the card has real padding. */
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 54px;
+	height: 54px;
+	margin: 0 0 20px;
+	border-radius: var(--radius);
+	background: var(--brand-tint);
+	color: var(--brand);
+	font-size: 25px;
+	line-height: 1;
+	transition: background-color .2s var(--ease), color .2s var(--ease);
+}
+
+.single-service:hover i {
+	background: var(--brand);
+	color: #fff;
+}
+
+.single-service h4 {
+	margin: 0 0 12px;
+	font-size: 19px;
+	font-weight: 650;
+	line-height: 1.34;
+	letter-spacing: -.012em;
+}
+
+.single-service h4 a { color: var(--ink-900); }
+.single-service h4 a:hover { color: var(--brand); }
+
+.single-service p {
+	margin: 0;
+	font-size: 15.2px;
+	line-height: 1.68;
+	color: var(--ink-500);
+}
+
+/* Cards in a row should line up regardless of copy length. Scoped with :has()
+   so it only touches rows that actually hold cards, leaving heading rows and
+   the pricing grid alone. Browsers without :has() just get uneven heights. */
+.row:has(> [class*="col-"] > .single-service) { display: flex; flex-wrap: wrap; }
+.row:has(> [class*="col-"] > .single-service) > [class*="col-"] { display: flex; }
+.row:has(> [class*="col-"] > .single-service) > [class*="col-"] > .single-service { width: 100%; }
+
+/* Vendor/platform cards on the services page. */
+.vendor-card .vendor-mark {
+	background: var(--ink-900) !important;
+	border-radius: var(--radius) !important;
+}
+
+.vendor-card .vendor-mark span { letter-spacing: .5px; }
+
+/* --------------------------------------------------------------------------
+   Feature + schedule blocks
+   -------------------------------------------------------------------------- */
+
+.single-features {
+	padding: 32px 28px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-sm);
+}
+
+.single-features h3 {
+	font-size: 19px;
+	font-weight: 650;
+	margin-bottom: 12px;
+	color: var(--ink-900);
+}
+
+/* The three cards that straddle the hero. The template paints all three solid
+   orange, which is a lot of accent for the first thing on the page; white
+   cards sit better against the hero image and keep the accent for the icon
+   and the link. Only colour and depth change here — the overlap mechanism
+   (fixed section height plus a translated inner) is left as the template
+   built it, so nothing shifts. */
+.schedule { background: transparent; }
+
+.schedule .single-schedule {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-md);
+}
+
+.schedule .single-schedule:hover {
+	transform: translateY(-4px);
+	box-shadow: var(--shadow-lg);
+}
+
+.schedule .single-schedule:hover::before { opacity: 0; }
+
+.schedule .single-schedule .inner { border-radius: var(--radius-lg); }
+
+/* Equal heights across the three, whatever the copy length. */
+.schedule .schedule-inner .row { display: flex; flex-wrap: wrap; }
+.schedule .schedule-inner .row > [class*="col-"] { display: flex; }
+.schedule .schedule-inner .row > [class*="col-"] > .single-schedule { width: 100%; }
+
+/* The template drops a 110px icon into the corner as a watermark. On a white
+   card it clips against the edge and reads as a stray shape, so it goes. */
+.schedule .single-schedule .icon { display: none; }
+
+.schedule .single-schedule span {
+	color: var(--brand);
+	font-size: 12.5px;
+	font-weight: 600;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+}
+
+.schedule .single-schedule h4 {
+	color: var(--ink-900);
+	font-size: 19px;
+	font-weight: 650;
+	letter-spacing: -.012em;
+	text-transform: none;
+	margin-top: 10px;
+}
+
+.schedule .single-schedule p {
+	color: var(--ink-500);
+	font-size: 15px;
+	line-height: 1.66;
+	margin-top: 14px;
+}
+
+.schedule .single-schedule a {
+	color: var(--brand);
+	font-size: 13.5px;
+	font-weight: 600;
+	letter-spacing: .04em;
+}
+
+.schedule .single-schedule a:hover { color: var(--brand-dark); }
+.schedule .single-schedule a i { margin-left: 7px; }
+
+/* --------------------------------------------------------------------------
+   Stats band
+   -------------------------------------------------------------------------- */
+
+.fun-facts {
+	position: relative;
+	padding: 78px 0;
+	background-color: var(--ink-900);
+	background-size: cover;
+	background-position: center;
+}
+
+.fun-facts::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	opacity: 1;
+	background: rgba(9, 17, 28, .92);
+}
+
+.fun-facts .container { position: relative; z-index: 2; }
+
+/* The template lays these out as an absolutely-positioned circular icon with
+   the text indented past it. The icon is pinned to left:0 with no positioned
+   parent of its own, so it anchors to the section instead of its tile. Simpler
+   to make each one a centred column. */
+.fun-facts .single-fun {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 12px 16px;
+	text-align: center;
+	border: none;
+}
+
+.fun-facts .single-fun i {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 62px;
+	height: 62px;
+	margin: 0 0 16px;
+	border: 2px solid rgba(255, 255, 255, .28);
+	border-radius: 50%;
+	color: var(--brand);
+	background: rgba(255, 255, 255, .06);
+	font-size: 25px;
+	line-height: 1;
+}
+
+.fun-facts .single-fun:hover i {
+	background: var(--brand);
+	border-color: var(--brand);
+	color: #fff;
+}
+
+.fun-facts .single-fun .content { padding-left: 0; }
+
+.fun-facts .single-fun .counter,
+.fun-facts .single-fun h2 {
+	display: block;
+	color: #fff;
+	font-size: 40px;
+	font-weight: 700;
+	letter-spacing: -.02em;
+	line-height: 1.1;
+	margin-bottom: 6px;
+}
+
+.fun-facts .single-fun p {
+	color: rgba(255, 255, 255, .68);
+	font-size: 14.5px;
+	margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Pricing
+   -------------------------------------------------------------------------- */
+
+.pricing-table { background: var(--surface-alt); }
+
+.pricing-table .single-table,
+.single-table {
+	height: 100%;
+	padding: 36px 30px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-sm);
+	transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+
+.pricing-table .single-table:hover {
+	transform: translateY(-4px);
+	box-shadow: var(--shadow-lg);
+}
+
+.pricing-table .single-table .table-head h4 {
+	font-size: 18px;
+	font-weight: 650;
+	color: var(--ink-900);
+}
+
+.pricing-table .single-table .table-head .amount {
+	color: var(--brand);
+	font-size: 40px;
+	font-weight: 700;
+	letter-spacing: -.02em;
+}
+
+.pricing-table .single-table .table-content ul li,
+.pricing-table .single-table ul.table-list li {
+	color: var(--ink-500);
+	font-size: 15px;
+	line-height: 1.7;
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+
+.footer { background: var(--ink-900); }
+
+.footer .footer-top {
+	padding: 76px 0 56px;
+	border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+
+.footer .single-footer h2,
+.footer .single-footer h4 {
+	position: relative;
+	margin-bottom: 26px;
+	padding-bottom: 14px;
+	color: #fff;
+	font-size: 17px;
+	font-weight: 650;
+	letter-spacing: -.005em;
+	text-transform: none;
+}
+
+.footer .single-footer h2::before,
+.footer .single-footer h4::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 38px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--brand);
+}
+
+.footer .single-footer p,
+.footer .single-footer li,
+.footer .single-footer a {
+	color: rgba(255, 255, 255, .66);
+	font-size: 14.8px;
+	line-height: 1.78;
+}
+
+.footer .single-footer a:hover { color: #fff; }
+
+.footer .single-footer .f-link li a i { color: var(--brand); }
+
+.footer .social li a,
+.footer .single-footer .social li a {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: var(--radius);
+	background: rgba(255, 255, 255, .08);
+	color: rgba(255, 255, 255, .82);
+	font-size: 15px;
+}
+
+.footer .social li a:hover,
+.footer .single-footer .social li a:hover {
+	background: var(--brand);
+	color: #fff;
+}
+
+.footer .copyright {
+	padding: 22px 0;
+	background: var(--ink-900);
+	border-top: none;
+}
+
+.footer .copyright p,
+.footer .copyright a {
+	color: rgba(255, 255, 255, .55);
+	font-size: 14px;
+	margin: 0;
+}
+
+.footer .copyright a:hover { color: #fff; }
+
+/* --------------------------------------------------------------------------
+   Catalogue detail pages
+   -------------------------------------------------------------------------- */
+
+.catalogue-detail { padding: 74px 0 88px; }
+
+.catalogue-detail .catalogue-body h2 {
+	margin: 40px 0 14px;
+	font-size: 26px;
+	font-weight: 700;
+	letter-spacing: -.02em;
+}
+
+.catalogue-detail .catalogue-body h3 {
+	margin: 32px 0 12px;
+	font-size: 20px;
+	font-weight: 650;
+}
+
+.catalogue-detail .catalogue-body > *:first-child { margin-top: 0; }
+
+.catalogue-detail .catalogue-body ol {
+	margin: 0 0 20px;
+	padding-left: 20px;
+}
+
+.catalogue-detail .catalogue-body ol li {
+	margin-bottom: 9px;
+	font-size: 16px;
+	line-height: 1.72;
+}
+
+.catalogue-detail .catalogue-body blockquote {
+	margin: 0 0 22px;
+	padding: 14px 20px;
+	background: var(--surface-alt);
+	border-left: 3px solid var(--brand);
+	border-radius: 0 var(--radius) var(--radius) 0;
+	color: var(--ink-700);
+	font-size: 16px;
+}
+
+.catalogue-detail .catalogue-body code {
+	padding: 2px 6px;
+	background: var(--surface-alt);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	font-size: 14.5px;
+}
+
+.catalogue-detail .catalogue-body hr {
+	margin: 34px 0;
+	border: none;
+	border-top: 1px solid var(--line);
+}
+
+/* Opening summary, set slightly larger than the body copy. */
+.catalogue-detail .catalogue-body .lead-in {
+	margin-bottom: 26px;
+	padding-bottom: 24px;
+	border-bottom: 1px solid var(--line);
+	font-size: 18px;
+	line-height: 1.66;
+	color: var(--ink-700);
+}
+
+/* The related grid reuses the shared section heading, which is centred on
+   listing pages but should sit left here. */
+.catalogue-detail .related-block .section-title {
+	margin: 0 0 34px;
+	text-align: left;
+}
+
+.catalogue-detail .related-block .section-title h2 { font-size: 26px; }
+
+.catalogue-detail .catalogue-body p {
+	font-size: 16.5px;
+	line-height: 1.76;
+	margin-bottom: 16px;
+}
+
+.catalogue-detail .catalogue-body ul {
+	margin: 0 0 20px;
+	padding-left: 0;
+	list-style: none;
+}
+
+.catalogue-detail .catalogue-body ul li {
+	position: relative;
+	padding-left: 26px;
+	margin-bottom: 9px;
+	font-size: 16px;
+	line-height: 1.72;
+	color: var(--ink-500);
+}
+
+.catalogue-detail .catalogue-body ul li::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 11px;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--brand);
+}
+
+/* Summary panel beside the body copy. */
+.catalogue-aside {
+	position: sticky;
+	top: 24px;
+	padding: 28px 26px;
+	background: var(--surface-alt);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+}
+
+.catalogue-aside h3 {
+	margin: 0 0 16px;
+	font-size: 16px;
+	font-weight: 650;
+	color: var(--ink-900);
+}
+
+.catalogue-aside ul {
+	margin: 0 0 22px;
+	padding: 0;
+	list-style: none;
+}
+
+.catalogue-aside ul li {
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 11px 0;
+	border-bottom: 1px solid var(--line);
+	font-size: 14.8px;
+	color: var(--ink-700);
+}
+
+.catalogue-aside ul li:last-child { border-bottom: none; }
+.catalogue-aside ul li strong { color: var(--ink-400); font-weight: 500; }
+.catalogue-aside .btn { width: 100%; }
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1199px) {
+	.hero-slider .single-slider .text h1 { font-size: 44px; }
+}
+
+@media (max-width: 991px) {
+	section.section, .section { padding: 68px 0; }
+	/* Below this width the text column runs the full container, so the
+	   carousel arrows land on top of the hero buttons. Owl keeps touch
+	   dragging, so drop the arrows rather than the content. */
+	.hero-slider .owl-nav,
+	.hero-slider .owl-prev,
+	.hero-slider .owl-next { display: none !important; }
+	.hero-slider .single-slider { height: 540px; }
+	.hero-slider .single-slider .text h1 { font-size: 38px; }
+	.hero-slider .single-slider .text p { font-size: 17px; }
+	.breadcrumbs { padding: 62px 0; }
+	.breadcrumbs h2 { font-size: 32px; }
+	.section-title { margin-bottom: 40px; }
+	.section-title h2 { font-size: 29px; }
+	.catalogue-aside { position: static; margin-top: 34px; }
+	.header .get-quote { padding: 14px 0 20px; }
+}
+
+@media (max-width: 767px) {
+	body { font-size: 15.5px; }
+	section.section, .section { padding: 54px 0; }
+	.hero-slider .single-slider { height: auto; padding: 96px 0 84px; }
+	.hero-slider .single-slider .text h1 { font-size: 31px; }
+	.hero-slider .single-slider .text p { font-size: 16px; margin-bottom: 26px; }
+	.hero-slider .single-slider .text .button .btn { width: 100%; }
+	.breadcrumbs { padding: 48px 0; }
+	.breadcrumbs h2 { font-size: 26px; }
+	.section-title h2 { font-size: 25px; }
+	.section-title p { font-size: 15.5px; }
+	.single-service { padding: 26px 22px 24px; }
+	.fun-facts .single-fun .counter,
+	.fun-facts .single-fun h2 { font-size: 32px; }
+	.header .topbar .top-link,
+	.header .topbar .top-contact { padding: 8px 0; text-align: center; }
+	.footer .footer-top { padding: 54px 0 34px; }
+}
+
+/* The template hides the desktop nav on small screens and swaps in slicknav.
+   The panel sits inside the white header and the logo is a black-on-transparent
+   PNG, so this stays light: a dark panel left dark links and a black logo on a
+   dark background. Link colour needs .slicknav_nav li a to match the
+   template's own specificity. */
+@media (max-width: 767px) {
+	.slicknav_menu {
+		background: transparent;
+		border-radius: 0;
+		padding: 0;
+	}
+
+	.slicknav_btn { background: transparent; }
+
+	.slicknav_menu .slicknav_icon-bar { background-color: var(--brand); }
+
+	.slicknav_nav {
+		clear: both;
+		margin-top: 10px;
+		padding: 6px 0 4px;
+		background: var(--surface);
+		border-top: 1px solid var(--line);
+	}
+
+	.slicknav_nav li a {
+		padding: 11px 6px;
+		margin: 0;
+		color: var(--ink-700);
+		font-size: 15.5px;
+		font-weight: 500;
+		background: none;
+	}
+
+	.slicknav_nav li a:hover,
+	.slicknav_nav li:hover a,
+	.slicknav_nav li.active a {
+		color: var(--brand);
+		background: none;
+	}
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: .001ms !important;
+		transition-duration: .001ms !important;
+	}
+	.single-service:hover { transform: none; }
+}

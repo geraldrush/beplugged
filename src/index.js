@@ -380,9 +380,11 @@ export default {
         return await handlePublicQuestionnaire(request, env, token, method);
       }
 
-      // Service and course pages, rendered from the catalogue. The bare
-      // /service and /training pages stay as static assets, so only a path
-      // with a slug after it is handled here.
+      // Service and course pages, rendered from the catalogue. A path with a
+      // slug after it is a detail page; the bare /service and /training pages
+      // are the static assets with their card grids filled in from the
+      // catalogue, so a new item added in the admin appears on the listing
+      // and gets its own route without anyone editing HTML.
       if (method === "GET") {
         const seg = path.split("/").filter(Boolean);
         if (seg.length === 2) {
@@ -392,6 +394,9 @@ export default {
           if (seg[0] === "training") {
             return await handleCataloguePage(env, request, "course", seg[1]);
           }
+        }
+        if (path === "/service" || path === "/training") {
+          return await handleCatalogueListing(env, request, path);
         }
         if (path === "/sitemap.xml") {
           return await handleSitemap(env, request);
@@ -7649,6 +7654,58 @@ function slugify(value) {
     .slice(0, 80);
 }
 
+const DEFAULT_CATALOGUE_ITEMS = [
+  {
+    id: "default_unisa_cos1511_tutorial_class",
+    kind: "course",
+    slug: "unisa-cos1511-tutorial-class",
+    title: "UNISA COS1511 Tutorial Class",
+    summary:
+      "Private tutorial support for UNISA COS1511, focused on programming logic, problem solving, pseudocode and practical coding preparation.",
+    body: [
+      "## What this tutorial covers",
+      "",
+      "This private tutorial class supports students working through UNISA COS1511. The focus is on understanding programming fundamentals properly, not memorising answers.",
+      "",
+      "Students work through the ideas behind variables, input and output, decisions, loops, functions, arrays, tracing logic, pseudocode, debugging and exam-style problem solving.",
+      "",
+      "## Who it is for",
+      "",
+      "- UNISA students taking COS1511",
+      "- Students who need one-on-one support",
+      "- Small groups preparing for assignments or exams",
+      "- Learners who need help building confidence in programming logic",
+      "",
+      "## Tutorial format",
+      "",
+      "- Online or in-person sessions where practical",
+      "- One-on-one or small group support",
+      "- Assignment and exam preparation guidance",
+      "- Practical exercises after each topic",
+      "",
+      "## Important note",
+      "",
+      "Beplugged Academy provides independent private tuition and module support. We are not affiliated with, endorsed by, or acting on behalf of UNISA.",
+    ].join("\n"),
+    category: "University Tutorials",
+    icon: "code",
+    detail_1: "Flexible sessions",
+    detail_2: "Beginner",
+    seo_title: "UNISA COS1511 Tutorial Class | Beplugged Academy",
+    seo_description:
+      "Independent private tutorial support for UNISA COS1511 programming fundamentals, pseudocode, logic, assignments and exam preparation.",
+    status: "published",
+    position: 1,
+    updated_at: "2026-07-30",
+  },
+];
+
+function defaultCatalogueItem(kind, slug) {
+  return DEFAULT_CATALOGUE_ITEMS.find(
+    (item) => item.kind === kind && item.slug === slug,
+  );
+}
+
 // The public page. Rendered on the server so it is indexable without
 // JavaScript, and styled with the site's own stylesheets so it does not read
 // as a different site.
@@ -7695,23 +7752,16 @@ function cataloguePageHtml(item, related, origin) {
   }
 
   const details = [
-    item.detail_1 ? `<li><strong>${escapeHtml(isCourse ? "Duration" : "From")}</strong> ${escapeHtml(item.detail_1)}</li>` : "",
-    item.detail_2 ? `<li><strong>${escapeHtml(isCourse ? "Level" : "Typical timeline")}</strong> ${escapeHtml(item.detail_2)}</li>` : "",
-    item.category ? `<li><strong>Category</strong> ${escapeHtml(item.category)}</li>` : "",
+    item.detail_1 ? `<li><strong>${escapeHtml(isCourse ? "Duration" : "From")}</strong><span>${escapeHtml(item.detail_1)}</span></li>` : "",
+    item.detail_2 ? `<li><strong>${escapeHtml(isCourse ? "Level" : "Typical timeline")}</strong><span>${escapeHtml(item.detail_2)}</span></li>` : "",
+    item.category ? `<li><strong>Category</strong><span>${escapeHtml(item.category)}</span></li>` : "",
   ].filter(Boolean).join("");
 
   const relatedHtml = related.length
     ? `<div class="row">
          <div class="col-lg-12"><div class="section-title"><h2>${isCourse ? "Other Courses" : "Related Services"}</h2><img src="/img/section-img.png" alt="#"></div></div>
          ${related
-           .map(
-             (r) => `<div class="col-lg-4 col-md-6 col-12">
-             <div class="single-service">
-               <h4><a href="${catalogueBase(r.kind)}/${escapeAttr(r.slug)}">${escapeHtml(r.title)}</a></h4>
-               <p>${escapeHtml(r.summary || "")}</p>
-             </div>
-           </div>`,
-           )
+           .map((r) => catalogueCardHtml(r))
            .join("")}
        </div>`
     : "";
@@ -7738,74 +7788,101 @@ function cataloguePageHtml(item, related, origin) {
 <link rel="stylesheet" href="/css/normalize.css">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/css/responsive.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/theme.css">
 <script type="application/ld+json">${JSON.stringify(schema)}</script>
 <style>
-  .cat-hero{background:#2c2d3f;color:#fff;padding:52px 0 44px;}
-  .cat-hero h1{color:#fff;font-size:34px;margin:0 0 10px;line-height:1.25;}
-  .cat-hero p{color:rgba(255,255,255,.82);font-size:16px;max-width:760px;margin:0;}
-  .cat-crumb{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:14px;}
-  .cat-crumb a{color:rgba(255,255,255,.75);}
-  .cat-body{padding:52px 0;}
-  .cat-body h2{font-size:23px;margin:30px 0 12px;}
-  .cat-body h3{font-size:18px;margin:24px 0 10px;}
-  .cat-body p{margin:0 0 14px;line-height:1.8;}
-  .cat-body ul,.cat-body ol{margin:0 0 16px 20px;}
-  .cat-body li{margin-bottom:7px;}
-  .cat-body table{width:100%;border-collapse:collapse;margin:0 0 18px;}
-  .cat-body th,.cat-body td{border:1px solid #e5e6ea;padding:8px 11px;text-align:left;}
-  .cat-body th{background:#fafafb;}
-  .cat-facts{background:#fafafb;border:1px solid #e5e6ea;border-radius:6px;padding:18px 20px;margin:0 0 26px;}
-  .cat-facts ul{list-style:none;margin:0;padding:0;}
-  .cat-facts li{padding:5px 0;font-size:14px;}
-  .cat-facts strong{display:inline-block;min-width:130px;color:#777;font-weight:600;}
-  .cat-cta{background:#fff5f1;border-left:3px solid #f05023;border-radius:6px;padding:22px 24px;margin:34px 0 0;}
-  .cat-cta h3{margin:0 0 8px;font-size:19px;}
-  .cat-cta p{margin:0 0 14px;color:#666;}
+  /* Only what the shared theme does not already cover: tables coming out of
+     the markdown renderer, and the closing call to action. */
+  .catalogue-body table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:15px;}
+  .catalogue-body th,.catalogue-body td{border:1px solid var(--line);padding:10px 13px;text-align:left;}
+  .catalogue-body th{background:var(--surface-alt);color:var(--ink-900);font-weight:600;}
+  .catalogue-cta{background:var(--brand-tint);border:1px solid #f7d4c5;border-radius:var(--radius-lg);padding:26px 28px;margin:40px 0 0;}
+  .catalogue-cta h3{margin:0 0 8px;font-size:20px;font-weight:650;color:var(--ink-900);}
+  .catalogue-cta p{margin:0 0 18px;color:var(--ink-500);}
+  .catalogue-detail .related-block{margin-top:70px;padding-top:56px;border-top:1px solid var(--line);}
 </style>
 </head>
 <body>
-<header class="header"><div class="topbar"></div>
-  <div class="header-inner" style="background:#fff;border-bottom:1px solid #eee;">
-    <div class="container"><div class="row" style="align-items:center;padding:12px 0;">
-      <div class="col-lg-3 col-md-3 col-12"><a href="/"><img src="/img/logo.png" alt="Beplugged Tech" style="height:44px;"></a></div>
-      <div class="col-lg-9 col-md-9 col-12">
-        <div class="main-menu"><nav class="navigation"><ul class="nav menu" style="display:flex;flex-wrap:wrap;gap:18px;list-style:none;margin:0;justify-content:flex-end;">${nav}</ul></nav></div>
+<header class="header">
+  <div class="topbar">
+    <div class="container"><div class="row">
+      <div class="col-lg-6 col-md-5 col-12">
+        <ul class="top-link">
+          <li><a href="/about">About</a></li>
+          <li><a href="/service">Services</a></li>
+          <li><a href="/training">Training</a></li>
+        </ul>
+      </div>
+      <div class="col-lg-6 col-md-7 col-12">
+        <ul class="top-contact">
+          <li><i class="fa fa-phone"></i><a href="tel:+27659669657">+27 65 966 9657</a></li>
+          <li><i class="fa fa-envelope"></i><a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a></li>
+        </ul>
       </div>
     </div></div>
   </div>
+  <div class="header-inner">
+    <div class="container"><div class="inner"><div class="row" style="align-items:center;">
+      <div class="col-lg-3 col-md-3 col-12"><div class="logo"><a href="/"><img src="/img/logo.png" alt="Beplugged Tech"></a></div></div>
+      <div class="col-lg-9 col-md-9 col-12">
+        <div class="main-menu"><nav class="navigation"><ul class="nav menu" style="display:flex;flex-wrap:wrap;list-style:none;margin:0;justify-content:flex-end;">${nav}</ul></nav></div>
+      </div>
+    </div></div></div>
+  </div>
 </header>
 
-<section class="cat-hero">
+<div class="breadcrumbs overlay">
   <div class="container">
-    <div class="cat-crumb"><a href="/">Home</a> &rsaquo; <a href="${base}">${isCourse ? "Training" : "Services"}</a> &rsaquo; ${escapeHtml(item.title)}</div>
-    <h1>${escapeHtml(item.title)}</h1>
-    ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
+    <div class="bread-inner">
+      <div class="row"><div class="col-12">
+        <h2>${escapeHtml(item.title)}</h2>
+        <ul class="bread-list">
+          <li><a href="/">Home</a></li>
+          <li><i class="icofont-simple-right"></i></li>
+          <li><a href="${base}">${isCourse ? "Training" : "Services"}</a></li>
+          <li><i class="icofont-simple-right"></i></li>
+          <li class="active">${escapeHtml(item.title)}</li>
+        </ul>
+      </div></div>
+    </div>
   </div>
-</section>
+</div>
 
-<section class="cat-body">
+<section class="section catalogue-detail">
   <div class="container">
     <div class="row">
       <div class="col-lg-8 col-12">
-        ${details ? `<div class="cat-facts"><ul>${details}</ul></div>` : ""}
-        ${item.body ? markdownToEmailHtml(item.body) : ""}
-        <div class="cat-cta">
+        <div class="catalogue-body">
+          ${item.summary ? `<p class="lead-in">${escapeHtml(item.summary)}</p>` : ""}
+          ${item.body ? catalogueMarkdown(item.body) : ""}
+        </div>
+        <div class="catalogue-cta">
           <h3>${isCourse ? "Interested in this course?" : "Want to talk about this?"}</h3>
           <p>${isCourse ? "Tell us where you are starting from and we will suggest a route." : "Tell us what you need and we will come back with an honest answer on scope and cost."}</p>
           <a href="/contact" class="btn">Get in touch</a>
         </div>
       </div>
+      <div class="col-lg-4 col-12">
+        <aside class="catalogue-aside">
+          <h3>${isCourse ? "Course details" : "Service details"}</h3>
+          ${details ? `<ul>${details}</ul>` : ""}
+          <a href="/contact" class="btn">${isCourse ? "Enquire about this course" : "Request a quote"}</a>
+        </aside>
+      </div>
     </div>
-    ${relatedHtml}
+    ${relatedHtml ? `<div class="related-block">${relatedHtml}</div>` : ""}
   </div>
 </section>
 
-<footer class="footer" style="background:#2c2d3f;color:rgba(255,255,255,.7);padding:34px 0;margin-top:40px;">
-  <div class="container">
-    <p style="margin:0;font-size:14px;">&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
-      <a href="mailto:info@beplugged.co.za" style="color:#f05023;">info@beplugged.co.za</a> &middot;
-      <a href="${base}" style="color:rgba(255,255,255,.75);">All ${isCourse ? "courses" : "services"}</a>
-    </p>
+<footer class="footer">
+  <div class="copyright">
+    <div class="container">
+      <p>&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
+        <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> &middot;
+        <a href="${base}">All ${isCourse ? "courses" : "services"}</a>
+      </p>
+    </div>
   </div>
 </footer>
 <script src="/js/whatsapp.js"></script>
@@ -7933,6 +8010,13 @@ async function handleSitemap(env, request) {
 
   const body = [
     ...statics.map((u) => entry(origin + u, today, u === "/" ? "1.0" : "0.8")),
+    ...DEFAULT_CATALOGUE_ITEMS.filter(
+      (item) =>
+        item.status === "published" &&
+        !(rows.results || []).some((r) => r.kind === item.kind && r.slug === item.slug),
+    ).map((item) =>
+      entry(`${origin}${catalogueBase(item.kind)}/${item.slug}`, item.updated_at || today, "0.7"),
+    ),
     ...(rows.results || []).map((r) =>
       entry(`${origin}${catalogueBase(r.kind)}/${r.slug}`, r.updated_at || today, "0.7"),
     ),
@@ -7949,13 +8033,229 @@ async function handleSitemap(env, request) {
   );
 }
 
+// Which grid on the static page each catalogue item belongs in. The last
+// entry in each list is the catch-all, so an item saved with a category the
+// page does not know about still gets a card rather than disappearing.
+const CATALOGUE_GRIDS = {
+  "/service": {
+    kind: "service",
+    grids: [
+      { id: "catalogue-service-build", categories: ["What We Build"] },
+      { id: "catalogue-service-cloud", categories: null },
+    ],
+  },
+  "/training": {
+    kind: "course",
+    grids: [
+      { id: "catalogue-course-topics", categories: ["Course Topics"] },
+      { id: "catalogue-course-featured", categories: null },
+    ],
+  },
+};
+
+// Catalogue bodies were being run through the email renderer, which emits
+// <div style="font-weight:bold;font-size:..."> for a heading because email
+// clients need inline styles. On a web page that costs the real heading
+// outline these pages are meant to be indexed on, and the inline size beats
+// the stylesheet. This emits semantic markup and leaves the look to theme.css.
+function catalogueMarkdown(md) {
+  const inline = (s) =>
+    escapeHtml(s)
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      // Only http(s), mailto, tel and site-relative targets become links, so a
+      // javascript: URL pasted into the admin cannot turn into one.
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, text, href) =>
+        /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(href)
+          ? `<a href="${href}">${text}</a>`
+          : match,
+      );
+
+  const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      // Body headings sit under the page's own <h1>, so a markdown "##"
+      // becomes an <h2> and anything deeper is clamped to <h6>.
+      const level = Math.min(heading[1].length, 6);
+      out.push(`<h${level}>${inline(heading[2].trim())}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      out.push("<hr>");
+      i++;
+      continue;
+    }
+
+    const bullet = /^\s*[-*+]\s+/;
+    const numbered = /^\s*\d+[.)]\s+/;
+    if (bullet.test(line) || numbered.test(line)) {
+      const ordered = !bullet.test(line);
+      const pattern = ordered ? numbered : bullet;
+      const items = [];
+      while (i < lines.length && pattern.test(lines[i])) {
+        items.push(`<li>${inline(lines[i].replace(pattern, "").trim())}</li>`);
+        i++;
+      }
+      out.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+
+    if (/^\s*>\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote>${inline(buf.join(" "))}</blockquote>`);
+      continue;
+    }
+
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        rows.push(
+          lines[i].trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()),
+        );
+        i++;
+      }
+      // Drop the |---|---| separator markdown puts under the header row.
+      const body = rows.filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c)));
+      const [head, ...rest] = body;
+      out.push(
+        `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>` +
+          `<tbody>${rest.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+      );
+      continue;
+    }
+
+    const para = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,6})\s/.test(lines[i]) &&
+      !bullet.test(lines[i]) &&
+      !numbered.test(lines[i]) &&
+      !/^\s*[>|]/.test(lines[i])
+    ) {
+      para.push(lines[i].trim());
+      i++;
+    }
+    out.push(`<p>${inline(para.join(" "))}</p>`);
+  }
+
+  return out.join("\n");
+}
+
+function catalogueCardHtml(item) {
+  const href = `${catalogueBase(item.kind)}/${escapeAttr(item.slug)}`;
+  const icon = item.icon ? `icofont-${String(item.icon).replace(/[^a-z0-9-]/gi, "")}` : "icofont-star";
+  return `<div class="col-lg-4 col-md-6 col-12">
+              <div class="single-service">
+                <i class="icofont ${icon}"></i>
+                <h4><a href="${href}">${escapeHtml(item.title)}</a></h4>
+                <p>${escapeHtml(item.summary || "")}</p>
+              </div>
+            </div>`;
+}
+
+// Serves /service and /training: the static asset is the shell, and each card
+// grid is replaced with cards built from the catalogue. If the database is
+// unreachable the asset is returned untouched, so the page still renders with
+// the markup that ships in public/.
+async function handleCatalogueListing(env, request, path) {
+  const config = CATALOGUE_GRIDS[path];
+  const asset = await env.ASSETS.fetch(request);
+
+  if (!config || !asset.ok || !/text\/html/i.test(asset.headers.get("Content-Type") || "")) {
+    return asset;
+  }
+
+  let items;
+  try {
+    await ensureSchema(env);
+    const rows = await env.DB.prepare(
+      `SELECT kind, slug, title, summary, icon, category FROM catalogue_items
+       WHERE kind = ? AND status = 'published' ORDER BY position ASC, title ASC`,
+    )
+      .bind(config.kind)
+      .all();
+    items = rows.results || [];
+  } catch (err) {
+    console.error("catalogue listing failed", err);
+    return asset;
+  }
+
+  // Anything in the catalogue plus the built-in defaults that are not
+  // already stored, so a fresh database still shows the seeded pages.
+  const merged = [
+    ...items,
+    ...DEFAULT_CATALOGUE_ITEMS.filter(
+      (d) =>
+        d.kind === config.kind &&
+        d.status === "published" &&
+        !items.some((i) => i.slug === d.slug),
+    ),
+  ];
+
+  if (!merged.length) {
+    return asset;
+  }
+
+  const claimed = new Set();
+  let rewriter = new HTMLRewriter();
+
+  for (const grid of config.grids) {
+    const cards = merged.filter((item) => {
+      if (claimed.has(item.slug)) return false;
+      const match = grid.categories ? grid.categories.includes(item.category) : true;
+      if (match) claimed.add(item.slug);
+      return match;
+    });
+
+    if (!cards.length) continue;
+
+    const html = cards.map(catalogueCardHtml).join("\n");
+    rewriter = rewriter.on(`#${grid.id}`, {
+      element(element) {
+        element.setInnerContent(html, { html: true });
+      },
+    });
+  }
+
+  const headers = new Headers(asset.headers);
+  // The body no longer matches the asset on disk, so the asset's validator
+  // would let a stale copy of the grid survive an edit in the admin.
+  headers.delete("ETag");
+  headers.delete("Last-Modified");
+  headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+
+  return rewriter.transform(
+    new Response(asset.body, { status: asset.status, headers }),
+  );
+}
+
 async function handleCataloguePage(env, request, kind, slug) {
   await ensureSchema(env);
-  const item = await env.DB.prepare(
+  const dbItem = await env.DB.prepare(
     "SELECT * FROM catalogue_items WHERE slug = ? AND kind = ? AND status = 'published'",
   )
     .bind(slug, kind)
     .first();
+  const item = dbItem || defaultCatalogueItem(kind, slug);
 
   if (!item) {
     return new Response("Not found", {
@@ -7965,7 +8265,7 @@ async function handleCataloguePage(env, request, kind, slug) {
   }
 
   const rest = await env.DB.prepare(
-    `SELECT kind, slug, title, summary FROM catalogue_items
+    `SELECT kind, slug, title, summary, icon FROM catalogue_items
      WHERE kind = ? AND status = 'published' AND id != ?
      ORDER BY position ASC, title ASC LIMIT 3`,
   )
