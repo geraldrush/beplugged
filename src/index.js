@@ -7751,6 +7751,15 @@ function cataloguePageHtml(item, related, origin) {
     };
   }
 
+  // Enquiry CTAs go straight to WhatsApp, prefilled with what the visitor was
+  // reading. The contact form is reserved for people who navigate to the
+  // contact page themselves.
+  const whatsappHref = `https://wa.me/27659669657?text=${encodeURIComponent(
+    isCourse
+      ? `Hi Beplugged Academy, I would like to enquire about the ${item.title} course.`
+      : `Hi Beplugged, I would like a quote for ${item.title}.`,
+  )}`;
+
   const details = [
     item.detail_1 ? `<li><strong>${escapeHtml(isCourse ? "Duration" : "From")}</strong><span>${escapeHtml(item.detail_1)}</span></li>` : "",
     item.detail_2 ? `<li><strong>${escapeHtml(isCourse ? "Level" : "Typical timeline")}</strong><span>${escapeHtml(item.detail_2)}</span></li>` : "",
@@ -7860,14 +7869,14 @@ function cataloguePageHtml(item, related, origin) {
         <div class="catalogue-cta">
           <h3>${isCourse ? "Interested in this course?" : "Want to talk about this?"}</h3>
           <p>${isCourse ? "Tell us where you are starting from and we will suggest a route." : "Tell us what you need and we will come back with an honest answer on scope and cost."}</p>
-          <a href="/contact" class="btn">Get in touch</a>
+          <a href="${whatsappHref}" class="btn" target="_blank" rel="noopener">Get in touch</a>
         </div>
       </div>
       <div class="col-lg-4 col-12">
         <aside class="catalogue-aside">
           <h3>${isCourse ? "Course details" : "Service details"}</h3>
           ${details ? `<ul>${details}</ul>` : ""}
-          <a href="/contact" class="btn">${isCourse ? "Enquire about this course" : "Request a quote"}</a>
+          <a href="${whatsappHref}" class="btn" target="_blank" rel="noopener">${isCourse ? "Enquire about this course" : "Request a quote"}</a>
         </aside>
       </div>
     </div>
@@ -7996,12 +8005,19 @@ async function handleCatalogue(request, env, path, method) {
 }
 
 async function handleSitemap(env, request) {
-  await ensureSchema(env);
+  // Same reasoning as the catalogue pages: this is a crawler-facing read, so
+  // it must not sit behind the schema setup. A failed query still yields a
+  // valid sitemap of the static pages.
   const origin = new URL(request.url).origin;
-  const rows = await env.DB.prepare(
-    `SELECT kind, slug, updated_at FROM catalogue_items
-     WHERE status = 'published' ORDER BY kind, position`,
-  ).all();
+  let rows = { results: [] };
+  try {
+    rows = await env.DB.prepare(
+      `SELECT kind, slug, updated_at FROM catalogue_items
+       WHERE status = 'published' ORDER BY kind, position`,
+    ).all();
+  } catch (err) {
+    console.error("sitemap query failed", err);
+  }
 
   const statics = ["/", "/about", "/service", "/training", "/portfolio-details", "/contact"];
   const today = new Date().toISOString().slice(0, 10);
@@ -8186,7 +8202,10 @@ async function handleCatalogueListing(env, request, path) {
 
   let items;
   try {
-    await ensureSchema(env);
+    // No ensureSchema here on purpose. It runs the full DDL on a cold isolate,
+    // which put ~17s in front of the first byte on exactly the pages that are
+    // meant to be crawled. These tables are created by the admin paths; if one
+    // is genuinely missing the query throws and the static markup is served.
     const rows = await env.DB.prepare(
       `SELECT kind, slug, title, summary, icon, category FROM catalogue_items
        WHERE kind = ? AND status = 'published' ORDER BY position ASC, title ASC`,
@@ -8249,12 +8268,19 @@ async function handleCatalogueListing(env, request, path) {
 }
 
 async function handleCataloguePage(env, request, kind, slug) {
-  await ensureSchema(env);
-  const dbItem = await env.DB.prepare(
-    "SELECT * FROM catalogue_items WHERE slug = ? AND kind = ? AND status = 'published'",
-  )
-    .bind(slug, kind)
-    .first();
+  // Deliberately no ensureSchema: see handleCatalogueListing. A read-only page
+  // should never pay for DDL, least of all on a cold isolate.
+  let dbItem = null;
+  try {
+    dbItem = await env.DB.prepare(
+      "SELECT * FROM catalogue_items WHERE slug = ? AND kind = ? AND status = 'published'",
+    )
+      .bind(slug, kind)
+      .first();
+  } catch (err) {
+    console.error("catalogue lookup failed", err);
+  }
+
   const item = dbItem || defaultCatalogueItem(kind, slug);
 
   if (!item) {
@@ -8264,13 +8290,18 @@ async function handleCataloguePage(env, request, kind, slug) {
     });
   }
 
-  const rest = await env.DB.prepare(
-    `SELECT kind, slug, title, summary, icon FROM catalogue_items
-     WHERE kind = ? AND status = 'published' AND id != ?
-     ORDER BY position ASC, title ASC LIMIT 3`,
-  )
-    .bind(kind, item.id)
-    .all();
+  let rest = { results: [] };
+  try {
+    rest = await env.DB.prepare(
+      `SELECT kind, slug, title, summary, icon FROM catalogue_items
+       WHERE kind = ? AND status = 'published' AND id != ?
+       ORDER BY position ASC, title ASC LIMIT 3`,
+    )
+      .bind(kind, item.id)
+      .all();
+  } catch (err) {
+    console.error("related lookup failed", err);
+  }
 
   const origin = new URL(request.url).origin;
   return new Response(cataloguePageHtml(item, rest.results || [], origin), {

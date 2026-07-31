@@ -695,10 +695,16 @@ a:focus-visible {
 
 .footer { background: var(--ink-900); }
 
+/* The template paints this panel solid orange, which puts an orange CTA button
+   on an orange field and leaves no colour left for emphasis. Dark carries the
+   accent better and matches the topbar at the other end of the page. */
 .footer .footer-top {
 	padding: 76px 0 56px;
+	background: var(--ink-900);
 	border-bottom: 1px solid rgba(255, 255, 255, .09);
 }
+
+.footer .footer-top::before { display: none; }
 
 .footer .single-footer h2,
 .footer .single-footer h4 {
@@ -736,6 +742,22 @@ a:focus-visible {
 
 .footer .single-footer .f-link li a i { color: var(--brand); }
 
+.footer .single-footer p {
+	max-width: 420px;
+	margin-bottom: 22px;
+}
+
+.footer .social {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.footer .social li { margin: 0; }
+
 .footer .social li a,
 .footer .single-footer .social li a {
 	display: inline-flex;
@@ -743,10 +765,18 @@ a:focus-visible {
 	justify-content: center;
 	width: 38px;
 	height: 38px;
+	padding: 0;
 	border-radius: var(--radius);
 	background: rgba(255, 255, 255, .08);
 	color: rgba(255, 255, 255, .82);
-	font-size: 15px;
+}
+
+/* Icons are inline SVG rather than the icon font, which has no TikTok or X. */
+.footer .social li a svg {
+	width: 17px;
+	height: 17px;
+	fill: currentColor;
+	display: block;
 }
 
 .footer .social li a:hover,
@@ -754,6 +784,34 @@ a:focus-visible {
 	background: var(--brand);
 	color: #fff;
 }
+
+/* Link and contact columns */
+.footer .f-link ul,
+.footer .footer-contact ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.footer .f-link ul li,
+.footer .footer-contact ul li { margin-bottom: 11px; }
+
+.footer .f-link ul li a,
+.footer .footer-contact ul li a {
+	color: rgba(255, 255, 255, .66);
+	font-size: 14.8px;
+}
+
+.footer .f-link ul li a:hover,
+.footer .footer-contact ul li a:hover { color: #fff; }
+
+.footer .footer-contact .btn {
+	height: 44px;
+	margin-top: 12px;
+	font-size: 14.5px;
+}
+
+.footer .copyright .copyright-content { text-align: center; }
 
 .footer .copyright {
 	padding: 22px 0;
