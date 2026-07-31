@@ -482,13 +482,21 @@ a:focus-visible {
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] { display: flex; }
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] > .single-service { width: 100%; }
 
-/* Vendor/platform cards on the services page. */
+/* Vendor/platform cards on the services page. These hold real brand logos,
+   which are all drawn for light backgrounds, so the tile stays neutral. */
 .vendor-card .vendor-mark {
-	background: var(--ink-900) !important;
-	border-radius: var(--radius) !important;
+	background: var(--surface-alt);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
 }
 
-.vendor-card .vendor-mark span { letter-spacing: .5px; }
+.vendor-card .vendor-mark img {
+	max-height: 100%;
+	max-width: 100%;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+}
 
 /* --------------------------------------------------------------------------
    Feature + schedule blocks
