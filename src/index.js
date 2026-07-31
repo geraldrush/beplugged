@@ -387,6 +387,14 @@ export default {
       // and gets its own route without anyone editing HTML.
       if (method === "GET") {
         const seg = path.split("/").filter(Boolean);
+        // /training/categories/<slug> is checked before /training/<slug>, so
+        // the three-segment category path is never read as a course slug.
+        if (seg.length === 3 && seg[0] === "training" && seg[1] === "categories") {
+          return await handleCategoryPage(env, request, seg[2]);
+        }
+        if (seg.length === 2 && seg[0] === "training" && seg[1] === "categories") {
+          return Response.redirect(new URL("/training", request.url).toString(), 301);
+        }
         if (seg.length === 2) {
           if (seg[0] === "services") {
             return await handleCataloguePage(env, request, "service", seg[1]);
@@ -7639,10 +7647,20 @@ async function handleSendDocumentPack(request, env, method) {
   return json({ success: true, recipient: to, documents: docs.length });
 }
 
-const CATALOGUE_KINDS = new Set(["service", "course"]);
+// "category" groups courses. It is a catalogue item like any other so the
+// existing admin can create, edit, reorder and unpublish them without new
+// screens; a course joins one by putting the category's slug in its own
+// category field.
+const CATALOGUE_KINDS = new Set(["service", "course", "category"]);
+
+// Categories sit under their own path segment so a category slug can never
+// collide with a course slug on /training/<slug>.
+const CATEGORY_BASE = "/training/categories";
 
 function catalogueBase(kind) {
-  return kind === "course" ? "/training" : "/services";
+  if (kind === "course") return "/training";
+  if (kind === "category") return CATEGORY_BASE;
+  return "/services";
 }
 
 function slugify(value) {
@@ -7709,6 +7727,155 @@ function defaultCatalogueItem(kind, slug) {
 // The public page. Rendered on the server so it is indexable without
 // JavaScript, and styled with the site's own stylesheets so it does not read
 // as a different site.
+// Rendered with the same shell as a course page so the two read as one site.
+// The course cards reuse catalogueCardHtml, which the listing grids also use.
+function categoryPageHtml(category, courses, origin) {
+  const url = `${origin}${CATEGORY_BASE}/${category.slug}`;
+  const title = category.seo_title || `${category.title} Courses | Beplugged Academy`;
+  const description =
+    category.seo_description ||
+    category.summary ||
+    `${category.title} training from Beplugged Academy.`;
+
+  const nav = [
+    ["/", "Home"],
+    ["/about", "About"],
+    ["/service", "Services"],
+    ["/training", "Training"],
+    ["/portfolio-details", "Projects"],
+    ["/contact", "Contact Us"],
+  ]
+    .map(([href, label]) => `<li><a href="${href}">${label}</a></li>`)
+    .join("");
+
+  // ItemList tells a crawler this page indexes the courses beneath it.
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: category.title,
+    description,
+    url,
+    provider: { "@type": "Organization", name: "Beplugged Tech", url: origin },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: courses.length,
+      itemListElement: courses.map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: c.title,
+        url: `${origin}/training/${c.slug}`,
+      })),
+    },
+  };
+
+  const cards = courses.length
+    ? courses.map(catalogueCardHtml).join("\n")
+    : `<div class="col-12"><p style="color:#6b7688;">No courses are published in this category yet.</p></div>`;
+
+  return `<!doctype html>
+<html class="no-js" lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeAttr(description)}">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="${escapeAttr(url)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escapeAttr(title)}">
+<meta property="og:description" content="${escapeAttr(description)}">
+<meta property="og:url" content="${escapeAttr(url)}">
+<meta property="og:site_name" content="Beplugged Tech">
+<link rel="icon" href="/img/favicon.ico">
+<link rel="stylesheet" href="/css/bootstrap.min.css">
+<link rel="stylesheet" href="/css/font-awesome.min.css">
+<link rel="stylesheet" href="/css/icofont.css">
+<link rel="stylesheet" href="/css/normalize.css">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/theme.css">
+<script type="application/ld+json">${JSON.stringify(schema)}</script>
+</head>
+<body>
+<header class="header">
+  <div class="topbar">
+    <div class="container"><div class="row">
+      <div class="col-lg-6 col-md-5 col-12">
+        <ul class="top-link">
+          <li><a href="/about">About</a></li>
+          <li><a href="/service">Services</a></li>
+          <li><a href="/training">Training</a></li>
+        </ul>
+      </div>
+      <div class="col-lg-6 col-md-7 col-12">
+        <ul class="top-contact">
+          <li><i class="fa fa-phone"></i><a href="tel:+27659669657">+27 65 966 9657</a></li>
+          <li><i class="fa fa-envelope"></i><a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a></li>
+        </ul>
+      </div>
+    </div></div>
+  </div>
+  <div class="header-inner">
+    <div class="container"><div class="inner"><div class="row" style="align-items:center;">
+      <div class="col-lg-3 col-md-3 col-12"><div class="logo"><a href="/"><img src="/img/logo.png" alt="Beplugged Tech"></a></div></div>
+      <div class="col-lg-9 col-md-9 col-12">
+        <div class="main-menu"><nav class="navigation"><ul class="nav menu" style="display:flex;flex-wrap:wrap;list-style:none;margin:0;justify-content:flex-end;">${nav}</ul></nav></div>
+      </div>
+    </div></div></div>
+  </div>
+</header>
+
+<div class="breadcrumbs overlay">
+  <div class="container">
+    <div class="bread-inner">
+      <div class="row"><div class="col-12">
+        <h2>${escapeHtml(category.title)}</h2>
+        <ul class="bread-list">
+          <li><a href="/">Home</a></li>
+          <li><i class="icofont-simple-right"></i></li>
+          <li><a href="/training">Training</a></li>
+          <li><i class="icofont-simple-right"></i></li>
+          <li class="active">${escapeHtml(category.title)}</li>
+        </ul>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<section class="services section catalogue-detail">
+  <div class="container">
+    <div class="row"><div class="col-lg-12">
+      <div class="section-title">
+        <h2>${escapeHtml(category.title)}</h2>
+        <p>${escapeHtml(category.summary || "")}</p>
+      </div>
+    </div></div>
+    ${category.body ? `<div class="row"><div class="col-lg-8 col-12"><div class="catalogue-body">${catalogueMarkdown(category.body)}</div></div></div>` : ""}
+    <div class="row">${cards}</div>
+    <div class="row"><div class="col-lg-12">
+      <div class="appointment-cta">
+        <a href="https://wa.me/27659669657?text=${encodeURIComponent(`Hi Beplugged Academy, I would like to enquire about ${category.title} training.`)}" class="btn" target="_blank" rel="noopener">Enquire on WhatsApp</a>
+        <p>Not sure which course fits? Tell us where you are starting from.</p>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="copyright">
+    <div class="container">
+      <p>&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
+        <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> &middot;
+        <a href="/training">All training</a>
+      </p>
+    </div>
+  </div>
+</footer>
+<script src="/js/whatsapp.js"></script>
+</body></html>`;
+}
+
 function cataloguePageHtml(item, related, origin) {
   const base = catalogueBase(item.kind);
   const url = `${origin}${base}/${item.slug}`;
@@ -7763,7 +7930,15 @@ function cataloguePageHtml(item, related, origin) {
   const details = [
     item.detail_1 ? `<li><strong>${escapeHtml(isCourse ? "Duration" : "From")}</strong><span>${escapeHtml(item.detail_1)}</span></li>` : "",
     item.detail_2 ? `<li><strong>${escapeHtml(isCourse ? "Level" : "Typical timeline")}</strong><span>${escapeHtml(item.detail_2)}</span></li>` : "",
-    item.category ? `<li><strong>Category</strong><span>${escapeHtml(item.category)}</span></li>` : "",
+    // For a course the category field holds a category slug, so link it back
+    // to that category page when the category actually exists.
+    item.category
+      ? `<li><strong>Category</strong><span>${
+          isCourse && item.categoryTitle
+            ? `<a href="${CATEGORY_BASE}/${escapeAttr(item.category)}">${escapeHtml(item.categoryTitle)}</a>`
+            : escapeHtml(item.categoryTitle || item.category)
+        }</span></li>`
+      : "",
   ].filter(Boolean).join("");
 
   const relatedHtml = related.length
@@ -8052,19 +8227,20 @@ async function handleSitemap(env, request) {
 // Which grid on the static page each catalogue item belongs in. The last
 // entry in each list is the catch-all, so an item saved with a category the
 // page does not know about still gets a card rather than disappearing.
+// Each grid names the kind it draws and, for services, which categories fall
+// into it. Training leads with the categories and lists every course under
+// them, so the page reads as categories first and courses second.
 const CATALOGUE_GRIDS = {
   "/service": {
-    kind: "service",
     grids: [
-      { id: "catalogue-service-build", categories: ["What We Build"] },
-      { id: "catalogue-service-cloud", categories: null },
+      { id: "catalogue-service-build", kind: "service", categories: ["What We Build"] },
+      { id: "catalogue-service-cloud", kind: "service", categories: null },
     ],
   },
   "/training": {
-    kind: "course",
     grids: [
-      { id: "catalogue-course-topics", categories: ["Course Topics"] },
-      { id: "catalogue-course-featured", categories: null },
+      { id: "catalogue-course-topics", kind: "category", categories: null },
+      { id: "catalogue-course-featured", kind: "course", categories: null },
     ],
   },
 };
@@ -8200,6 +8376,8 @@ async function handleCatalogueListing(env, request, path) {
     return asset;
   }
 
+  const kinds = [...new Set(config.grids.map((g) => g.kind))];
+
   let items;
   try {
     // No ensureSchema here on purpose. It runs the full DDL on a cold isolate,
@@ -8208,9 +8386,10 @@ async function handleCatalogueListing(env, request, path) {
     // is genuinely missing the query throws and the static markup is served.
     const rows = await env.DB.prepare(
       `SELECT kind, slug, title, summary, icon, category FROM catalogue_items
-       WHERE kind = ? AND status = 'published' ORDER BY position ASC, title ASC`,
+       WHERE kind IN (${kinds.map(() => "?").join(",")}) AND status = 'published'
+       ORDER BY position ASC, title ASC`,
     )
-      .bind(config.kind)
+      .bind(...kinds)
       .all();
     items = rows.results || [];
   } catch (err) {
@@ -8224,7 +8403,7 @@ async function handleCatalogueListing(env, request, path) {
     ...items,
     ...DEFAULT_CATALOGUE_ITEMS.filter(
       (d) =>
-        d.kind === config.kind &&
+        kinds.includes(d.kind) &&
         d.status === "published" &&
         !items.some((i) => i.slug === d.slug),
     ),
@@ -8239,6 +8418,7 @@ async function handleCatalogueListing(env, request, path) {
 
   for (const grid of config.grids) {
     const cards = merged.filter((item) => {
+      if (item.kind !== grid.kind) return false;
       if (claimed.has(item.slug)) return false;
       const match = grid.categories ? grid.categories.includes(item.category) : true;
       if (match) claimed.add(item.slug);
@@ -8265,6 +8445,51 @@ async function handleCatalogueListing(env, request, path) {
   return rewriter.transform(
     new Response(asset.body, { status: asset.status, headers }),
   );
+}
+
+// A category page: the category's own copy, then every published course that
+// names it. Courses join a category by storing its slug in their category
+// field, so reassigning one is a single edit in the admin.
+async function handleCategoryPage(env, request, slug) {
+  let category = null;
+  let courses = [];
+
+  try {
+    category = await env.DB.prepare(
+      "SELECT * FROM catalogue_items WHERE slug = ? AND kind = 'category' AND status = 'published'",
+    )
+      .bind(slug)
+      .first();
+
+    if (category) {
+      const rows = await env.DB.prepare(
+        `SELECT kind, slug, title, summary, icon FROM catalogue_items
+         WHERE kind = 'course' AND status = 'published' AND category = ?
+         ORDER BY position ASC, title ASC`,
+      )
+        .bind(slug)
+        .all();
+      courses = rows.results || [];
+    }
+  } catch (err) {
+    console.error("category page failed", err);
+  }
+
+  if (!category) {
+    return new Response("Not found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const origin = new URL(request.url).origin;
+  return new Response(categoryPageHtml(category, courses, origin), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+      ...getSecurityHeaders(),
+    },
+  });
 }
 
 async function handleCataloguePage(env, request, kind, slug) {
@@ -8301,6 +8526,21 @@ async function handleCataloguePage(env, request, kind, slug) {
       .all();
   } catch (err) {
     console.error("related lookup failed", err);
+  }
+
+  // Resolve the category slug to its title so the sidebar can link to it.
+  // A course whose category has been unpublished simply shows no link.
+  if (kind === "course" && item.category) {
+    try {
+      const cat = await env.DB.prepare(
+        "SELECT title FROM catalogue_items WHERE slug = ? AND kind = 'category' AND status = 'published'",
+      )
+        .bind(item.category)
+        .first();
+      if (cat) item.categoryTitle = cat.title;
+    } catch (err) {
+      console.error("category title lookup failed", err);
+    }
   }
 
   const origin = new URL(request.url).origin;

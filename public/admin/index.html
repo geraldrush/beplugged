@@ -4015,10 +4015,14 @@
               label: "Type",
               type: "select",
               defaultValue: "service",
-              options: ["service", "course"],
+              options: ["service", "course", "category"],
             },
             { name: "slug", label: "Web address", placeholder: "left blank, made from the title" },
-            { name: "category", label: "Category" },
+            {
+              name: "category",
+              label: "Category",
+              placeholder: "for a course, the category's web address e.g. coding-and-development",
+            },
             { name: "detail_1", label: "From / Duration", placeholder: "From R45 000  ·  8 weeks" },
             { name: "detail_2", label: "Timeline / Level", placeholder: "6-10 weeks  ·  Beginner" },
             {
