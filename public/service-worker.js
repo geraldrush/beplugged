@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v8";
+const CACHE_VERSION = "beplugged-v9";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -49,6 +49,15 @@ function shouldBypassCache(request) {
   }
 
   return request.headers.has("Authorization");
+}
+
+// Assets whose contents change from one deploy to the next, under a URL that
+// does not. These get revalidated in the background rather than pinned.
+function shouldRevalidate(request) {
+  if (request.destination === "style" || request.destination === "script") {
+    return true;
+  }
+  return /\.(css|js)$/i.test(new URL(request.url).pathname);
 }
 
 function isCacheableResponse(response) {
@@ -106,13 +115,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Revalidated assets must be written back to the cache they were precached
+  // into. caches.match() searches STATIC_CACHE first, so refreshing a copy of
+  // theme.css into RUNTIME_CACHE would leave the stale precached one winning
+  // every lookup.
+  const targetCache = shouldRevalidate(request) ? STATIC_CACHE : RUNTIME_CACHE;
+
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(request)
+      const network = fetch(request)
         .then((response) => {
           if (!isCacheableResponse(response)) {
             return response;
@@ -120,16 +131,36 @@ self.addEventListener("fetch", (event) => {
 
           const responseClone = response.clone();
           event.waitUntil(
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone))
+            caches.open(targetCache).then((cache) => cache.put(request, responseClone))
           );
           return response;
         })
         .catch(() => {
+          if (cached) {
+            return cached;
+          }
           if (request.destination === "image") {
             return caches.match("/img/logo.png");
           }
           return Response.error();
         });
+
+      // Stylesheets and scripts change on every deploy. Serving them
+      // cache-first with no revalidation meant a returning visitor kept the
+      // build they first saw until CACHE_VERSION happened to change, so CSS
+      // fixes silently never reached them. Hand back the cached copy for
+      // speed, but always refresh it in the background so the next load is
+      // current. Images and fonts are content-stable, so they stay
+      // cache-first and cost no extra request.
+      if (shouldRevalidate(request)) {
+        if (cached) {
+          event.waitUntil(network.catch(() => {}));
+          return cached;
+        }
+        return network;
+      }
+
+      return cached || network;
     })
   );
 });
