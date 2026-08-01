@@ -50,12 +50,21 @@ writeFileSync(main, readFileSync(main, "utf8")
 
 cpSync("node_modules/emception/cdn", CDN, { recursive: true });
 
-// python-runtime drives emcc. We invoke clang directly, and it is the only
-// file over Cloudflare's per-file cap, so it is left out.
+/* python-runtime drives em++, which is what turns a compiled program into
+   something runnable with working stdout. It cannot be dropped. At 25.17 MiB
+   it is fractionally over Cloudflare's 25 MiB per-file cap, so it ships as two
+   halves and the Worker streams them back as one file at the original path. */
 const python = `${CDN}/usr/lib/python-runtime.tar.br`;
 if (existsSync(python)) {
-  console.log(`  omitting python-runtime.tar.br (${(statSync(python).size / 1048576).toFixed(1)} MiB, over the ${CAP / 1048576} MiB cap)`);
+  const buf = readFileSync(python);
+  const half = Math.ceil(buf.length / 2);
+  writeFileSync(`${python}.part0`, buf.subarray(0, half));
+  writeFileSync(`${python}.part1`, buf.subarray(half));
   rmSync(python);
+  console.log(
+    `  split python-runtime.tar.br (${(buf.length / 1048576).toFixed(2)} MiB) into 2 parts; ` +
+      `the Worker rejoins them at request time`,
+  );
 }
 
 const over = [];

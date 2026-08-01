@@ -118,6 +118,13 @@
     }
     .done-btn{margin:4px 0 8px;}
     .setup-btn{margin:6px 0 10px;height:40px;font-size:14px;}
+    .bar-wrap{margin:2px 0 10px;display:none;}
+    .bar-wrap.on{display:block;}
+    .bar{height:9px;border-radius:5px;background:var(--line);overflow:hidden;}
+    .bar span{display:block;height:100%;width:0;background:var(--brand);
+      border-radius:5px;transition:width .25s ease;}
+    .bar-text{margin-top:5px;font-size:12px;color:var(--ink-400);
+      display:flex;justify-content:space-between;gap:10px;}
     .ex.setup-item b{color:var(--brand);}
     .q .label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
       color:var(--ink-400);margin:12px 0 5px;}
@@ -377,28 +384,52 @@
           prep.className = "btn run setup-btn";
           var already = CodeRunner.isPrepared && CodeRunner.isPrepared();
           prep.textContent = already ? "\u2713 Compiler ready \u2014 download again" : "Download the compiler";
+
+          var barWrap = document.createElement("div");
+          barWrap.className = "bar-wrap";
+          barWrap.innerHTML = '<div class="bar"><span></span></div>' +
+            '<div class="bar-text"><em class="bar-phase"></em><em class="bar-size"></em></div>';
+          var fill = barWrap.querySelector(".bar span");
+          var phaseEl = barWrap.querySelector(".bar-phase");
+          var sizeEl = barWrap.querySelector(".bar-size");
+
+          var mb = function (n) { return (n / 1048576).toFixed(1) + " MB"; };
+
           prep.addEventListener("click", async function () {
             prep.disabled = true;
+            prep.textContent = "Downloading\u2026";
+            barWrap.classList.add("on");
             var t0 = Date.now();
             try {
-              await CodeRunner.prepare(function (msg) {
-                prep.textContent = msg;
-                statusEl.textContent = msg;
-                say(msg + "\n\nLeave this tab open. You can read Lesson 1 while it downloads.");
+              await CodeRunner.prepare(function (p) {
+                phaseEl.textContent = p.phase || "";
+                if (p.total > 0) {
+                  var pct = Math.min(100, Math.round((p.loaded / p.total) * 100));
+                  fill.style.width = pct + "%";
+                  sizeEl.textContent = mb(p.loaded) + " of " + mb(p.total) + "  \u00b7  " + pct + "%";
+                  prep.textContent = "Downloading\u2026 " + pct + "%";
+                } else {
+                  sizeEl.textContent = "";
+                }
+                statusEl.textContent = p.phase || "";
               });
+              fill.style.width = "100%";
               var secs = Math.round((Date.now() - t0) / 1000);
+              phaseEl.textContent = "Done";
               prep.textContent = "\u2713 Compiler ready";
               statusEl.textContent = "Compiler ready";
-              say("Ready in " + secs + " seconds.\n\nThe compiler is now stored on this device, so it will start\ninstantly from here on and works with no connection.\n\nOpen Lesson 1 and write your first program.", "ok");
+              say("Ready in " + secs + " seconds.\n\nThe compiler is stored on this device now, so it starts\ninstantly from here on and works with no connection.\n\nOpen Lesson 1 and write your first program.", "ok");
             } catch (err) {
+              phaseEl.textContent = "Stopped";
               prep.textContent = "Try again";
               statusEl.textContent = "Setup failed";
-              say("Setup did not finish:\n\n" + (err && err.message ? err.message : err) +
-                  "\n\nA computer works better than a phone for this, and wifi better than mobile data.", "err");
+              say("Setup did not finish:\n\n" + (err && err.message ? err.message : err), "err");
             }
             prep.disabled = false;
           });
+
           wrap.appendChild(prep);
+          wrap.appendChild(barWrap);
           q.appendChild(wrap);
           return;
         }

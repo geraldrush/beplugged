@@ -228,6 +228,13 @@ export default {
         return await handleLogin(request, env);
       }
 
+      // One toolchain file is fractionally over Cloudflare's 25 MiB per-asset
+      // cap, so it is deployed as two halves and rejoined here. The compiler
+      // asks for the original path and never knows the difference.
+      if (path === "/academy/cdn/usr/lib/python-runtime.tar.br" && method === "GET") {
+        return await handleSplitAsset(request, env, path, 2);
+      }
+
       if (path === "/api/academy/run" && method === "POST") {
         return await handleAcademyRun(request, env);
       }
@@ -2927,6 +2934,49 @@ function handleDemoRequest(path, method) {
 
 const ACADEMY_MAX_SOURCE = 60000;
 const ACADEMY_MAX_STDIN = 10000;
+
+// Streams a file that was deployed in numbered halves, because a single static
+// asset cannot exceed 25 MiB. The parts are concatenated in order without ever
+// holding the whole thing in memory.
+async function handleSplitAsset(request, env, path, parts) {
+  if (!env.ASSETS) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const url = new URL(request.url);
+  const responses = [];
+  for (let i = 0; i < parts; i += 1) {
+    const partUrl = new URL(`${path}.part${i}`, url.origin);
+    const res = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
+    if (!res.ok) {
+      console.error(JSON.stringify({ message: "split_asset_missing", part: `${path}.part${i}` }));
+      return new Response("Not found", { status: 404 });
+    }
+    responses.push(res);
+  }
+
+  const { readable, writable } = new TransformStream();
+  (async () => {
+    try {
+      for (const res of responses) {
+        await res.body.pipeTo(writable, { preventClose: true });
+      }
+      await writable.close();
+    } catch (err) {
+      console.error("split asset stream failed", err);
+      try { await writable.abort(err); } catch {}
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      // Immutable content at a stable path, so let it cache hard.
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
 
 async function handleAcademyRun(request, env) {
   // Unauthenticated and it costs real compute, so throttle before any work.

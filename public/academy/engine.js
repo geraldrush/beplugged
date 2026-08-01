@@ -17,10 +17,42 @@
 
 window.CodeRunner = (function () {
   const SRC = "/home/user/main.cpp";
-  const EXE = "/home/user/a.out";
+  const EXE = "/home/user/main.js";
 
   let emPromise = null;
   let onProgress = () => {};
+
+  // clang targeting emscripten does not leave a native binary behind, so what
+  // "run the program" means depends on what the toolchain produced. Rather
+  // than guess, try the plausible artefacts once and remember which worked.
+  let runner = null;
+  try { runner = localStorage.getItem("cos1511:runner"); } catch (e) {}
+
+  async function execute(em, stdin) {
+    const candidates = runner
+      ? [runner]
+      : [EXE, "/home/user/main.js", "/home/user/a.out.js", "/home/user/a.out"];
+
+    const tried = [];
+    let last = { stdout: "", stderr: "", exitCode: 1 };
+
+    for (const candidate of candidates) {
+      tried.push(candidate);
+      try {
+        const r = await em.run(candidate, [], { stdin: stdin || "" });
+        // "not found" means the artefact is not there; anything else is a
+        // real result, including a program that legitimately printed nothing.
+        const missing = /not found|no such file/i.test(String(r.stderr || ""));
+        if (!missing) {
+          return { ...r, runner: candidate, tried };
+        }
+        last = r;
+      } catch (err) {
+        last = { stdout: "", stderr: String(err && err.message ? err.message : err), exitCode: 1 };
+      }
+    }
+    return { ...last, runner: null, tried };
+  }
 
   async function boot() {
     onProgress("Starting the compiler…");
@@ -83,29 +115,99 @@ window.CodeRunner = (function () {
 
     /* Fetches and caches everything a lesson will need, so the download
        happens deliberately rather than in the middle of someone's first
-       exercise. Compiling a tiny program is the surest way to warm it:
-       it pulls clang, the linker, the headers and the standard library,
-       which is the whole set. */
-    async prepare(progress) {
-      const say = typeof progress === "function" ? progress : () => {};
+       exercise.
 
-      say("Starting the compiler…");
+       The bundles are fetched here, by us, rather than left to the toolchain,
+       purely so the byte counts are real. Reading the response as a stream
+       gives an honest progress bar instead of an animation that means
+       nothing. They land in the HTTP cache, so when the compiler asks for
+       them a moment later they are already on the device.
+
+       Compiling a tiny program afterwards is what proves it: that pulls the
+       linker, the headers and the standard library, so anyone who finishes
+       setup has the whole set rather than meeting a second download at their
+       first #include <string>. */
+    async prepare(progress) {
+      const report = typeof progress === "function" ? progress : () => {};
+
+      // Everything a plain C++ program needs. Graphics, cmake and the rest of
+      // the payload are never touched by this course, so students do not pay
+      // for them.
+      const WANTED = [
+        "clang", "lld", "include", "clang-headers", "usr-bin", "share",
+        "cache-core", "cache-crt", "cache-libc-variants", "cache-libcxx-variants",
+        "usr-lib-misc", "emscripten-core", "wasm-opt", "python", "python-runtime",
+      ];
+
+      report({ phase: "Reading the manifest…", loaded: 0, total: 0 });
+      const manifest = await (await fetch("/academy/cdn/manifest.json")).json();
+
+      const bundles = WANTED
+        .map((name) => manifest.bundles && manifest.bundles[name])
+        .filter((b) => b && b.url)
+        .map((b) => ({ url: b.url.replace(/^\/cdn/, "/academy/cdn"), size: b.size || 0 }));
+
+      const total = bundles.reduce((n, b) => n + b.size, 0);
+      let loaded = 0;
+
+      for (const bundle of bundles) {
+        const res = await fetch(bundle.url);
+        if (!res.ok) {
+          // A missing bundle is not fatal here; the compiler will ask for it
+          // itself and fail with something more useful than we could say.
+          loaded += bundle.size;
+          report({ phase: "Downloading the compiler…", loaded, total });
+          continue;
+        }
+
+        if (!res.body || !res.body.getReader) {
+          await res.arrayBuffer();
+          loaded += bundle.size;
+          report({ phase: "Downloading the compiler…", loaded, total });
+          continue;
+        }
+
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          loaded += value.length;
+          report({ phase: "Downloading the compiler…", loaded, total });
+        }
+      }
+
+      report({ phase: "Starting the compiler…", loaded: total, total });
       const em = await emception();
 
-      say("Fetching clang — this is the big one, about 100MB…");
+      report({ phase: "Building a test program…", loaded: total, total });
       await em.writeFile(SRC, '#include <iostream>\nint main(){ std::cout << "ready"; return 0; }\n');
-      const compiled = await em.run("clang++", [SRC, "-o", EXE]);
+      const compiled = await em.run("em++", [SRC, "-o", EXE]);
       if (compiled.exitCode !== 0) {
         throw new Error(String(compiled.stderr || "the compiler could not build a test program"));
       }
 
-      say("Checking it runs…");
-      const ran = await em.run(EXE, [], { stdin: "" });
-      if (!String(ran.stdout || "").includes("ready")) {
-        throw new Error("the test program compiled but did not run as expected");
+      report({ phase: "Checking it runs…", loaded: total, total });
+
+      const outcome = await execute(em, "");
+      if (!String(outcome.stdout || "").includes("ready")) {
+        let listing = "(could not read the directory)";
+        try {
+          const entries = await em.listDir("/home/user");
+          listing = JSON.stringify(entries);
+        } catch (e) {}
+        throw new Error(
+          "it compiled, but the built program would not run.\n\n" +
+            "Tried: " + outcome.tried.join(", ") + "\n" +
+            "Last error: " + String(outcome.stderr || "none").slice(0, 300) + "\n" +
+            "Files produced: " + listing,
+        );
       }
 
-      try { localStorage.setItem("cos1511:toolchain", "ready"); } catch (e) {}
+      runner = outcome.runner;
+      try {
+        localStorage.setItem("cos1511:toolchain", "ready");
+        if (runner) localStorage.setItem("cos1511:runner", runner);
+      } catch (e) {}
       return true;
     },
 
@@ -131,7 +233,7 @@ window.CodeRunner = (function () {
         await em.writeFile(SRC, source);
 
         onProgress("Compiling…");
-        const compiled = await em.run("clang++", [SRC, "-o", EXE]);
+        const compiled = await em.run("em++", [SRC, "-o", EXE]);
 
         if (compiled.exitCode !== 0) {
           const extra = notes.length
@@ -145,7 +247,8 @@ window.CodeRunner = (function () {
         }
 
         onProgress("Running…");
-        const ran = await em.run(EXE, [], { stdin: stdin || "" });
+        const ran = await execute(em, stdin);
+        if (ran.runner) runner = ran.runner;
 
         return {
           stdout: String(ran.stdout || ""),
