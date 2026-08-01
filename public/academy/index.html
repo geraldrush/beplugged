@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>COS1511 Practice — Beplugged Academy</title>
+  <meta name="description" content="Write, run and check C++ for UNISA COS1511, in the browser.">
+  <link rel="icon" href="/img/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <style>
+    :root {
+      --ink-900:#0d1826; --ink-800:#14233a; --ink-700:#1f3049; --ink-500:#4a5568;
+      --ink-400:#6b7688; --line:#e3e8ef; --surface:#fff; --surface-alt:#f7f9fc;
+      --brand:#f05023; --brand-dark:#d23f14; --ok:#1e8750; --warn:#a16a1b; --err:#c0392b;
+      --radius:6px; --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+    }
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;display:flex;flex-direction:column;
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+      color:var(--ink-500);background:var(--surface-alt);-webkit-font-smoothing:antialiased;
+    }
+
+    /* Top bar */
+    .bar{
+      display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+      padding:10px 16px;background:var(--ink-900);color:#fff;flex:0 0 auto;
+    }
+    .bar img{height:30px;width:auto;}
+    .bar .title{font-size:15px;font-weight:600;letter-spacing:-.01em;}
+    .bar .title span{color:rgba(255,255,255,.55);font-weight:400;}
+    .bar .spacer{margin-left:auto;}
+    .bar a{color:rgba(255,255,255,.7);font-size:13.5px;text-decoration:none;}
+    .bar a:hover{color:#fff;}
+
+    /* Layout */
+    .wrap{flex:1 1 auto;display:grid;grid-template-columns:280px 1fr 340px;min-height:0;}
+    .pane{min-width:0;min-height:0;display:flex;flex-direction:column;}
+    .pane + .pane{border-left:1px solid var(--line);}
+    .pane-head{
+      flex:0 0 auto;display:flex;align-items:center;gap:8px;
+      padding:9px 13px;background:var(--surface);border-bottom:1px solid var(--line);
+      font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);
+    }
+    .pane-body{flex:1 1 auto;overflow:auto;background:var(--surface);}
+
+    /* Exercise list */
+    .ex{
+      display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);
+      background:none;padding:11px 13px;cursor:pointer;font-family:inherit;
+    }
+    .ex:hover{background:var(--surface-alt);}
+    .ex.active{background:#fff6f3;box-shadow:inset 3px 0 0 var(--brand);}
+    .ex b{display:block;font-size:13.5px;color:var(--ink-900);font-weight:600;line-height:1.35;}
+    .ex small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-400);}
+
+    /* Question text */
+    .q{padding:14px 15px;font-size:13.8px;line-height:1.62;}
+    .q h3{margin:0 0 4px;font-size:15px;color:var(--ink-900);}
+    .q .marks{display:inline-block;margin-bottom:10px;padding:1px 7px;border-radius:20px;
+      background:#fff1eb;color:var(--brand);font-size:11px;font-weight:700;}
+    .q p{margin:0 0 9px;}
+    .q ul{margin:0 0 10px;padding-left:18px;}
+    .q li{margin-bottom:4px;}
+    .q pre{
+      margin:0 0 10px;padding:9px 11px;background:var(--ink-900);color:#e8eef7;
+      border-radius:var(--radius);font-family:var(--mono);font-size:12px;line-height:1.5;
+      overflow-x:auto;white-space:pre;
+    }
+    .q .label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+      color:var(--ink-400);margin:12px 0 5px;}
+
+    /* Editor */
+    .CodeMirror{height:100%;font-family:var(--mono);font-size:13.5px;line-height:1.55;}
+    #fallback{
+      width:100%;height:100%;border:none;padding:12px;resize:none;
+      font-family:var(--mono);font-size:13.5px;line-height:1.55;
+      background:#212121;color:#eee;
+    }
+    .editor-body{flex:1 1 auto;min-height:0;background:#212121;}
+
+    /* Buttons */
+    .btn{
+      display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+      border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+      font-family:inherit;font-size:13px;font-weight:600;color:var(--ink-700);cursor:pointer;
+    }
+    .btn:hover{background:var(--surface-alt);}
+    .btn.run{background:var(--brand);border-color:var(--brand);color:#fff;}
+    .btn.run:hover{background:var(--brand-dark);}
+    .btn:disabled{opacity:.55;cursor:default;}
+
+    /* Output */
+    .io-label{
+      padding:7px 13px;font-size:11px;font-weight:700;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--ink-400);background:var(--surface-alt);
+      border-bottom:1px solid var(--line);border-top:1px solid var(--line);
+    }
+    #stdin{
+      width:100%;min-height:74px;border:none;padding:10px 13px;resize:vertical;
+      font-family:var(--mono);font-size:12.5px;line-height:1.5;color:var(--ink-900);
+    }
+    #stdin:focus{outline:none;background:#fffdfa;}
+    #stdout{
+      flex:1 1 auto;margin:0;padding:11px 13px;overflow:auto;white-space:pre-wrap;
+      word-break:break-word;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+      background:var(--ink-900);color:#e8eef7;
+    }
+    #stdout .err{color:#ff9c8a;}
+    #stdout .note{color:#9fb0c6;}
+    #stdout .ok{color:#7fd6a2;}
+
+    .status{font-size:12px;color:var(--ink-400);margin-left:auto;}
+
+    @media (max-width:1100px){
+      .wrap{grid-template-columns:240px 1fr;}
+      .pane.io{grid-column:1 / -1;border-left:none;border-top:1px solid var(--line);max-height:320px;}
+    }
+    @media (max-width:760px){
+      .wrap{display:flex;flex-direction:column;}
+      .pane{border-left:none;}
+      .pane.list{max-height:190px;border-bottom:1px solid var(--line);}
+      .pane.editor{min-height:320px;}
+      .pane.io{max-height:none;}
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <img src="/img/logo.png" alt="Beplugged Academy">
+    <div class="title">COS1511 Practice <span>&middot; Introduction to Programming</span></div>
+    <div class="spacer"></div>
+    <a href="/training/unisa-cos1511-tutorial-class">About this course</a>
+  </div>
+
+  <div class="wrap">
+    <!-- Exercises -->
+    <section class="pane list">
+      <div class="pane-head">Exercises</div>
+      <div class="pane-body" id="exercise-list"></div>
+    </section>
+
+    <!-- Editor -->
+    <section class="pane editor">
+      <div class="pane-head">
+        <button class="btn run" id="run-btn">&#9654; Run</button>
+        <button class="btn" id="reset-btn">Reset</button>
+        <span class="status" id="status">Ready</span>
+      </div>
+      <div class="editor-body"><textarea id="fallback" spellcheck="false"></textarea></div>
+    </section>
+
+    <!-- Question + IO -->
+    <section class="pane io">
+      <div class="pane-head">Question</div>
+      <div class="pane-body" id="question"></div>
+      <div class="io-label">Input (what you would type at the keyboard)</div>
+      <textarea id="stdin" spellcheck="false" placeholder="One value per line, as cin reads them."></textarea>
+      <div class="io-label">Output</div>
+      <pre id="stdout"><span class="note">Press Run to compile and execute.</span></pre>
+    </section>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+  <script src="/academy/exercises.js"></script>
+  <script src="/academy/engine.js"></script>
+  <script>
+    (function () {
+      var editor = null;
+      var fallback = document.getElementById("fallback");
+      var statusEl = document.getElementById("status");
+      var outEl = document.getElementById("stdout");
+      var current = null;
+
+      // CodeMirror gives syntax highlighting and line numbers, which matter
+      // when a student is hunting a missing semicolon. If the CDN is blocked
+      // the plain textarea underneath still works.
+      if (window.CodeMirror) {
+        editor = CodeMirror.fromTextArea(fallback, {
+          mode: "text/x-c++src",
+          theme: "material-darker",
+          lineNumbers: true,
+          indentUnit: 4,
+          matchBrackets: true,
+          lineWrapping: false,
+        });
+      }
+
+      function getCode() { return editor ? editor.getValue() : fallback.value; }
+      function setCode(v) { editor ? editor.setValue(v) : (fallback.value = v); }
+
+      function storeKey(id) { return "cos1511:" + id; }
+
+      function say(html, cls) {
+        outEl.innerHTML = '<span class="' + (cls || "note") + '"></span>';
+        outEl.firstChild.textContent = html;
+      }
+
+      function renderQuestion(ex) {
+        var q = document.getElementById("question");
+        q.innerHTML = "";
+        var wrap = document.createElement("div");
+        wrap.className = "q";
+
+        var h = document.createElement("h3");
+        h.textContent = ex.title;
+        wrap.appendChild(h);
+
+        var m = document.createElement("span");
+        m.className = "marks";
+        m.textContent = ex.source + (ex.marks ? " · " + ex.marks + " marks" : "");
+        wrap.appendChild(m);
+
+        ex.brief.forEach(function (block) {
+          if (block.type === "p") {
+            var p = document.createElement("p");
+            p.textContent = block.text;
+            wrap.appendChild(p);
+          } else if (block.type === "list") {
+            var ul = document.createElement("ul");
+            block.items.forEach(function (i) {
+              var li = document.createElement("li");
+              li.textContent = i;
+              ul.appendChild(li);
+            });
+            wrap.appendChild(ul);
+          } else if (block.type === "code") {
+            var lbl = document.createElement("div");
+            lbl.className = "label";
+            lbl.textContent = block.label || "Example";
+            wrap.appendChild(lbl);
+            var pre = document.createElement("pre");
+            pre.textContent = block.text;
+            wrap.appendChild(pre);
+          }
+        });
+
+        q.appendChild(wrap);
+      }
+
+      function select(id) {
+        var ex = EXERCISES.find(function (e) { return e.id === id; });
+        if (!ex) return;
+        current = ex;
+
+        [].forEach.call(document.querySelectorAll(".ex"), function (b) {
+          b.classList.toggle("active", b.dataset.id === id);
+        });
+
+        var saved = null;
+        try { saved = localStorage.getItem(storeKey(id)); } catch (e) {}
+        setCode(saved !== null ? saved : ex.starter);
+        document.getElementById("stdin").value = ex.sampleInput || "";
+        renderQuestion(ex);
+        say("Press Run to compile and execute.");
+        if (editor) setTimeout(function () { editor.refresh(); }, 0);
+      }
+
+      function buildList() {
+        var list = document.getElementById("exercise-list");
+        EXERCISES.forEach(function (ex) {
+          var b = document.createElement("button");
+          b.className = "ex";
+          b.dataset.id = ex.id;
+          var t = document.createElement("b");
+          t.textContent = ex.title;
+          var s = document.createElement("small");
+          s.textContent = ex.source + (ex.marks ? " · " + ex.marks + " marks" : "");
+          b.appendChild(t);
+          b.appendChild(s);
+          b.addEventListener("click", function () { select(ex.id); });
+          list.appendChild(b);
+        });
+      }
+
+      // Work is kept per exercise so switching between them never loses code.
+      function save() {
+        if (!current) return;
+        try { localStorage.setItem(storeKey(current.id), getCode()); } catch (e) {}
+      }
+      setInterval(save, 4000);
+      window.addEventListener("beforeunload", save);
+
+      document.getElementById("reset-btn").addEventListener("click", function () {
+        if (!current) return;
+        if (!confirm("Replace your code with the starter for this exercise?")) return;
+        setCode(current.starter);
+        save();
+      });
+
+      document.getElementById("run-btn").addEventListener("click", async function () {
+        var btn = this;
+        save();
+        btn.disabled = true;
+        statusEl.textContent = "Running...";
+        say("Compiling...");
+
+        try {
+          var result = await CodeRunner.run(getCode(), document.getElementById("stdin").value);
+          outEl.innerHTML = "";
+
+          if (result.stdout) {
+            var o = document.createElement("span");
+            o.textContent = result.stdout;
+            outEl.appendChild(o);
+          }
+          if (result.stderr) {
+            var e = document.createElement("span");
+            e.className = "err";
+            e.textContent = (result.stdout ? "\n" : "") + result.stderr;
+            outEl.appendChild(e);
+          }
+          if (!result.stdout && !result.stderr) {
+            var n = document.createElement("span");
+            n.className = "note";
+            n.textContent = "(the program produced no output)";
+            outEl.appendChild(n);
+          }
+
+          // Compare against the paper's expected output where we have it.
+          if (current && current.expectedOutput && result.stdout) {
+            var norm = function (s) { return s.replace(/\r/g, "").replace(/[ \t]+$/gm, "").trim(); };
+            var pass = norm(result.stdout) === norm(current.expectedOutput);
+            var v = document.createElement("span");
+            v.className = pass ? "ok" : "err";
+            v.textContent = pass
+              ? "\n\n✓ Matches the expected output."
+              : "\n\n✗ Does not match the expected output yet.";
+            outEl.appendChild(v);
+          }
+
+          statusEl.textContent = result.stderr ? "Finished with errors" : "Done";
+        } catch (err) {
+          say(String(err && err.message ? err.message : err), "err");
+          statusEl.textContent = "Failed";
+        }
+
+        btn.disabled = false;
+      });
+
+      buildList();
+      select(EXERCISES[0].id);
+
+      CodeRunner.ready().then(function (info) {
+        statusEl.textContent = info.label;
+      });
+    })();
+  </script>
+</body>
+</html>
