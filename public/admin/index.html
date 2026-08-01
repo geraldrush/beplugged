@@ -236,6 +236,168 @@
         letter-spacing: -0.01em;
       }
 
+      /* ---- Dashboard tiles ----------------------------------------------
+         Headline figures with a drill-through, in the shape of the familiar
+         admin templates but with one difference: the colour is driven by the
+         value, not fixed per slot. A tile only goes amber or red when there
+         is actually something to act on, so red keeps meaning "look here".
+         ------------------------------------------------------------------ */
+      .tile-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: 132px;
+        padding: 1.1rem 1.15rem 0;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(16, 18, 40, 0.04);
+        overflow: hidden;
+        transition: box-shadow 0.18s ease, transform 0.18s ease;
+      }
+
+      .tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(16, 18, 40, 0.1);
+      }
+
+      .tile .tile-value {
+        font-size: 1.85rem;
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--dark);
+      }
+
+      .tile .tile-label {
+        margin-top: 0.3rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* Oversized glyph bled into the corner, as the template does, but at a
+         low enough opacity that it never competes with the figure. */
+      .tile .tile-icon {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.7rem;
+        font-size: 2.6rem;
+        line-height: 1;
+        opacity: 0.1;
+        pointer-events: none;
+      }
+
+      .tile .tile-link {
+        margin: 0.85rem -1.15rem 0;
+        padding: 0.5rem 1.15rem;
+        border-top: 1px solid var(--border);
+        background: #fcfcfd;
+        font-size: 0.76rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+        text-align: left;
+        cursor: pointer;
+        width: calc(100% + 2.3rem);
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        display: block;
+      }
+
+      .tile .tile-link:hover { color: var(--primary); background: #fff7f4; }
+
+      /* State is set from the value at render time. */
+      .tile.is-alert { border-color: #e8bdb7; }
+      .tile.is-alert .tile-value { color: var(--danger); }
+      .tile.is-alert .tile-icon { color: var(--danger); opacity: 0.16; }
+
+      .tile.is-warn { border-color: #e6d3ae; }
+      .tile.is-warn .tile-value { color: var(--warning); }
+      .tile.is-warn .tile-icon { color: var(--warning); opacity: 0.16; }
+
+      .tile.is-good .tile-value { color: var(--success); }
+      .tile.is-good .tile-icon { color: var(--success); opacity: 0.14; }
+
+      .tile.is-plain .tile-icon { color: var(--dark); }
+
+      /* Compact row for the secondary counts. */
+      .mini-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .mini {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        padding: 0.7rem 0.85rem;
+        border: 1px solid var(--border);
+        border-radius: 0.45rem;
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .mini:hover {
+        border-color: #d3d5dc;
+        box-shadow: 0 4px 12px rgba(16, 18, 40, 0.07);
+      }
+
+      .mini .mini-icon {
+        flex: 0 0 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.35rem;
+        background: var(--page);
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      .mini .mini-text { min-width: 0; }
+
+      /* Both are spans inside a span, so they need to be told to stack —
+         otherwise the figure runs straight into its label. */
+      .mini .mini-value {
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--dark);
+        line-height: 1.2;
+      }
+
+      .mini .mini-label {
+        display: block;
+        margin-top: 0.1rem;
+        font-size: 0.72rem;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mini.is-alert .mini-icon { background: #fbeae7; color: var(--danger); }
+      .mini.is-alert .mini-value { color: var(--danger); }
+      .mini.is-warn .mini-icon { background: #fdf3e3; color: var(--warning); }
+      .mini.is-warn .mini-value { color: var(--warning); }
+      .mini.is-good .mini-icon { background: #e8f4ed; color: var(--success); }
+
       .card {
         border: 1px solid var(--border);
         border-radius: 0.375rem;
@@ -1572,71 +1734,65 @@
             </div>
           </div>
 
-          <div
-            style="
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-              gap: 1rem;
-            "
-          >
-            <div class="stat-card" style="border-left-color: #1f8a52">
-              <h3>Revenue Collected</h3>
-              <div class="value" id="kpi-collected" style="color: #1f8a52">
-                R0.00
-              </div>
+          <!-- Headline figures. Money first, then the things that stall work. -->
+          <div class="tile-grid">
+            <div class="tile" id="tile-collected">
+              <span class="tile-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+              <div class="tile-value" id="kpi-collected">R0.00</div>
+              <div class="tile-label">Revenue Collected</div>
+              <button type="button" class="tile-link" onclick="showTab('receipts')">View receipts &rarr;</button>
             </div>
-            <div class="stat-card" style="border-left-color: var(--warning)">
-              <h3>Outstanding</h3>
-              <div
-                class="value"
-                id="kpi-outstanding"
-                style="color: var(--warning)"
-              >
-                R0.00
-              </div>
+            <div class="tile" id="tile-outstanding">
+              <span class="tile-icon"><i class="fa-solid fa-hourglass-half"></i></span>
+              <div class="tile-value" id="kpi-outstanding">R0.00</div>
+              <div class="tile-label">Outstanding</div>
+              <button type="button" class="tile-link" onclick="showTab('invoices')">Chase invoices &rarr;</button>
             </div>
-            <div class="stat-card">
-              <h3>Total Invoiced</h3>
-              <div class="value" id="kpi-invoiced">R0.00</div>
+            <div class="tile" id="tile-invoiced">
+              <span class="tile-icon"><i class="fa-solid fa-file-invoice"></i></span>
+              <div class="tile-value" id="kpi-invoiced">R0.00</div>
+              <div class="tile-label">Total Invoiced</div>
+              <button type="button" class="tile-link" onclick="showTab('invoices')">View invoices &rarr;</button>
             </div>
-            <div class="stat-card">
-              <h3>Pending Invoices</h3>
-              <div class="value" id="kpi-pending">0</div>
+            <div class="tile" id="tile-pending">
+              <span class="tile-icon"><i class="fa-solid fa-clipboard-list"></i></span>
+              <div class="tile-value" id="kpi-pending">0</div>
+              <div class="tile-label">Pending Invoices</div>
+              <button type="button" class="tile-link" onclick="showTab('invoices')">Open workboard &rarr;</button>
             </div>
-            <div class="stat-card" style="border-left-color: #2c2d3f">
-              <h3>Open Leads</h3>
-              <div class="value" id="kpi-open-leads" style="color: #2c2d3f">
-                0
-              </div>
-            </div>
-            <div class="stat-card">
-              <h3>Open Requirements</h3>
-              <div class="value" id="kpi-open-requirements">0</div>
-            </div>
-            <div class="stat-card" style="border-left-color: #1f8a52">
-              <h3>Active Projects</h3>
-              <div class="value" id="kpi-active-projects" style="color: #1f8a52">
-                0
-              </div>
-            </div>
-            <div class="stat-card">
-              <h3>Document Reviews</h3>
-              <div class="value" id="kpi-document-reviews">0</div>
-            </div>
-            <div class="stat-card">
-              <h3>Quality Actions</h3>
-              <div class="value" id="kpi-quality-actions">0</div>
-            </div>
-            <div class="stat-card" style="border-left-color: var(--danger)">
-              <h3>Security Risks</h3>
-              <div class="value" id="kpi-security-risks" style="color: var(--danger)">
-                0
-              </div>
-            </div>
-            <div class="stat-card">
-              <h3>Team Members</h3>
-              <div class="value" id="kpi-team-members">0</div>
-            </div>
+          </div>
+
+          <!-- Everything else, compact. Each one opens its own section. -->
+          <div class="mini-grid">
+            <button type="button" class="mini" id="mini-open-leads" onclick="showTab('leads')">
+              <span class="mini-icon"><i class="fa-solid fa-bullseye"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-open-leads">0</span><span class="mini-label">Open leads</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-active-projects" onclick="showTab('projects')">
+              <span class="mini-icon"><i class="fa-solid fa-diagram-project"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-active-projects">0</span><span class="mini-label">Active projects</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-open-requirements" onclick="showTab('requirements')">
+              <span class="mini-icon"><i class="fa-solid fa-list-check"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-open-requirements">0</span><span class="mini-label">Open requirements</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-document-reviews" onclick="showTab('documents')">
+              <span class="mini-icon"><i class="fa-solid fa-file-lines"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-document-reviews">0</span><span class="mini-label">Document reviews</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-quality-actions" onclick="showTab('quality')">
+              <span class="mini-icon"><i class="fa-solid fa-circle-check"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-quality-actions">0</span><span class="mini-label">Quality actions</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-security-risks" onclick="showTab('security')">
+              <span class="mini-icon"><i class="fa-solid fa-shield-halved"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-security-risks">0</span><span class="mini-label">Security risks</span></span>
+            </button>
+            <button type="button" class="mini" id="mini-team-members" onclick="showTab('team')">
+              <span class="mini-icon"><i class="fa-solid fa-users"></i></span>
+              <span class="mini-text"><span class="mini-value" id="kpi-team-members">0</span><span class="mini-label">Team members</span></span>
+            </button>
+          </div>
           </div>
 
           <div class="card" style="margin-top: 1.5rem">
@@ -6490,22 +6646,57 @@
           document.getElementById("kpi-invoiced").textContent = fmtCurrency(
             analytics.kpis.invoiced,
           );
-          document.getElementById("kpi-pending").textContent =
-            analytics.kpis.invoices_pending;
-          document.getElementById("kpi-open-leads").textContent =
-            analytics.kpis.open_leads;
-          document.getElementById("kpi-open-requirements").textContent =
-            analytics.kpis.open_requirements;
-          document.getElementById("kpi-active-projects").textContent =
-            analytics.kpis.active_projects;
-          document.getElementById("kpi-document-reviews").textContent =
-            analytics.kpis.documents_in_review;
-          document.getElementById("kpi-quality-actions").textContent =
-            analytics.kpis.quality_actions;
-          document.getElementById("kpi-security-risks").textContent =
-            analytics.kpis.security_risks;
-          document.getElementById("kpi-team-members").textContent =
-            analytics.kpis.team_members;
+          // Counts get separators too, so a four figure number does not read
+          // differently here than it does in the money tiles above.
+          const fmtCount = (n) => Number(n || 0).toLocaleString("en-ZA");
+
+          // A tile's colour comes from its value. Zero outstanding is not a
+          // warning and zero risks is not an alarm; painting them that way is
+          // what makes people stop reading the colour at all.
+          const setState = (id, state) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove("is-alert", "is-warn", "is-good", "is-plain");
+            el.classList.add(state);
+          };
+
+          const setCount = (valueId, tileId, raw, rule) => {
+            const n = Number(raw || 0);
+            const el = document.getElementById(valueId);
+            if (el) el.textContent = fmtCount(n);
+            if (tileId) setState(tileId, rule(n));
+          };
+
+          // Money owed to us: amber once there is anything to chase.
+          setState(
+            "tile-outstanding",
+            Number(analytics.kpis.outstanding || 0) > 0 ? "is-warn" : "is-good",
+          );
+          setState("tile-collected", "is-good");
+          setState("tile-invoiced", "is-plain");
+
+          setCount("kpi-pending", "tile-pending", analytics.kpis.invoices_pending, (n) =>
+            n > 0 ? "is-warn" : "is-good",
+          );
+
+          // Work in flight is normal, so these stay neutral however busy.
+          setCount("kpi-open-leads", "mini-open-leads", analytics.kpis.open_leads, () => "is-plain");
+          setCount("kpi-active-projects", "mini-active-projects", analytics.kpis.active_projects, () => "is-plain");
+          setCount("kpi-open-requirements", "mini-open-requirements", analytics.kpis.open_requirements, () => "is-plain");
+          setCount("kpi-team-members", "mini-team-members", analytics.kpis.team_members, () => "is-plain");
+
+          // These are queues waiting on someone, so they warm up when non-zero.
+          setCount("kpi-document-reviews", "mini-document-reviews", analytics.kpis.documents_in_review, (n) =>
+            n > 0 ? "is-warn" : "is-good",
+          );
+          setCount("kpi-quality-actions", "mini-quality-actions", analytics.kpis.quality_actions, (n) =>
+            n > 0 ? "is-warn" : "is-good",
+          );
+
+          // The only genuine alarm on the page.
+          setCount("kpi-security-risks", "mini-security-risks", analytics.kpis.security_risks, (n) =>
+            n > 0 ? "is-alert" : "is-good",
+          );
           try {
             renderCharts(analytics);
           } catch (err) {
