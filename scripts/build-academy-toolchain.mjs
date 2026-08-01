@@ -67,6 +67,29 @@ if (existsSync(python)) {
   );
 }
 
+/* Stamp a version onto every bundle URL in the manifest.
+
+   This exists because a bug once served one of these files truncated while
+   also telling the browser to keep it for a year as immutable. Fixing the
+   server could not help: nothing was asking the server any more. A version in
+   the query string means a bad copy can always be stepped over, for everyone,
+   without asking anyone to clear their cache. Bump TOOLCHAIN_VERSION whenever
+   the payload changes. */
+const TOOLCHAIN_VERSION = "2";
+{
+  const manifestPath = `${CDN}/manifest.json`;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  let stamped = 0;
+  for (const bundle of Object.values(manifest.bundles || {})) {
+    if (bundle && typeof bundle.url === "string" && !bundle.url.includes("?v=")) {
+      bundle.url = `${bundle.url}?v=${TOOLCHAIN_VERSION}`;
+      stamped += 1;
+    }
+  }
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  console.log(`  stamped v${TOOLCHAIN_VERSION} onto ${stamped} bundle URLs`);
+}
+
 const over = [];
 const walk = (dir) => {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

@@ -146,6 +146,8 @@ window.CodeRunner = (function () {
         .map((name) => manifest.bundles && manifest.bundles[name])
         .filter((b) => b && b.url)
         .map((b) => ({ url: b.url.replace(/^\/cdn/, "/academy/cdn"), size: b.size || 0 }));
+      // b.url already carries the ?v= stamp from the manifest, so the warmed
+      // URL and the one the compiler requests are identical.
 
       const total = bundles.reduce((n, b) => n + b.size, 0);
       let loaded = 0;

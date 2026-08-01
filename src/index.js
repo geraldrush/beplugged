@@ -2945,55 +2945,44 @@ async function handleSplitAsset(request, env, path, parts) {
 
   const url = new URL(request.url);
 
-  // Confirm every part exists before promising a body, so a missing half is a
-  // clean 404 rather than a truncated file the caller cannot tell is broken.
-  const partUrls = [];
+  /* Buffered rather than streamed, deliberately.
+
+     A streamed response carries no Content-Length, and the loader that
+     consumes these bundles is size-aware: the ones served as ordinary static
+     assets arrive with a declared length and work, this one did not and did
+     not. Buffering is also what makes the length exact. At roughly 26MB
+     against a 128MB limit there is ample headroom, and this file is fetched
+     once per device. */
+  const buffers = [];
+  let total = 0;
+
   for (let i = 0; i < parts; i += 1) {
     const partUrl = new URL(`${path}.part${i}`, url.origin);
-    const head = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
-    if (!head.ok) {
+    const res = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
+    if (!res.ok) {
       console.error(JSON.stringify({ message: "split_asset_missing", part: `${path}.part${i}` }));
       return new Response("Not found", { status: 404 });
     }
-    // The body is not consumed here; it is refetched when its turn comes so
-    // no response sits open while an earlier part streams.
-    await head.body.cancel();
-    partUrls.push(partUrl);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    buffers.push(buf);
+    total += buf.byteLength;
   }
 
-  const { readable, writable } = new TransformStream();
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const buf of buffers) {
+    joined.set(buf, offset);
+    offset += buf.byteLength;
+  }
 
-  (async () => {
-    // An explicit writer, one part at a time. Piping several bodies into a
-    // single writable silently dropped bytes: the file came back short, which
-    // is worse than failing because the truncation only surfaced much later
-    // as a corrupt archive.
-    const writer = writable.getWriter();
-    let written = 0;
-    try {
-      for (const partUrl of partUrls) {
-        const res = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
-        if (!res.ok || !res.body) throw new Error(`part unavailable: ${partUrl.pathname}`);
-        const reader = res.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          await writer.write(value);
-          written += value.byteLength;
-        }
-      }
-      await writer.close();
-      console.log(JSON.stringify({ message: "split_asset_served", path, bytes: written }));
-    } catch (err) {
-      console.error("split asset stream failed", err);
-      try { await writer.abort(err); } catch {}
-    }
-  })();
+  console.log(JSON.stringify({ message: "split_asset_served", path, bytes: total }));
 
-  return new Response(readable, {
+  return new Response(joined, {
     headers: {
       "Content-Type": "application/octet-stream",
-      // Immutable content at a stable path, so let it cache hard.
+      "Content-Length": String(total),
+      // Immutable content, but the URL carries a version so a bad copy can
+      // always be stepped over without anyone clearing a cache.
       "Cache-Control": "public, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
     },
