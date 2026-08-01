@@ -16,6 +16,28 @@
    --------------------------------------------------------------------------- */
 
 window.CodeRunner = (function () {
+  /* The toolchain logs its progress to the console: which bundles it fetches,
+     what it extracts, which tool it resolves. When something fails deep inside
+     it, that trail is the only evidence of what actually happened, and asking
+     someone to open devtools and copy it is a poor way to find out. So the
+     last of it is kept here and attached to any failure. */
+  const TRAIL = [];
+  (function captureConsole() {
+    ["log", "warn", "error"].forEach((level) => {
+      const original = console[level].bind(console);
+      console[level] = function (...args) {
+        try {
+          const line = args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
+          if (/Emception|LazyFS|Kernel|bundle|python|clang|em\+\+/i.test(line)) {
+            TRAIL.push(line.slice(0, 200));
+            if (TRAIL.length > 40) TRAIL.shift();
+          }
+        } catch (e) {}
+        return original(...args);
+      };
+    });
+  })();
+
   const SRC = "/home/user/main.cpp";
   const EXE = "/home/user/main.js";
 
@@ -185,7 +207,10 @@ window.CodeRunner = (function () {
       await em.writeFile(SRC, '#include <iostream>\nint main(){ std::cout << "ready"; return 0; }\n');
       const compiled = await em.run("em++", [SRC, "-o", EXE]);
       if (compiled.exitCode !== 0) {
-        throw new Error(String(compiled.stderr || "the compiler could not build a test program"));
+        throw new Error(
+          String(compiled.stderr || "the compiler could not build a test program") +
+            "\n\n--- what the toolchain did ---\n" + TRAIL.join("\n"),
+        );
       }
 
       report({ phase: "Checking it runs…", loaded: total, total });
