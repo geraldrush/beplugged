@@ -1,131 +1,164 @@
-/* The run engine.
+/* The run engine — a real C++ compiler, in the browser.
    ---------------------------------------------------------------------------
-   Contract used by the page, and the only thing it knows about running code:
+   Contract used by the page:
 
-       CodeRunner.ready()            -> Promise<{ ready:boolean, label:string }>
+       CodeRunner.ready()            -> Promise<{ ready, label }>
        CodeRunner.run(source, stdin) -> Promise<{ stdout, stderr, exitCode }>
 
-   Compilation happens on a backend, reached through this site's own Worker at
-   /api/academy/run. The browser never talks to the compiler directly, so the
-   backend address and any credential stay on the server and every run is rate
-   limited. Changing compiler means pointing the Worker somewhere else; nothing
-   in this file or the page changes.
+   clang and lld are fetched from this origin and run as WebAssembly in a
+   worker. Nothing is sent anywhere: a student's code never leaves their
+   machine, there is no per-run cost, and it keeps working offline once the
+   toolchain has been cached.
+
+   The first run is slow — the clang bundle is 21.5MB and decompresses to
+   about 110MB — so progress is reported rather than leaving a dead button.
+   After that it is cached in IndexedDB and subsequent runs are quick.
    --------------------------------------------------------------------------- */
 
 window.CodeRunner = (function () {
-  let state = null;
+  const SRC = "/home/user/main.cpp";
+  const EXE = "/home/user/a.out";
 
-  // Cheap checks for the mistakes the COS1511 papers are full of. These run
-  // before the code is sent, so an obvious slip is caught without waiting on
-  // the network. They never claim a program is correct, only that something
-  // looks wrong.
+  let emPromise = null;
+  let onProgress = () => {};
+
+  async function boot() {
+    onProgress("Starting the compiler…");
+    const { createEmception } = await import("/academy/vendor/emception.bundle.js");
+    const em = await createEmception({
+      manifestUrl: "/academy/cdn/manifest.json",
+      tty: "none",
+    });
+    return em;
+  }
+
+  function emception() {
+    // Booted once per page and reused. A failure clears it so the next Run
+    // tries again rather than being stuck forever.
+    if (!emPromise) {
+      emPromise = boot().catch((err) => {
+        emPromise = null;
+        throw err;
+      });
+    }
+    return emPromise;
+  }
+
+  // Cheap checks for the mistakes the COS1511 papers are full of. Run before
+  // the compiler so an obvious slip is caught in milliseconds. These never
+  // claim a program is correct, only that something looks wrong.
   function lint(source) {
     const notes = [];
-    const lines = source.split("\n");
-
     const opens = (source.match(/\{/g) || []).length;
     const closes = (source.match(/\}/g) || []).length;
-    if (opens !== closes) {
-      notes.push(`Braces do not balance: ${opens} opening, ${closes} closing.`);
-    }
-
-    const pOpen = (source.match(/\(/g) || []).length;
-    const pClose = (source.match(/\)/g) || []).length;
-    if (pOpen !== pClose) {
-      notes.push(`Brackets do not balance: ${pOpen} opening, ${pClose} closing.`);
-    }
+    if (opens !== closes) notes.push(`Braces do not balance: ${opens} opening, ${closes} closing.`);
 
     if (/\bcout\b|\bcin\b/.test(source) && !/#include\s*<iostream>/.test(source)) {
       notes.push("Uses cout or cin but does not #include <iostream>.");
     }
-    if (/\bstring\b/.test(source) && !/#include\s*<string>/.test(source)) {
-      notes.push("Uses string but does not #include <string>.");
-    }
     if (/\bsetprecision\b/.test(source) && !/#include\s*<iomanip>/.test(source)) {
       notes.push("Uses setprecision but does not #include <iomanip>.");
     }
-    if (
-      /\b(cout|cin|string|endl)\b/.test(source) &&
-      !/using\s+namespace\s+std\s*;/.test(source) &&
-      !/std::/.test(source)
-    ) {
-      notes.push("No 'using namespace std;' and no std:: prefixes.");
-    }
-    if (!/\bint\s+main\s*\(/.test(source)) {
-      notes.push("No int main() function.");
-    }
-
-    lines.forEach((line, i) => {
-      if (/\bif\s*\(\s*[A-Za-z_]\w*\s*=\s*[^=]/.test(line)) {
-        notes.push(`Line ${i + 1}: 'if (x = ...)' assigns instead of comparing. Did you mean '=='?`);
-      }
-    });
-
+    if (!/\bint\s+main\s*\(/.test(source)) notes.push("No int main() function.");
     return notes;
   }
 
-  async function probe() {
-    try {
-      const res = await fetch("/api/academy/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "", stdin: "" }),
-      });
-      // 400 means it got as far as checking the code, so a backend is wired up.
-      if (res.status === 400) return { ready: true, label: "Compiler ready" };
-      if (res.status === 503) return { ready: false, label: "Compiler not configured" };
-      return { ready: true, label: "Compiler ready" };
-    } catch (e) {
-      return { ready: false, label: "Compiler unreachable" };
-    }
-  }
-
   return {
-    name: "worker-backed",
+    name: "in-browser clang",
+
+    // The page shows this while the toolchain downloads on first use.
+    setProgressHandler(fn) {
+      onProgress = typeof fn === "function" ? fn : () => {};
+    },
 
     ready() {
-      if (!state) state = probe();
-      return state;
+      return Promise.resolve({ ready: true, label: "Compiler ready" });
+    },
+
+    // True once the toolchain has been fetched and cached on this device.
+    isPrepared() {
+      try { return localStorage.getItem("cos1511:toolchain") === "ready"; }
+      catch (e) { return false; }
+    },
+
+    /* Fetches and caches everything a lesson will need, so the download
+       happens deliberately rather than in the middle of someone's first
+       exercise. Compiling a tiny program is the surest way to warm it:
+       it pulls clang, the linker, the headers and the standard library,
+       which is the whole set. */
+    async prepare(progress) {
+      const say = typeof progress === "function" ? progress : () => {};
+
+      say("Starting the compiler…");
+      const em = await emception();
+
+      say("Fetching clang — this is the big one, about 100MB…");
+      await em.writeFile(SRC, '#include <iostream>\nint main(){ std::cout << "ready"; return 0; }\n');
+      const compiled = await em.run("clang++", [SRC, "-o", EXE]);
+      if (compiled.exitCode !== 0) {
+        throw new Error(String(compiled.stderr || "the compiler could not build a test program"));
+      }
+
+      say("Checking it runs…");
+      const ran = await em.run(EXE, [], { stdin: "" });
+      if (!String(ran.stdout || "").includes("ready")) {
+        throw new Error("the test program compiled but did not run as expected");
+      }
+
+      try { localStorage.setItem("cos1511:toolchain", "ready"); } catch (e) {}
+      return true;
     },
 
     async run(source, stdin) {
       const notes = lint(source);
+      let em;
 
-      let res;
       try {
-        res = await fetch("/api/academy/run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source, stdin: stdin || "" }),
-        });
-      } catch (e) {
+        em = await emception();
+      } catch (err) {
         return {
           stdout: "",
-          stderr: "Could not reach the compiler. Check your connection and try again.",
+          stderr:
+            "The compiler could not start.\n\n" +
+            String(err && err.message ? err.message : err) +
+            "\n\nThis needs a computer rather than a phone, and about 100MB " +
+            "of download the first time.",
           exitCode: 1,
         };
       }
 
-      const data = await res.json().catch(() => ({}));
+      try {
+        await em.writeFile(SRC, source);
 
-      if (!res.ok) {
-        const prefix = notes.length
-          ? "Before it even compiles, these look wrong:\n\n" +
-            notes.map((n) => "  • " + n).join("\n") +
-            "\n\n"
-          : "";
+        onProgress("Compiling…");
+        const compiled = await em.run("clang++", [SRC, "-o", EXE]);
+
+        if (compiled.exitCode !== 0) {
+          const extra = notes.length
+            ? "\n\nAlso worth checking:\n" + notes.map((n) => "  • " + n).join("\n")
+            : "";
+          return {
+            stdout: "",
+            stderr: String(compiled.stderr || "Compilation failed.") + extra,
+            exitCode: compiled.exitCode || 1,
+          };
+        }
+
+        onProgress("Running…");
+        const ran = await em.run(EXE, [], { stdin: stdin || "" });
+
+        return {
+          stdout: String(ran.stdout || ""),
+          stderr: String(ran.stderr || ""),
+          exitCode: typeof ran.exitCode === "number" ? ran.exitCode : 0,
+        };
+      } catch (err) {
         return {
           stdout: "",
-          stderr: prefix + (data.error || "The compiler did not run that."),
+          stderr: "The compiler stopped unexpectedly:\n" + String(err && err.message ? err.message : err),
           exitCode: 1,
         };
       }
-
-      return {
-        stdout: data.stdout || "",
-        stderr: data.stderr || "",
-        exitCode: typeof data.exitCode === "number" ? data.exitCode : 0,
-      };
     },
   };
 })();

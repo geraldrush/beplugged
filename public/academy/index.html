@@ -117,6 +117,8 @@
       border-radius:6px;font-size:13.4px;line-height:1.55;color:#5a3a30;
     }
     .done-btn{margin:4px 0 8px;}
+    .setup-btn{margin:6px 0 10px;height:40px;font-size:14px;}
+    .ex.setup-item b{color:var(--brand);}
     .q .label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
       color:var(--ink-400);margin:12px 0 5px;}
 
@@ -370,6 +372,37 @@
           wrap.appendChild(tb);
         }
 
+        if (ex.setup) {
+          var prep = document.createElement("button");
+          prep.className = "btn run setup-btn";
+          var already = CodeRunner.isPrepared && CodeRunner.isPrepared();
+          prep.textContent = already ? "\u2713 Compiler ready \u2014 download again" : "Download the compiler";
+          prep.addEventListener("click", async function () {
+            prep.disabled = true;
+            var t0 = Date.now();
+            try {
+              await CodeRunner.prepare(function (msg) {
+                prep.textContent = msg;
+                statusEl.textContent = msg;
+                say(msg + "\n\nLeave this tab open. You can read Lesson 1 while it downloads.");
+              });
+              var secs = Math.round((Date.now() - t0) / 1000);
+              prep.textContent = "\u2713 Compiler ready";
+              statusEl.textContent = "Compiler ready";
+              say("Ready in " + secs + " seconds.\n\nThe compiler is now stored on this device, so it will start\ninstantly from here on and works with no connection.\n\nOpen Lesson 1 and write your first program.", "ok");
+            } catch (err) {
+              prep.textContent = "Try again";
+              statusEl.textContent = "Setup failed";
+              say("Setup did not finish:\n\n" + (err && err.message ? err.message : err) +
+                  "\n\nA computer works better than a phone for this, and wifi better than mobile data.", "err");
+            }
+            prep.disabled = false;
+          });
+          wrap.appendChild(prep);
+          q.appendChild(wrap);
+          return;
+        }
+
         // Progress is the student's own claim, not a mark. It only tracks
         // where they got to.
         var done = document.createElement("button");
@@ -417,6 +450,7 @@
           lesson: l.lesson,
           title: l.title,
           pending: !!l.pending,
+          setup: !!l.setup,
           teach: l.teach,
           task: l.task,
           starter: l.starter || "",
@@ -507,6 +541,12 @@
         say("Compiling...");
 
         try {
+          if (CodeRunner.setProgressHandler) {
+            CodeRunner.setProgressHandler(function (msg) {
+              statusEl.textContent = msg;
+              say(msg + "\n\nThe first run downloads the compiler (about 100MB) and is slow.\nAfter that it is cached and starts quickly.");
+            });
+          }
           var result = await CodeRunner.run(getCode(), document.getElementById("stdin").value);
           outEl.innerHTML = "";
 

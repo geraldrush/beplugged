@@ -8,6 +8,32 @@
    pending, so the path ahead is visible rather than hidden. */
 
 const CURRICULUM = [
+  /* ================= SETUP ================= */
+  {
+    id: "setup",
+    part: "Start here",
+    title: "Set up the compiler",
+    setup: true,
+    teach: [
+      { type: "p", text: "This page runs a real C++ compiler inside your browser. Nothing is sent to a server: your code is compiled on your own machine, which means it keeps working offline and costs nothing to use." },
+      { type: "p", text: "The trade is that the compiler has to be downloaded once, and it is not small." },
+      { type: "list", items: [
+        "About 100MB, downloaded once and then kept on this device",
+        "Use a computer if you can, and wifi rather than mobile data",
+        "It takes a few minutes on a normal connection",
+        "After this, everything is instant and works with no connection at all",
+      ] },
+      { type: "note", text: "Do this once, now, on wifi. If you wait and press Run in the middle of a lesson, you will be sitting through the download then instead." },
+      { type: "p", text: "Press the button below and leave the tab open. You can read Lesson 1 while it works." },
+    ],
+    starter:
+`// Nothing to write here yet.
+//
+// Press "Download the compiler" on the right.
+// When it finishes, open Lesson 1 and start writing C++.
+`,
+  },
+
   /* ================= PART I ================= */
   {
     id: "l1-first",
