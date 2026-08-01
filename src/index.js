@@ -228,6 +228,10 @@ export default {
         return await handleLogin(request, env);
       }
 
+      if (path === "/api/academy/run" && method === "POST") {
+        return await handleAcademyRun(request, env);
+      }
+
       if (path === "/api/auth/guest" && method === "POST") {
         return await handleGuestLogin(request, env);
       }
@@ -2906,6 +2910,107 @@ function handleDemoRequest(path, method) {
   // Anything not fixtured returns an empty list rather than falling through
   // to the real handlers, so no guest request can reach the database.
   return json(match ? match[1]() : []);
+}
+
+/* ===================================================================
+   Compiling and running student C++.
+   The Worker never compiles anything itself; it forwards to whichever
+   execution backend is configured and normalises the answer. That keeps
+   the backend a deployment decision rather than a code change, and means
+   the browser never talks to it directly, so the address and any key stay
+   on the server and every run can be rate limited.
+
+   Set ACADEMY_EXEC_URL to a Piston-compatible /execute endpoint, whether
+   that is a Cloudflare Container, a self-hosted Piston, or a managed one.
+   Optionally set ACADEMY_EXEC_TOKEN if the backend needs a bearer token.
+   =================================================================== */
+
+const ACADEMY_MAX_SOURCE = 60000;
+const ACADEMY_MAX_STDIN = 10000;
+
+async function handleAcademyRun(request, env) {
+  // Unauthenticated and it costs real compute, so throttle before any work.
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `run:${clientIp}` });
+    if (!success) {
+      return json(
+        { error: "You are running code very quickly. Give it a few seconds." },
+        { status: 429 },
+      );
+    }
+  }
+
+  if (!env.ACADEMY_EXEC_URL) {
+    return json(
+      {
+        error:
+          "No compiler is configured yet. Set ACADEMY_EXEC_URL on the Worker to a " +
+          "Piston-compatible execute endpoint and this will start working.",
+        configured: false,
+      },
+      { status: 503 },
+    );
+  }
+
+  const body = await parseRequestJson(request);
+  const source = String(body?.source || "");
+  const stdin = String(body?.stdin || "");
+
+  if (!source.trim()) {
+    return json({ error: "There is no code to run." }, { status: 400 });
+  }
+  if (source.length > ACADEMY_MAX_SOURCE || stdin.length > ACADEMY_MAX_STDIN) {
+    return json({ error: "That program is larger than this page accepts." }, { status: 413 });
+  }
+
+  const headers = { "Content-Type": "application/json" };
+  if (env.ACADEMY_EXEC_TOKEN) {
+    headers.Authorization = `Bearer ${env.ACADEMY_EXEC_TOKEN}`;
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch(env.ACADEMY_EXEC_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        language: "c++",
+        version: env.ACADEMY_EXEC_VERSION || "10.2.0",
+        files: [{ name: "main.cpp", content: source }],
+        stdin,
+        compile_timeout: 10000,
+        run_timeout: 5000,
+      }),
+    });
+  } catch (err) {
+    console.error("academy exec unreachable", err);
+    return json({ error: "The compiler service did not respond." }, { status: 502 });
+  }
+
+  if (!upstream.ok) {
+    const detail = (await upstream.text()).slice(0, 300);
+    console.error(JSON.stringify({ message: "academy_exec_failed", status: upstream.status, detail }));
+    return json({ error: "The compiler service refused that request." }, { status: 502 });
+  }
+
+  const result = await upstream.json().catch(() => null);
+  if (!result) {
+    return json({ error: "The compiler service sent something unreadable." }, { status: 502 });
+  }
+
+  // Piston reports compilation and execution separately. A student cares
+  // about compiler errors first, since nothing ran if those exist.
+  const compile = result.compile || {};
+  const run = result.run || {};
+  const compileErr = String(compile.stderr || "").trim();
+
+  return json({
+    stdout: String(run.stdout || ""),
+    stderr: compileErr || String(run.stderr || ""),
+    exitCode: typeof run.code === "number" ? run.code : compileErr ? 1 : 0,
+    compiled: !compileErr,
+  });
 }
 
 async function handleGuestLogin(request, env) {
