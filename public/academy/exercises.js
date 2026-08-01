@@ -244,8 +244,17 @@ int main() {
     source: "Oct/Nov 2025 · Q3.2",
     marks: 10,
     brief: [
-      { type: "p", text: "The program below has several errors: a missing include, an undeclared variable, a missing function header, missing semicolons and return values, and misplaced braces. Rewrite it with all the errors fixed." },
-      { type: "p", text: "Fix it in the editor and run it until it compiles and gives the right answer. A number is prime when nothing between 2 and n/2 divides into it exactly." },
+      { type: "p", text: "The code below is reproduced from the paper exactly as printed, mistakes and all. It will not compile. Rewrite it with every error fixed." },
+      { type: "p", text: "There are six kinds of problem in it:" },
+      { type: "list", items: [
+        "cout and cin are used, but there is no using namespace std; and no std:: prefixes",
+        "a variable is read into that was never declared",
+        "the prime function has a body but no function header above it",
+        "three statements are missing their semicolon",
+        "one return has no value to return",
+        "a closing brace is in the wrong place, so main ends too early",
+      ] },
+      { type: "p", text: "A number is prime when nothing between 2 and n/2 divides into it exactly. Note what prime() returns in each case, and read the if in main() carefully before deciding which value means what." },
     ],
     sampleInput: "7\n",
     starter:
