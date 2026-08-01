@@ -2944,27 +2944,49 @@ async function handleSplitAsset(request, env, path, parts) {
   }
 
   const url = new URL(request.url);
-  const responses = [];
+
+  // Confirm every part exists before promising a body, so a missing half is a
+  // clean 404 rather than a truncated file the caller cannot tell is broken.
+  const partUrls = [];
   for (let i = 0; i < parts; i += 1) {
     const partUrl = new URL(`${path}.part${i}`, url.origin);
-    const res = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
-    if (!res.ok) {
+    const head = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
+    if (!head.ok) {
       console.error(JSON.stringify({ message: "split_asset_missing", part: `${path}.part${i}` }));
       return new Response("Not found", { status: 404 });
     }
-    responses.push(res);
+    // The body is not consumed here; it is refetched when its turn comes so
+    // no response sits open while an earlier part streams.
+    await head.body.cancel();
+    partUrls.push(partUrl);
   }
 
   const { readable, writable } = new TransformStream();
+
   (async () => {
+    // An explicit writer, one part at a time. Piping several bodies into a
+    // single writable silently dropped bytes: the file came back short, which
+    // is worse than failing because the truncation only surfaced much later
+    // as a corrupt archive.
+    const writer = writable.getWriter();
+    let written = 0;
     try {
-      for (const res of responses) {
-        await res.body.pipeTo(writable, { preventClose: true });
+      for (const partUrl of partUrls) {
+        const res = await env.ASSETS.fetch(new Request(partUrl, { method: "GET" }));
+        if (!res.ok || !res.body) throw new Error(`part unavailable: ${partUrl.pathname}`);
+        const reader = res.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+          written += value.byteLength;
+        }
       }
-      await writable.close();
+      await writer.close();
+      console.log(JSON.stringify({ message: "split_asset_served", path, bytes: written }));
     } catch (err) {
       console.error("split asset stream failed", err);
-      try { await writable.abort(err); } catch {}
+      try { await writer.abort(err); } catch {}
     }
   })();
 
