@@ -283,6 +283,29 @@
         color: #4a5568;
       }
 
+      .tour-bubble .tour-items {
+        margin: 0 0 0.7rem;
+        padding: 0;
+        list-style: none;
+        max-height: 46vh;
+        overflow-y: auto;
+      }
+
+      .tour-bubble .tour-items li {
+        padding: 0.28rem 0;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        color: #4a5568;
+        border-bottom: 1px solid #f0f2f5;
+      }
+
+      .tour-bubble .tour-items li:last-child { border-bottom: none; }
+
+      .tour-bubble .tour-items b {
+        color: var(--dark);
+        font-weight: 650;
+      }
+
       .tour-bubble .tour-use {
         margin: 0 0 0.75rem;
         padding: 0.5rem 0.65rem;
@@ -1732,99 +1755,99 @@
       <!-- Sidebar -->
       <div class="sidebar" style="width: 250px">
         <nav class="nav flex-column">
-          <div class="nav-section-title">Home</div>
-          <button class="nav-link active" onclick="showTab('dashboard')">
+          <div class="nav-section-title" data-tour-group="home">Home</div>
+          <button class="nav-link active" data-tour-group="home" onclick="showTab('dashboard')">
             <i class="fas fa-th-large"></i> Dashboard
           </button>
-          <button class="nav-link" onclick="showTab('map')">
+          <button class="nav-link" data-tour-group="home" onclick="showTab('map')">
             <i class="fas fa-sitemap"></i> Enterprise Map
           </button>
-          <div class="nav-section-title">Administration</div>
-          <button class="nav-link" onclick="showTab('company')">
+          <div class="nav-section-title" data-tour-group="administration">Administration</div>
+          <button class="nav-link" data-tour-group="administration" onclick="showTab('company')">
             <i class="fas fa-building"></i> Company
           </button>
-          <button class="nav-link" onclick="showTab('catalogue')">
+          <button class="nav-link" data-tour-group="administration" onclick="showTab('catalogue')">
             <i class="fas fa-store"></i> Services &amp; Courses
           </button>
-          <button class="nav-link" onclick="showTab('team')">
+          <button class="nav-link" data-tour-group="administration" onclick="showTab('team')">
             <i class="fas fa-user-shield"></i> Team
           </button>
-          <button class="nav-link" onclick="showBusinessModule('branches')">
+          <button class="nav-link" data-tour-group="administration" onclick="showBusinessModule('branches')">
             <i class="fas fa-code-branch"></i> Branches
           </button>
-          <button class="nav-link" onclick="showBusinessModule('departments')">
+          <button class="nav-link" data-tour-group="administration" onclick="showBusinessModule('departments')">
             <i class="fas fa-layer-group"></i> Departments
           </button>
-          <button class="nav-link" onclick="showTab('system-logs')">
+          <button class="nav-link" data-tour-group="administration" onclick="showTab('system-logs')">
             <i class="fas fa-clock-rotate-left"></i> System Logs
           </button>
-          <div class="nav-section-title">Sales</div>
-          <button class="nav-link" onclick="showTab('leads')">
+          <div class="nav-section-title" data-tour-group="sales">Sales</div>
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('leads')">
             <i class="fas fa-bullseye"></i> Leads
           </button>
-          <button class="nav-link" onclick="showTab('crm')">
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('crm')">
             <i class="fas fa-address-book"></i> CRM
           </button>
-          <button class="nav-link" onclick="showTab('clients')">
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('clients')">
             <i class="fas fa-users"></i> Clients
           </button>
-          <button class="nav-link" onclick="showTab('requirements')">
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('requirements')">
             <i class="fas fa-clipboard-list"></i> Requirements
           </button>
-          <button class="nav-link" onclick="showTab('agreements')">
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('agreements')">
             <i class="fas fa-file-signature"></i> Agreements
           </button>
-          <button class="nav-link" onclick="showTab('quotes')">
+          <button class="nav-link" data-tour-group="sales" onclick="showTab('quotes')">
             <i class="fas fa-quote-left"></i> Quotes
           </button>
-          <div class="nav-section-title">Delivery</div>
-          <button class="nav-link" onclick="showTab('projects')">
+          <div class="nav-section-title" data-tour-group="delivery">Delivery</div>
+          <button class="nav-link" data-tour-group="delivery" onclick="showTab('projects')">
             <i class="fas fa-diagram-project"></i> Projects
           </button>
-          <button class="nav-link" onclick="showTab('project-risks')">
+          <button class="nav-link" data-tour-group="delivery" onclick="showTab('project-risks')">
             <i class="fas fa-triangle-exclamation"></i> Project Risks
           </button>
-          <button class="nav-link" onclick="showTab('documents')">
+          <button class="nav-link" data-tour-group="delivery" onclick="showTab('documents')">
             <i class="fas fa-folder-open"></i> Documents
           </button>
-          <div class="nav-section-title">Quality & Security</div>
-          <button class="nav-link" onclick="showTab('policies')">
+          <div class="nav-section-title" data-tour-group="quality-security">Quality & Security</div>
+          <button class="nav-link" data-tour-group="quality-security" onclick="showTab('policies')">
             <i class="fas fa-file-signature"></i> Policies
           </button>
-          <button class="nav-link" onclick="showTab('sops')">
+          <button class="nav-link" data-tour-group="quality-security" onclick="showTab('sops')">
             <i class="fas fa-list-check"></i> SOPs
           </button>
-          <button class="nav-link" onclick="showTab('quality')">
+          <button class="nav-link" data-tour-group="quality-security" onclick="showTab('quality')">
             <i class="fas fa-clipboard-check"></i> Quality
           </button>
-          <button class="nav-link" onclick="showTab('security')">
+          <button class="nav-link" data-tour-group="quality-security" onclick="showTab('security')">
             <i class="fas fa-shield-halved"></i> Security
           </button>
-          <div class="nav-section-title">Finance</div>
-          <button class="nav-link" onclick="showTab('invoices')">
+          <div class="nav-section-title" data-tour-group="finance">Finance</div>
+          <button class="nav-link" data-tour-group="finance" onclick="showTab('invoices')">
             <i class="fas fa-file-invoice"></i> Invoices
           </button>
-          <button class="nav-link" onclick="showTab('receipts')">
+          <button class="nav-link" data-tour-group="finance" onclick="showTab('receipts')">
             <i class="fas fa-receipt"></i> Receipts
           </button>
-          <button class="nav-link" onclick="showBusinessModule('expenses')">
+          <button class="nav-link" data-tour-group="finance" onclick="showBusinessModule('expenses')">
             <i class="fas fa-wallet"></i> Expenses
           </button>
-          <button class="nav-link" onclick="showBusinessModule('suppliers')">
+          <button class="nav-link" data-tour-group="finance" onclick="showBusinessModule('suppliers')">
             <i class="fas fa-truck-field"></i> Suppliers
           </button>
-          <div class="nav-section-title">Growth</div>
-          <button class="nav-link" onclick="showBusinessModule('training')">
+          <div class="nav-section-title" data-tour-group="growth">Growth</div>
+          <button class="nav-link" data-tour-group="growth" onclick="showBusinessModule('training')">
             <i class="fas fa-graduation-cap"></i> Training
           </button>
-          <button class="nav-link" onclick="showBusinessModule('supportTickets')">
+          <button class="nav-link" data-tour-group="growth" onclick="showBusinessModule('supportTickets')">
             <i class="fas fa-headset"></i> Support Tickets
           </button>
-          <button class="nav-link" onclick="showBusinessModule('tenders')">
+          <button class="nav-link" data-tour-group="growth" onclick="showBusinessModule('tenders')">
             <i class="fas fa-file-contract"></i> Tenders
           </button>
-          <div class="nav-section-title">Session</div>
-          <button class="nav-link" onclick="logout()">
+          <div class="nav-section-title" data-tour-group="session">Session</div>
+          <button class="nav-link" data-tour-group="session" onclick="logout()">
             <i class="fas fa-sign-out-alt"></i> Logout
           </button>
         </nav>
@@ -11182,95 +11205,111 @@
 
       const TOUR_STEPS = [
         {
-          tab: "dashboard",
-          target: null,
           title: "This is your business, on one screen",
-          body: "The admin holds the whole company: the work you are chasing, the work you are doing, the money in and out, and the records that prove how you operate. Everything lives in one database, so a lead becomes a quote, a quote becomes a project, and a project becomes an invoice without retyping anything.",
-          use: "Start here each morning. If nothing is amber or red, nothing needs you today.",
+          body: "The admin holds the whole company: the work you are chasing, the work you are doing, the money in and out, and the records that prove how you operate. This tour walks the sidebar and explains what every item is for.",
+          use: "Use the arrow keys to move through, or Escape to leave at any point.",
+        },
+        {
+          target: ".sidebar",
+          title: "The sidebar, grouped by what you are doing",
+          body: "Twenty-nine sections in eight groups. The order follows the life of a job: find the work, agree it, deliver it, prove it was done properly, bill it, then grow.",
+          use: "You will live in Sales and Finance. Most of the rest you touch only when a client or an auditor asks.",
+        },
+        {
+          target: '[data-tour-group="home"]',
+          title: "Home",
+          items: [
+            ["Dashboard", "The daily view: money, what needs doing, and the shape of the pipeline."],
+            ["Enterprise Map", "A single page listing every module in the system and whether it has its own screen or lives in the shared register. Use it when you cannot remember where something is kept."],
+          ],
+          use: "Open the Enterprise Map once. It is the fastest way to see everything this system can hold.",
+        },
+        {
+          target: '[data-tour-group="administration"]',
+          title: "Administration — your own company",
+          items: [
+            ["Company", "Your registered details, address, VAT and banking. These fill in automatically on every invoice, quote and agreement, so get them right once."],
+            ["Services & Courses", "The catalogue that drives the public website. Publish a service or course here and it appears on beplugged.co.za with its own page, no deploy needed."],
+            ["Team", "The people who work for you. Assigning an owner to a project or document pulls from this list."],
+            ["Branches", "Physical or regional offices, if you operate from more than one."],
+            ["Departments", "Internal groupings, so costs and staff can be reported by area."],
+            ["System Logs", "An audit trail of who changed what and when. Read-only."],
+          ],
+          use: "Fill in Company first. Everything downstream depends on it.",
+        },
+        {
+          target: '[data-tour-group="sales"]',
+          title: "Sales — from stranger to signed",
+          items: [
+            ["Leads", "Anyone who might buy. Capture every enquiry here, even vague ones."],
+            ["CRM", "The contacts and the conversations. Log calls, meetings and follow-ups against a lead or client so nothing depends on your memory."],
+            ["Clients", "A lead who bought. Everything after this hangs off the client record."],
+            ["Requirements", "What the client actually asked for, written down before anything is priced. Your defence against scope creep."],
+            ["Agreements", "The signed terms. Can be sent for signature and tracked."],
+            ["Quotes", "Priced work sent to the client. An accepted quote becomes an invoice without retyping it."],
+          ],
+          use: "Always quote before you invoice. An invoice with no quote behind it is an argument waiting to happen.",
+        },
+        {
+          target: '[data-tour-group="delivery"]',
+          title: "Delivery — doing the work",
+          items: [
+            ["Projects", "The job itself, carrying milestones, tasks, issues and change requests. Clients can be given a progress link so they can check status without emailing you."],
+            ["Project Risks", "What might go wrong, and what you are doing about it. Worth keeping for anything large or fixed-price."],
+            ["Documents", "A controlled register of company paperwork: registration, tax clearance, BEE certificate, insurance, CVs, method statements. Each has an owner, a version, an approval status and a review date so nothing quietly expires. You can bundle the approved ones into a single pack to send when a client or tender asks for your documentation."],
+          ],
+          use: "Log change requests rather than absorbing them. That is the difference between a profitable project and a busy one.",
+        },
+        {
+          target: '[data-tour-group="quality-security"]',
+          title: "Quality & Security — proving how you work",
+          items: [
+            ["Policies", "The rules you say you operate by."],
+            ["SOPs", "Step by step procedures for work that must be done the same way every time."],
+            ["Quality", "Non-conformances and corrective actions: what went wrong and what you changed."],
+            ["Security", "Risks to data and systems, and how each was mitigated."],
+          ],
+          use: "This mostly matters when a corporate or government client audits you before awarding work. Keeping it current beats reconstructing it under deadline.",
+        },
+        {
+          target: '[data-tour-group="finance"]',
+          title: "Finance — the money",
+          items: [
+            ["Invoices", "Bills sent to clients. Emailed from here and tracked as sent, viewed, partially paid or paid."],
+            ["Receipts", "Proof of payment, issued against money received."],
+            ["Expenses", "What you spend, so profit is real rather than guessed."],
+            ["Suppliers", "Who you buy from, and what you owe them."],
+          ],
+          use: "Outstanding on the dashboard is driven from here. If that number looks wrong, the answer is in Invoices.",
+        },
+        {
+          target: '[data-tour-group="growth"]',
+          title: "Growth — work that is not a project",
+          items: [
+            ["Training", "Course delivery records: who attended what, and when."],
+            ["Support Tickets", "Ongoing support requests from clients on a retainer."],
+            ["Tenders", "Bids you are preparing or have submitted, with their deadlines."],
+          ],
+          use: "Tenders is the one to keep honest. A missed closing date costs the whole opportunity.",
         },
         {
           tab: "dashboard",
           target: ".tile-grid",
-          title: "The money, first",
-          body: "Collected is cash actually received. Outstanding is money invoiced but not yet paid. Total invoiced is everything billed. Pending is the count of invoices still open.",
-          use: "These change colour only when there is something to act on. Amber on Outstanding means somebody owes you; at zero it goes green rather than staying amber.",
-        },
-        {
-          tab: "dashboard",
-          target: ".mini-grid",
-          title: "Everything else, at a glance",
-          body: "Counts across the rest of the system. Work in flight stays neutral no matter how busy. Queues waiting on someone go amber, and security risks are the only thing that turns red.",
-          use: "Click any of these to jump straight to that section rather than hunting in the sidebar.",
-        },
-        {
-          tab: "dashboard",
-          target: "#pipeline",
-          title: "How work moves through",
-          body: "The pipeline rail shows the shape of your business end to end: lead, quote, project, invoice, payment. Each stage carries its own count.",
-          use: "Use it to spot where work is piling up. Lots of quotes and few projects means you are quoting but not converting.",
+          title: "Back to the dashboard: the money tiles",
+          body: "Collected is cash actually received. Outstanding is invoiced but unpaid. Total invoiced is everything billed. Pending is the count of open invoices.",
+          use: "These colour themselves only when there is something to act on. Amber on Outstanding means somebody owes you; at zero it turns green instead of staying amber.",
         },
         {
           tab: "dashboard",
           target: "#next-actions",
           title: "What needs doing",
-          body: "The system's own to-do list, assembled from overdue invoices, follow-ups that are due, documents awaiting review and anything else with a date that has passed.",
-          use: "If you only look at one thing, look at this.",
+          body: "The system's own to-do list, built from overdue invoices, follow-ups that are due, documents awaiting review and anything else whose date has passed.",
+          use: "If you only look at one thing each morning, look at this, then at Outstanding.",
         },
         {
-          tab: "leads",
-          target: null,
-          title: "Sales: Leads, CRM, Clients",
-          body: "A lead is someone who might buy. Working it means logging contacts and activities in CRM. When they buy, they become a client and everything after that hangs off that client record.",
-          use: "Capture every enquiry as a lead, even the vague ones. The pipeline is only honest if everything is in it.",
-        },
-        {
-          tab: "requirements",
-          target: null,
-          title: "Requirements and Agreements",
-          body: "Requirements are what the client actually asked for, written down before anything is priced. Agreements are the signed terms.",
-          use: "This is your defence against scope creep. When someone says \"we agreed this was included\", the requirement record settles it.",
-        },
-        {
-          tab: "quotes",
-          target: null,
-          title: "Quotes to Invoices",
-          body: "A quote goes out, the client accepts, and it becomes an invoice. Invoices are sent by email, tracked as sent, viewed, partially paid or paid, and receipts are issued against payments.",
-          use: "Quote first, always. An invoice with no quote behind it is an argument waiting to happen.",
-        },
-        {
-          tab: "projects",
-          target: null,
-          title: "Delivery: Projects, Milestones, Risks",
-          body: "Once work is won, the project record carries milestones, tasks, issues, change requests and risks. Clients can be given a progress link so they can see where things stand without emailing you.",
-          use: "Log change requests rather than absorbing them. That is the difference between a profitable project and a busy one.",
-        },
-        {
-          tab: "documents",
-          target: null,
-          title: "Documents: your company paperwork",
-          body: "A controlled register of the documents that prove your company is real and well run: company registration, tax clearance, BEE certificate, insurance, CVs, method statements, policies. Each one carries an owner, a version, a status of draft, review, approved or archived, and a review date so nothing quietly expires.",
-          use: "When a client or a tender asks for your company documentation, you select the current approved documents and send them as one pack instead of digging through email attachments. That is exactly what this is for, and it is empty right now.",
-        },
-        {
-          tab: "policies",
-          target: null,
-          title: "Quality and Security",
-          body: "Policies and SOPs are how you say you work. Quality records log non-conformances and corrective actions. Security records track risks and how they were mitigated.",
-          use: "Mostly this matters when a corporate or government client audits you before awarding work. Keeping it current is far easier than reconstructing it under deadline.",
-        },
-        {
-          tab: "catalogue",
-          target: null,
-          title: "Catalogue: this drives the public website",
-          body: "Services, courses and training categories. Anything published here appears on beplugged.co.za automatically, gets its own page and web address, and is added to the sitemap for Google.",
-          use: "Add a course here and it is live on the site with no code change and no deploy. Set it to draft to work on it without publishing.",
-        },
-        {
-          tab: "dashboard",
-          target: null,
           title: "That is the tour",
           body: "Reopen it any time from the Tour button in the top bar. Nothing you clicked during the tour changed any data.",
-          use: "The quickest habit that pays off: check What needs doing, then Outstanding.",
+          use: "Empty sections are not broken, only unused. Documents and Leads are both empty right now.",
         },
       ];
 
@@ -11325,14 +11364,27 @@
           try { showTab(step.tab); } catch (_) {}
         }
 
-        const el = step.target ? document.querySelector(step.target) : null;
+        // A step can point at one element or at a set of them, which is how a
+        // whole sidebar group gets ringed as a single region.
+        const els = step.target ? [...document.querySelectorAll(step.target)] : [];
+        const el = els[0] || null;
         if (el && !keepScroll) {
           el.scrollIntoView({ block: "center", behavior: "instant" });
         }
 
-        const r = el
-          ? el.getBoundingClientRect()
-          : { top: 0, left: 0, width: 0, height: 0, bottom: 0, right: 0 };
+        const r = els.length
+          ? els.reduce((acc, node) => {
+              const b = node.getBoundingClientRect();
+              return {
+                top: Math.min(acc.top, b.top),
+                left: Math.min(acc.left, b.left),
+                bottom: Math.max(acc.bottom, b.bottom),
+                right: Math.max(acc.right, b.right),
+              };
+            }, { top: Infinity, left: Infinity, bottom: -Infinity, right: -Infinity })
+          : { top: 0, left: 0, bottom: 0, right: 0 };
+        r.width = r.right - r.left;
+        r.height = r.bottom - r.top;
         const pad = 6;
         const vw = document.documentElement.clientWidth;
         const vh = document.documentElement.clientHeight;
@@ -11374,6 +11426,7 @@
         bubble.className = "tour-bubble";
         bubble.innerHTML =
           "<h4></h4><p></p>" +
+          '<ul class="tour-items"></ul>' +
           '<div class="tour-use"></div>' +
           '<div class="tour-foot">' +
           '<button type="button" class="tour-skip">Skip tour</button>' +
@@ -11383,7 +11436,26 @@
           "</div>";
         // Text set as textContent so copy can never be read as markup.
         bubble.querySelector("h4").textContent = step.title;
-        bubble.querySelector("p").textContent = step.body;
+
+        const para = bubble.querySelector("p");
+        if (step.body) para.textContent = step.body;
+        else para.remove();
+
+        // Sidebar groups are explained item by item.
+        const list = bubble.querySelector(".tour-items");
+        if (step.items) {
+          step.items.forEach(([label, meaning]) => {
+            const li = document.createElement("li");
+            const b = document.createElement("b");
+            b.textContent = label;
+            li.appendChild(b);
+            li.appendChild(document.createTextNode(" — " + meaning));
+            list.appendChild(li);
+          });
+        } else {
+          list.remove();
+        }
+
         bubble.querySelector(".tour-use").textContent = step.use;
         bubble.querySelector(".tour-step").textContent =
           tourIndex + 1 + " of " + TOUR_STEPS.length;
@@ -11403,21 +11475,42 @@
         // when the step highlights nothing.
         const bw = bubble.offsetWidth;
         const bh = bubble.offsetHeight;
+        const gap = 14;
+        const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
         let top;
         let left;
+
         if (!el) {
           top = Math.max(16, (vh - bh) / 2);
           left = Math.max(16, (vw - bw) / 2);
-        } else if (r.bottom + 14 + bh < vh) {
-          top = r.bottom + 14;
-          left = Math.min(Math.max(16, r.left), vw - bw - 16);
-        } else if (r.top - 14 - bh > 0) {
-          top = r.top - 14 - bh;
-          left = Math.min(Math.max(16, r.left), vw - bw - 16);
         } else {
-          top = Math.max(16, (vh - bh) / 2);
-          left = Math.min(Math.max(16, r.left), vw - bw - 16);
+          // Try each side in turn and take the first that both fits on screen
+          // and does not sit on top of what is being pointed at. A tall
+          // sidebar group has no room below it, so side placement matters.
+          const candidates = [
+            { name: "right", left: r.right + gap, top: clamp(r.top, 16, Math.max(16, vh - bh - 16)) },
+            { name: "left", left: r.left - gap - bw, top: clamp(r.top, 16, Math.max(16, vh - bh - 16)) },
+            { name: "below", left: clamp(r.left, 16, Math.max(16, vw - bw - 16)), top: r.bottom + gap },
+            { name: "above", left: clamp(r.left, 16, Math.max(16, vw - bw - 16)), top: r.top - gap - bh },
+          ];
+
+          const fits = (c) =>
+            c.left >= 8 && c.top >= 8 && c.left + bw <= vw - 8 && c.top + bh <= vh - 8;
+          const clear = (c) =>
+            c.left > r.right || c.left + bw < r.left || c.top > r.bottom || c.top + bh < r.top;
+
+          const pick =
+            candidates.find((c) => fits(c) && clear(c)) ||
+            candidates.find((c) => fits(c)) || {
+              left: clamp(vw - bw - 16, 16, vw - bw - 16),
+              top: clamp((vh - bh) / 2, 16, vh - bh - 16),
+            };
+
+          top = pick.top;
+          left = pick.left;
         }
+
         bubble.style.top = top + "px";
         bubble.style.left = left + "px";
 
