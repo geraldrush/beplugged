@@ -214,8 +214,23 @@ window.CodeRunner = (function () {
      the tool name gives it something to consume. */
       const compiled = await em.run("em++", ["em++", SRC, "-o", EXE]);
       if (compiled.exitCode !== 0) {
+        // Python dies saying it cannot find its codecs. Ask the filesystem
+        // directly whether the encodings package is actually there, so we stop
+        // inferring it from a traceback.
+        let fsReport = "";
+        for (const dir of ["/usr/lib/python3.13", "/usr/lib/python3.13/encodings"]) {
+          try {
+            const entries = await em.listDir(dir);
+            const names = (entries || []).map((e) => (typeof e === "string" ? e : e && e.name)).filter(Boolean);
+            fsReport += `\n${dir}: ${names.length} entries` +
+              (names.length ? ` -> ${names.slice(0, 12).join(", ")}` : " (EMPTY)");
+          } catch (err) {
+            fsReport += `\n${dir}: FAILED (${err && err.message ? err.message : err})`;
+          }
+        }
         throw new Error(
           String(compiled.stderr || "the compiler could not build a test program") +
+            "\n\n--- is the stdlib actually there? ---" + fsReport +
             "\n\n--- what the toolchain did ---\n" + TRAIL.join("\n"),
         );
       }
