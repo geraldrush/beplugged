@@ -61,7 +61,8 @@ window.CodeRunner = (function () {
     for (const candidate of candidates) {
       tried.push(candidate);
       try {
-        const r = await em.run(candidate, [], { stdin: stdin || "" });
+        // Same argv convention as the compiler: lead with the program name.
+        const r = await em.run(candidate, [candidate], { stdin: stdin || "" });
         // "not found" means the artefact is not there; anything else is a
         // real result, including a program that legitimately printed nothing.
         const missing = /not found|no such file/i.test(String(r.stderr || ""));
@@ -205,7 +206,13 @@ window.CodeRunner = (function () {
 
       report({ phase: "Building a test program…", loaded: total, total });
       await em.writeFile(SRC, '#include <iostream>\nint main(){ std::cout << "ready"; return 0; }\n');
-      const compiled = await em.run("em++", [SRC, "-o", EXE]);
+  /* The runner replaces argv[0] with the tool it resolves rather than
+     prepending it, so the first argument passed here is swallowed. Passing the
+     source file first meant it never reached the compiler, and Python — which
+     locates its standard library from argv[0] — ended up treating main.cpp as
+     its own executable and could not find its encodings module. Leading with
+     the tool name gives it something to consume. */
+      const compiled = await em.run("em++", ["em++", SRC, "-o", EXE]);
       if (compiled.exitCode !== 0) {
         throw new Error(
           String(compiled.stderr || "the compiler could not build a test program") +
@@ -260,7 +267,7 @@ window.CodeRunner = (function () {
         await em.writeFile(SRC, source);
 
         onProgress("Compiling…");
-        const compiled = await em.run("em++", [SRC, "-o", EXE]);
+        const compiled = await em.run("em++", ["em++", SRC, "-o", EXE]);
 
         if (compiled.exitCode !== 0) {
           const extra = notes.length
