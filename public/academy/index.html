@@ -100,6 +100,23 @@
       border-radius:var(--radius);font-family:var(--mono);font-size:12px;line-height:1.5;
       overflow-x:auto;white-space:pre;
     }
+    .grp{
+      padding:9px 13px 5px;font-size:10.5px;font-weight:700;letter-spacing:.07em;
+      text-transform:uppercase;color:var(--ink-400);background:var(--surface-alt);
+      border-bottom:1px solid var(--line);position:sticky;top:0;z-index:1;
+    }
+    .ex.pending{opacity:.45;cursor:default;}
+    .ex.pending:hover{background:none;}
+    .ex .tick{float:right;color:var(--ok);font-weight:700;margin-top:-16px;}
+    .note-box{
+      margin:0 0 10px;padding:8px 11px;background:#fff8ec;border-left:3px solid var(--warn);
+      border-radius:0 5px 5px 0;font-size:13px;line-height:1.55;color:#6b4a12;
+    }
+    .task-box{
+      margin:0 0 12px;padding:10px 12px;background:#fff6f3;border:1px solid #f7d4c5;
+      border-radius:6px;font-size:13.4px;line-height:1.55;color:#5a3a30;
+    }
+    .done-btn{margin:4px 0 8px;}
     .q .label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
       color:var(--ink-400);margin:12px 0 5px;}
 
@@ -130,10 +147,17 @@
       border-bottom:1px solid var(--line);border-top:1px solid var(--line);
     }
     #stdin{
-      width:100%;min-height:74px;border:none;padding:10px 13px;resize:vertical;
-      font-family:var(--mono);font-size:12.5px;line-height:1.5;color:var(--ink-900);
+      flex:0 0 auto;width:100%;height:76px;border:none;padding:9px 15px;resize:none;
+      font-family:var(--mono);font-size:13px;line-height:1.55;
+      background:#16233a;color:#cfe0f5;
     }
-    #stdin:focus{outline:none;background:#fffdfa;}
+    #stdin::placeholder{color:#6d829e;}
+    #stdin:focus{outline:none;background:#1a2942;}
+    #stdin-label{
+      background:#0b1524;color:#8fa3bd;border-top:1px solid rgba(255,255,255,.08);
+      border-bottom:none;text-transform:none;letter-spacing:0;font-weight:500;
+      font-size:11.5px;padding:6px 15px;
+    }
     #stdout{
       flex:1 1 auto;margin:0;padding:13px 15px;overflow:auto;white-space:pre-wrap;
       word-break:break-word;font-family:var(--mono);font-size:13.5px;line-height:1.6;
@@ -142,6 +166,39 @@
     #stdout .err{color:#ff9c8a;}
     #stdout .note{color:#9fb0c6;}
     #stdout .ok{color:#7fd6a2;}
+
+    /* Walkthrough */
+    .tourx-veil{position:fixed;background:rgba(13,24,38,.66);z-index:5000;}
+    .tourx-ring{
+      position:fixed;z-index:5001;border:2px solid var(--brand);border-radius:6px;
+      box-shadow:0 0 0 4px rgba(240,80,35,.22);pointer-events:none;transition:all .2s ease;
+    }
+    .tourx-bubble{
+      position:fixed;z-index:5002;width:min(350px,calc(100vw - 28px));
+      background:#fff;border-radius:9px;box-shadow:0 20px 50px rgba(13,24,38,.4);
+      padding:16px 17px 13px;
+    }
+    .tourx-bubble h4{margin:0 0 6px;font-size:15.5px;font-weight:700;color:var(--ink-900);}
+    .tourx-bubble p{margin:0 0 9px;font-size:13.6px;line-height:1.58;color:var(--ink-500);}
+    .tourx-use{
+      margin:0 0 12px;padding:8px 10px;background:#fff6f3;border-left:3px solid var(--brand);
+      border-radius:0 5px 5px 0;font-size:12.8px;line-height:1.5;color:#5a3a30;
+    }
+    .tourx-foot{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
+      border-top:1px solid var(--line);padding-top:10px;
+    }
+    .tourx-step{font-size:11.5px;color:var(--ink-400);white-space:nowrap;}
+    .tourx-btns{display:flex;gap:6px;}
+    .tourx-btns button{
+      border:1px solid var(--line);background:#fff;color:var(--ink-700);border-radius:5px;
+      padding:5px 11px;font-family:inherit;font-size:12.6px;font-weight:600;cursor:pointer;
+    }
+    .tourx-btns .tourx-next{background:var(--brand);border-color:var(--brand);color:#fff;}
+    .tourx-skip{
+      border:none;background:none;padding:0;color:var(--ink-400);
+      font-family:inherit;font-size:12.4px;text-decoration:underline;cursor:pointer;
+    }
 
     .status{font-size:12px;color:var(--ink-400);margin-left:auto;}
     .spacer-sm{margin-left:auto;}
@@ -167,6 +224,7 @@
     <img src="/img/logo.png" alt="Beplugged Academy">
     <div class="title">COS1511 Practice <span>&middot; Introduction to Programming</span></div>
     <div class="spacer"></div>
+    <button type="button" class="btn small" id="guide-btn" style="background:transparent;border-color:rgba(255,255,255,.35);color:#fff;">Guide</button>
     <a href="/training/unisa-cos1511-tutorial-class">About this course</a>
   </div>
 
@@ -200,6 +258,8 @@
           <button class="btn small" id="expand-btn" title="Make the output taller">Expand</button>
         </div>
         <pre id="stdout"><span class="note">Press Run to compile and execute.</span></pre>
+        <div class="io-label" id="stdin-label">Keyboard input &mdash; type the lines your program will read, then Run</div>
+        <textarea id="stdin" spellcheck="false" placeholder="One value per line, in the order cin asks for them."></textarea>
       </section>
     </div>
 
@@ -209,15 +269,15 @@
     <section class="pane side">
       <div class="pane-head">Question</div>
       <div class="pane-body" id="question"></div>
-      <div class="io-label">Input (what you would type at the keyboard)</div>
-      <textarea id="stdin" spellcheck="false" placeholder="One value per line, as cin reads them."></textarea>
     </section>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+  <script src="/academy/curriculum.js"></script>
   <script src="/academy/exercises.js"></script>
   <script src="/academy/engine.js"></script>
+  <script src="/academy/tour.js"></script>
   <script>
     (function () {
       var editor = null;
@@ -257,19 +317,27 @@
         wrap.className = "q";
 
         var h = document.createElement("h3");
-        h.textContent = ex.title;
+        h.textContent = (ex.lesson ? "Lesson " + ex.lesson + ": " : "") + ex.title;
         wrap.appendChild(h);
 
-        var m = document.createElement("span");
-        m.className = "marks";
-        m.textContent = ex.source + (ex.marks ? " · " + ex.marks + " marks" : "");
-        wrap.appendChild(m);
+        if (ex.meta) {
+          var m = document.createElement("span");
+          m.className = "marks";
+          m.textContent = ex.meta;
+          wrap.appendChild(m);
+        }
 
-        ex.brief.forEach(function (block) {
+        // Lessons teach first; past papers only have the question.
+        (ex.teach || ex.brief || []).forEach(function (block) {
           if (block.type === "p") {
-            var p = document.createElement("p");
-            p.textContent = block.text;
-            wrap.appendChild(p);
+            var el = document.createElement("p");
+            el.textContent = block.text;
+            wrap.appendChild(el);
+          } else if (block.type === "note") {
+            var n = document.createElement("div");
+            n.className = "note-box";
+            n.textContent = block.text;
+            wrap.appendChild(n);
           } else if (block.type === "list") {
             var ul = document.createElement("ul");
             block.items.forEach(function (i) {
@@ -279,21 +347,50 @@
             });
             wrap.appendChild(ul);
           } else if (block.type === "code") {
-            var lbl = document.createElement("div");
-            lbl.className = "label";
-            lbl.textContent = block.label || "Example";
-            wrap.appendChild(lbl);
+            if (block.label) {
+              var lbl = document.createElement("div");
+              lbl.className = "label";
+              lbl.textContent = block.label;
+              wrap.appendChild(lbl);
+            }
             var pre = document.createElement("pre");
             pre.textContent = block.text;
             wrap.appendChild(pre);
           }
         });
 
+        if (ex.task) {
+          var tl = document.createElement("div");
+          tl.className = "label";
+          tl.textContent = "Now you try";
+          wrap.appendChild(tl);
+          var tb = document.createElement("div");
+          tb.className = "task-box";
+          tb.textContent = ex.task;
+          wrap.appendChild(tb);
+        }
+
+        // Progress is the student's own claim, not a mark. It only tracks
+        // where they got to.
+        var done = document.createElement("button");
+        done.className = "btn done-btn";
+        done.textContent = isDone(ex.id) ? "✓ Marked as done" : "Mark as done";
+        done.addEventListener("click", function () {
+          var now = !isDone(ex.id);
+          try { localStorage.setItem(doneKey(ex.id), now ? "1" : "0"); } catch (e) {}
+          done.textContent = now ? "✓ Marked as done" : "Mark as done";
+          buildList();
+          [].forEach.call(document.querySelectorAll(".ex"), function (b) {
+            b.classList.toggle("active", b.dataset.id === ex.id);
+          });
+        });
+        wrap.appendChild(done);
+
         q.appendChild(wrap);
       }
 
       function select(id) {
-        var ex = EXERCISES.find(function (e) { return e.id === id; });
+        var ex = ITEMS.find(function (e) { return e.id === id; });
         if (!ex) return;
         current = ex;
 
@@ -310,19 +407,79 @@
         if (editor) setTimeout(function () { editor.refresh(); }, 0);
       }
 
+      // One ordered path: the lessons in study-guide order, then the past
+      // paper questions. Past papers keep their own shape, so they are
+      // normalised into the same fields the renderer uses.
+      var ITEMS = CURRICULUM.map(function (l) {
+        return {
+          id: l.id || ("pending-" + l.lesson),
+          group: l.part,
+          lesson: l.lesson,
+          title: l.title,
+          pending: !!l.pending,
+          teach: l.teach,
+          task: l.task,
+          starter: l.starter || "",
+          sampleInput: l.sampleInput,
+          expectedOutput: l.expectedOutput,
+        };
+      }).concat(EXERCISES.map(function (e) {
+        return {
+          id: e.id,
+          group: EXAM_PART,
+          title: e.title,
+          meta: e.source + (e.marks ? " · " + e.marks + " marks" : ""),
+          brief: e.brief,
+          starter: e.starter,
+          sampleInput: e.sampleInput,
+          expectedOutput: e.expectedOutput,
+        };
+      }));
+
+      function doneKey(id) { return "cos1511:done:" + id; }
+      function isDone(id) {
+        try { return localStorage.getItem(doneKey(id)) === "1"; } catch (e) { return false; }
+      }
+
       function buildList() {
         var list = document.getElementById("exercise-list");
-        EXERCISES.forEach(function (ex) {
+        list.innerHTML = "";
+        var lastGroup = null;
+
+        ITEMS.forEach(function (item) {
+          if (item.group !== lastGroup) {
+            lastGroup = item.group;
+            var h = document.createElement("div");
+            h.className = "grp";
+            h.textContent = item.group;
+            list.appendChild(h);
+          }
+
           var b = document.createElement("button");
-          b.className = "ex";
-          b.dataset.id = ex.id;
+          b.className = "ex" + (item.pending ? " pending" : "");
+          b.dataset.id = item.id;
+          if (item.pending) b.disabled = true;
+
           var t = document.createElement("b");
-          t.textContent = ex.title;
-          var s = document.createElement("small");
-          s.textContent = ex.source + (ex.marks ? " · " + ex.marks + " marks" : "");
+          t.textContent = (item.lesson ? item.lesson + ". " : "") + item.title;
           b.appendChild(t);
-          b.appendChild(s);
-          b.addEventListener("click", function () { select(ex.id); });
+
+          var sm = document.createElement("small");
+          sm.textContent = item.pending
+            ? "Not written yet"
+            : (item.meta || "Lesson");
+          b.appendChild(sm);
+
+          if (!item.pending && isDone(item.id)) {
+            var tick = document.createElement("span");
+            tick.className = "tick";
+            tick.textContent = "✓";
+            b.appendChild(tick);
+          }
+
+          if (!item.pending) {
+            b.addEventListener("click", function () { select(item.id); });
+          }
           list.appendChild(b);
         });
       }
@@ -476,8 +633,12 @@
 
       window.addEventListener("resize", function () { if (editor) editor.refresh(); });
 
+      document.getElementById("guide-btn").addEventListener("click", function () {
+        if (window.startAcademyTour) window.startAcademyTour();
+      });
+
       buildList();
-      select(EXERCISES[0].id);
+      select(ITEMS[0].id);
 
       CodeRunner.ready().then(function (info) {
         statusEl.textContent = info.label;
