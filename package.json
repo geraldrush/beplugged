@@ -27,6 +27,7 @@
     "wrangler": "^4.73.0",
     "emception": "^3.8.0",
     "@gameguild/emception-browser": "^3.8.0",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.49.0"
   }
 }

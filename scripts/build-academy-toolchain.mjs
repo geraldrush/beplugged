@@ -7,7 +7,7 @@
      imports, so it must be bundled with a text loader for .py
    - the worker entry is a separate module that needs its own bundle, and
      the main bundle references it without a file extension */
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
 const OUT = "public/academy";
@@ -60,7 +60,7 @@ if (existsSync(python)) {
 
 const over = [];
 const walk = (dir) => {
-  for (const e of readFileSync ? require("node:fs").readdirSync(dir, { withFileTypes: true }) : []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
     if (e.isDirectory()) walk(p);
     else if (statSync(p).size > CAP) over.push(p);
