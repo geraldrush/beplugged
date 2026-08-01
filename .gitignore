@@ -39,3 +39,8 @@ Study Guide.pdf
 
 # Local test scripts
 .*.js
+
+# Compiler toolchain, restored with: npm run academy:toolchain
+public/academy/cdn/
+public/academy/vendor/
+.build/
