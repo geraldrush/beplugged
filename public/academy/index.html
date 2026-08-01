@@ -37,10 +37,39 @@
     .bar a{color:rgba(255,255,255,.7);font-size:13.5px;text-decoration:none;}
     .bar a:hover{color:#fff;}
 
-    /* Layout */
-    .wrap{flex:1 1 auto;display:grid;grid-template-columns:280px 1fr 340px;min-height:0;}
+    /* Layout
+       Three columns, with the middle one split so program output sits under
+       the editor at full editor width instead of squeezed into a side column.
+       Every divider drags, and the sizes are remembered per browser. */
+    .wrap{
+      flex:1 1 auto;display:flex;min-height:0;
+      --w-list:260px; --w-side:330px; --h-output:260px;
+    }
     .pane{min-width:0;min-height:0;display:flex;flex-direction:column;}
-    .pane + .pane{border-left:1px solid var(--line);}
+    .col-centre{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;}
+    .pane.list{flex:0 0 var(--w-list);}
+    .pane.side{flex:0 0 var(--w-side);}
+    .pane.output{flex:0 0 var(--h-output);min-height:74px;}
+
+    /* Drag handles */
+    .gutter{flex:0 0 6px;background:var(--line);position:relative;touch-action:none;}
+    .gutter::after{
+      content:"";position:absolute;inset:0;background:transparent;
+    }
+    .gutter:hover,.gutter.dragging{background:var(--brand);}
+    .gutter.v{cursor:col-resize;}
+    .gutter.h{cursor:row-resize;flex:0 0 6px;}
+    .gutter.v::before{
+      content:"";position:absolute;top:50%;left:1px;width:4px;height:26px;
+      transform:translateY(-50%);border-radius:3px;background:rgba(0,0,0,.14);
+    }
+    .gutter.h::before{
+      content:"";position:absolute;left:50%;top:1px;height:4px;width:26px;
+      transform:translateX(-50%);border-radius:3px;background:rgba(0,0,0,.14);
+    }
+    .gutter:hover::before,.gutter.dragging::before{background:rgba(255,255,255,.85);}
+    body.resizing{cursor:inherit;user-select:none;}
+    body.resizing iframe,body.resizing .CodeMirror{pointer-events:none;}
     .pane-head{
       flex:0 0 auto;display:flex;align-items:center;gap:8px;
       padding:9px 13px;background:var(--surface);border-bottom:1px solid var(--line);
@@ -106,8 +135,8 @@
     }
     #stdin:focus{outline:none;background:#fffdfa;}
     #stdout{
-      flex:1 1 auto;margin:0;padding:11px 13px;overflow:auto;white-space:pre-wrap;
-      word-break:break-word;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+      flex:1 1 auto;margin:0;padding:13px 15px;overflow:auto;white-space:pre-wrap;
+      word-break:break-word;font-family:var(--mono);font-size:13.5px;line-height:1.6;
       background:var(--ink-900);color:#e8eef7;
     }
     #stdout .err{color:#ff9c8a;}
@@ -115,17 +144,21 @@
     #stdout .ok{color:#7fd6a2;}
 
     .status{font-size:12px;color:var(--ink-400);margin-left:auto;}
+    .spacer-sm{margin-left:auto;}
+    .btn.small{height:24px;padding:0 9px;font-size:11.5px;font-weight:600;}
+    .pane.editor{flex:1 1 auto;min-height:90px;}
 
-    @media (max-width:1100px){
-      .wrap{grid-template-columns:240px 1fr;}
-      .pane.io{grid-column:1 / -1;border-left:none;border-top:1px solid var(--line);max-height:320px;}
-    }
-    @media (max-width:760px){
-      .wrap{display:flex;flex-direction:column;}
-      .pane{border-left:none;}
-      .pane.list{max-height:190px;border-bottom:1px solid var(--line);}
-      .pane.editor{min-height:320px;}
-      .pane.io{max-height:none;}
+    /* Below this the three columns stop making sense, so everything stacks and
+       the dividers stop being draggable. */
+    @media (max-width:900px){
+      .wrap{flex-direction:column;}
+      .pane.list{flex:0 0 168px;}
+      .pane.side{flex:0 0 auto;max-height:44vh;}
+      .col-centre{flex:1 1 auto;min-height:340px;}
+      .pane.output{flex:0 0 200px;}
+      .gutter.v{display:none;}
+      .gutter.h{flex:0 0 6px;}
+      .pane.list,.pane.side{border-top:1px solid var(--line);}
     }
   </style>
 </head>
@@ -137,31 +170,47 @@
     <a href="/training/unisa-cos1511-tutorial-class">About this course</a>
   </div>
 
-  <div class="wrap">
+  <div class="wrap" id="wrap">
     <!-- Exercises -->
     <section class="pane list">
       <div class="pane-head">Exercises</div>
       <div class="pane-body" id="exercise-list"></div>
     </section>
 
-    <!-- Editor -->
-    <section class="pane editor">
-      <div class="pane-head">
-        <button class="btn run" id="run-btn">&#9654; Run</button>
-        <button class="btn" id="reset-btn">Reset</button>
-        <span class="status" id="status">Ready</span>
-      </div>
-      <div class="editor-body"><textarea id="fallback" spellcheck="false"></textarea></div>
-    </section>
+    <div class="gutter v" data-resize="list" title="Drag to resize"></div>
 
-    <!-- Question + IO -->
-    <section class="pane io">
+    <!-- Editor above, output below -->
+    <div class="col-centre">
+      <section class="pane editor">
+        <div class="pane-head">
+          <button class="btn run" id="run-btn">&#9654; Run</button>
+          <button class="btn" id="reset-btn">Reset</button>
+          <span class="status" id="status">Ready</span>
+        </div>
+        <div class="editor-body"><textarea id="fallback" spellcheck="false"></textarea></div>
+      </section>
+
+      <div class="gutter h" data-resize="output" title="Drag to resize"></div>
+
+      <section class="pane output">
+        <div class="pane-head">
+          Output
+          <span class="spacer-sm"></span>
+          <button class="btn small" id="clear-btn">Clear</button>
+          <button class="btn small" id="expand-btn" title="Make the output taller">Expand</button>
+        </div>
+        <pre id="stdout"><span class="note">Press Run to compile and execute.</span></pre>
+      </section>
+    </div>
+
+    <div class="gutter v" data-resize="side" title="Drag to resize"></div>
+
+    <!-- Question and keyboard input -->
+    <section class="pane side">
       <div class="pane-head">Question</div>
       <div class="pane-body" id="question"></div>
       <div class="io-label">Input (what you would type at the keyboard)</div>
       <textarea id="stdin" spellcheck="false" placeholder="One value per line, as cin reads them."></textarea>
-      <div class="io-label">Output</div>
-      <pre id="stdout"><span class="note">Press Run to compile and execute.</span></pre>
     </section>
   </div>
 
@@ -342,6 +391,90 @@
 
         btn.disabled = false;
       });
+
+      document.getElementById("clear-btn").addEventListener("click", function () {
+        say("Cleared. Press Run to compile and execute.");
+      });
+
+      // Quick way to give output the whole middle column without dragging.
+      var expanded = false;
+      document.getElementById("expand-btn").addEventListener("click", function () {
+        var wrap = document.getElementById("wrap");
+        expanded = !expanded;
+        setSize("output", expanded ? Math.round(wrap.clientHeight * 0.62) : 260);
+        this.textContent = expanded ? "Shrink" : "Expand";
+      });
+
+      /* ---- Resizable panes -------------------------------------------------
+         Each divider writes a CSS variable on the wrapper. Sizes are clamped so
+         a pane can never be dragged away entirely, and remembered per browser
+         so the layout a student sets up is still there next time.
+         -------------------------------------------------------------------- */
+      var LIMITS = {
+        list: { varName: "--w-list", min: 150, max: 460, axis: "x" },
+        side: { varName: "--w-side", min: 220, max: 620, axis: "x" },
+        output: { varName: "--h-output", min: 74, max: null, axis: "y" },
+      };
+
+      function setSize(which, px) {
+        var cfg = LIMITS[which];
+        var wrap = document.getElementById("wrap");
+        var max = cfg.max || Math.max(120, wrap.clientHeight - 150);
+        var v = Math.round(Math.min(Math.max(px, cfg.min), max));
+        wrap.style.setProperty(cfg.varName, v + "px");
+        try { localStorage.setItem("cos1511:pane:" + which, String(v)); } catch (e) {}
+        if (editor) editor.refresh();
+      }
+
+      Object.keys(LIMITS).forEach(function (which) {
+        var saved = null;
+        try { saved = localStorage.getItem("cos1511:pane:" + which); } catch (e) {}
+        if (saved) setSize(which, parseInt(saved, 10));
+      });
+
+      [].forEach.call(document.querySelectorAll(".gutter"), function (g) {
+        g.addEventListener("pointerdown", function (e) {
+          // Stacked layout: the dividers are decoration, not controls.
+          if (window.matchMedia("(max-width:900px)").matches) return;
+
+          var which = g.dataset.resize;
+          var cfg = LIMITS[which];
+          var wrap = document.getElementById("wrap");
+          var startPos = cfg.axis === "x" ? e.clientX : e.clientY;
+          var startSize = parseInt(getComputedStyle(wrap).getPropertyValue(cfg.varName), 10);
+
+          g.setPointerCapture(e.pointerId);
+          g.classList.add("dragging");
+          document.body.classList.add("resizing");
+
+          function move(ev) {
+            var delta = (cfg.axis === "x" ? ev.clientX : ev.clientY) - startPos;
+            // The exercise list grows rightwards; the other two grow the other
+            // way, so their delta is inverted.
+            setSize(which, which === "list" ? startSize + delta : startSize - delta);
+          }
+
+          function up(ev) {
+            g.releasePointerCapture(ev.pointerId);
+            g.classList.remove("dragging");
+            document.body.classList.remove("resizing");
+            g.removeEventListener("pointermove", move);
+            g.removeEventListener("pointerup", up);
+          }
+
+          g.addEventListener("pointermove", move);
+          g.addEventListener("pointerup", up);
+          e.preventDefault();
+        });
+
+        // Double click restores the default for that divider.
+        g.addEventListener("dblclick", function () {
+          var d = { list: 260, side: 330, output: 260 };
+          setSize(g.dataset.resize, d[g.dataset.resize]);
+        });
+      });
+
+      window.addEventListener("resize", function () { if (editor) editor.refresh(); });
 
       buildList();
       select(EXERCISES[0].id);
