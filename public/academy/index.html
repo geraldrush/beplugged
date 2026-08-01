@@ -283,10 +283,10 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-  <script src="/academy/curriculum.js"></script>
-  <script src="/academy/exercises.js"></script>
-  <script src="/academy/engine.js"></script>
-  <script src="/academy/tour.js"></script>
+  <script src="/academy/curriculum.js?v=3"></script>
+  <script src="/academy/exercises.js?v=3"></script>
+  <script src="/academy/engine.js?v=3"></script>
+  <script src="/academy/tour.js?v=3"></script>
   <script>
     (function () {
       var editor = null;
@@ -402,6 +402,8 @@
             var t0 = Date.now();
             try {
               await CodeRunner.prepare(function (p) {
+                // Tolerate an older engine that reports a plain string.
+                if (typeof p === "string") p = { phase: p, loaded: 0, total: 0 };
                 phaseEl.textContent = p.phase || "";
                 if (p.total > 0) {
                   var pct = Math.min(100, Math.round((p.loaded / p.total) * 100));
