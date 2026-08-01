@@ -217,10 +217,19 @@ export default {
             headers: jsonHeaders,
           });
         }
+        // A guest session is answered here and goes no further, so no demo
+        // request can reach a handler that queries real records.
+        if (sessionRole(token) === "guest") {
+          return handleDemoRequest(path, method);
+        }
       }
 
       if (path === "/api/auth/login" && method === "POST") {
         return await handleLogin(request, env);
+      }
+
+      if (path === "/api/auth/guest" && method === "POST") {
+        return await handleGuestLogin(request, env);
       }
 
       if (path === "/api/auth/forgot" && method === "POST") {
@@ -526,11 +535,12 @@ function getSessionSecret(env) {
   return env.SESSION_SECRET;
 }
 
-async function createSessionToken(env) {
+async function createSessionToken(env, role = "admin") {
   const now = Math.floor(Date.now() / 1000);
   const payload = base64UrlEncodeString(
     JSON.stringify({
-      sub: "admin",
+      sub: role,
+      role,
       iat: now,
       exp: now + SESSION_TTL_SECONDS,
       nonce: crypto.randomUUID(),
@@ -559,7 +569,7 @@ async function isValidToken(token, env) {
     const claims = JSON.parse(base64UrlDecodeString(payload));
     const now = Math.floor(Date.now() / 1000);
     return (
-      claims.sub === "admin" &&
+      (claims.sub === "admin" || claims.sub === "guest") &&
       Number.isFinite(claims.exp) &&
       claims.exp > now &&
       Number.isFinite(claims.iat) &&
@@ -567,6 +577,18 @@ async function isValidToken(token, env) {
     );
   } catch {
     return false;
+  }
+}
+
+// The role carried by an already-validated token. Tokens minted before roles
+// existed have no role claim and are full admin sessions.
+function sessionRole(token) {
+  try {
+    const payload = String(token).split(" ")[1].split(".")[0];
+    const claims = JSON.parse(base64UrlDecodeString(payload));
+    return claims.role === "guest" || claims.sub === "guest" ? "guest" : "admin";
+  } catch {
+    return "admin";
   }
 }
 
@@ -2767,6 +2789,137 @@ async function loadAdminCredential(env, username) {
     console.error("credential lookup failed", err);
     return null;
   }
+}
+
+/* ===================================================================
+   Demo mode
+   A guest session is answered entirely from the fixtures below. The real
+   database is never queried on a guest request, so a prospect looking
+   around the admin cannot be shown a real client, invoice or lead no
+   matter which endpoint they reach.
+   =================================================================== */
+
+const DEMO = {
+  clients: [
+    { id: "d1", name: "Karoo Foods (Pty) Ltd", contact_name: "Nomsa Dlamini", email: "nomsa@karoofoods.example", phone: "+27 21 555 0142", city: "Cape Town", status: "active" },
+    { id: "d2", name: "Highveld Logistics", contact_name: "Pieter van Wyk", email: "pieter@highveld.example", phone: "+27 11 555 0198", city: "Johannesburg", status: "active" },
+    { id: "d3", name: "Sundale Primary School", contact_name: "Fatima Adams", email: "admin@sundale.example", phone: "+27 31 555 0107", city: "Durban", status: "active" },
+    { id: "d4", name: "Umoya Renewables", contact_name: "Sipho Khumalo", email: "sipho@umoya.example", phone: "+27 12 555 0163", city: "Pretoria", status: "prospect" },
+  ],
+  invoices: [
+    { id: "i1", invoice_number: "INV-2026-0042", client_name: "Karoo Foods (Pty) Ltd", total: 48500, amount_paid: 48500, status: "paid", issue_date: "2026-06-02", due_date: "2026-06-30" },
+    { id: "i2", invoice_number: "INV-2026-0043", client_name: "Highveld Logistics", total: 126000, amount_paid: 63000, status: "partially_paid", issue_date: "2026-06-18", due_date: "2026-07-18" },
+    { id: "i3", invoice_number: "INV-2026-0044", client_name: "Sundale Primary School", total: 32400, amount_paid: 0, status: "sent", issue_date: "2026-07-01", due_date: "2026-07-31" },
+    { id: "i4", invoice_number: "INV-2026-0045", client_name: "Umoya Renewables", total: 74250, amount_paid: 0, status: "overdue", issue_date: "2026-05-20", due_date: "2026-06-19" },
+    { id: "i5", invoice_number: "INV-2026-0046", client_name: "Karoo Foods (Pty) Ltd", total: 18900, amount_paid: 0, status: "draft", issue_date: "2026-07-28", due_date: "2026-08-27" },
+  ],
+  quotes: [
+    { id: "q1", quote_number: "QTE-2026-0031", client_name: "Umoya Renewables", total: 210000, status: "accepted", issue_date: "2026-05-11" },
+    { id: "q2", quote_number: "QTE-2026-0032", client_name: "Sundale Primary School", total: 32400, status: "accepted", issue_date: "2026-06-24" },
+    { id: "q3", quote_number: "QTE-2026-0033", client_name: "Metro Health Group", total: 96500, status: "sent", issue_date: "2026-07-22" },
+  ],
+  leads: [
+    { id: "l1", company_name: "Metro Health Group", contact_name: "Dr Anele Mbeki", email: "anele@metrohealth.example", stage: "proposal", value: 96500, next_follow_up: "2026-08-04" },
+    { id: "l2", company_name: "Rustenburg Mining Supplies", contact_name: "Johan Botha", email: "johan@rms.example", stage: "qualified", value: 145000, next_follow_up: "2026-08-06" },
+    { id: "l3", company_name: "Cape Craft Collective", contact_name: "Lerato Mokoena", email: "lerato@capecraft.example", stage: "new", value: 28000, next_follow_up: "2026-08-11" },
+  ],
+  projects: [
+    { id: "p1", name: "Umoya customer portal", client_name: "Umoya Renewables", status: "active", progress: 62, start_date: "2026-06-01", end_date: "2026-09-15" },
+    { id: "p2", name: "Highveld fleet tracking", client_name: "Highveld Logistics", status: "active", progress: 35, start_date: "2026-07-07", end_date: "2026-11-30" },
+    { id: "p3", name: "Sundale school website", client_name: "Sundale Primary School", status: "planning", progress: 5, start_date: "2026-08-10", end_date: "2026-10-02" },
+    { id: "p4", name: "Karoo stock reporting", client_name: "Karoo Foods (Pty) Ltd", status: "on_hold", progress: 48, start_date: "2026-04-14", end_date: "2026-08-29" },
+  ],
+  receipts: [
+    { id: "r1", receipt_number: "RCT-2026-0038", client_name: "Karoo Foods (Pty) Ltd", amount: 48500, payment_date: "2026-06-27", method: "eft" },
+    { id: "r2", receipt_number: "RCT-2026-0039", client_name: "Highveld Logistics", amount: 63000, payment_date: "2026-07-09", method: "eft" },
+  ],
+  team: [
+    { id: "t1", name: "Gerald Rushwaya", role: "Director", email: "gerald@example", active: 1 },
+    { id: "t2", name: "Thandi Nkosi", role: "Developer", email: "thandi@example", active: 1 },
+    { id: "t3", name: "Riaan de Villiers", role: "Support Engineer", email: "riaan@example", active: 1 },
+  ],
+  requirements: [
+    { id: "rq1", title: "Customer can download statements as PDF", client_name: "Umoya Renewables", status: "approved", priority: "high" },
+    { id: "rq2", title: "Fleet map refreshes every 30 seconds", client_name: "Highveld Logistics", status: "in_review", priority: "medium" },
+  ],
+  agreements: [
+    { id: "a1", agreement_number: "AGR-2026-0012", client_name: "Umoya Renewables", status: "signed", signed_at: "2026-05-29" },
+    { id: "a2", agreement_number: "AGR-2026-0013", client_name: "Highveld Logistics", status: "sent", signed_at: null },
+  ],
+  documents: [
+    { id: "dc1", title: "Company registration (CIPC)", category: "Statutory", owner: "Gerald Rushwaya", status: "approved", version: "1.0", review_date: "2027-02-01" },
+    { id: "dc2", title: "Tax clearance certificate", category: "Statutory", owner: "Gerald Rushwaya", status: "approved", version: "2.1", review_date: "2026-11-30" },
+    { id: "dc3", title: "Professional indemnity insurance", category: "Insurance", owner: "Gerald Rushwaya", status: "review", version: "1.3", review_date: "2026-09-15" },
+  ],
+  analytics: {
+    kpis: {
+      collected: 111500, outstanding: 169650, invoiced: 300050, invoices_pending: 3,
+      open_leads: 3, open_requirements: 2, active_projects: 2, documents_in_review: 1,
+      quality_actions: 1, security_risks: 0, team_members: 3,
+    },
+    revenue_by_month: [
+      { month: "2026-02", invoiced: 42000, collected: 42000 },
+      { month: "2026-03", invoiced: 68500, collected: 51000 },
+      { month: "2026-04", invoiced: 31000, collected: 31000 },
+      { month: "2026-05", invoiced: 74250, collected: 0 },
+      { month: "2026-06", invoiced: 174500, collected: 111500 },
+      { month: "2026-07", invoiced: 32400, collected: 0 },
+    ],
+    pipeline: [
+      { stage: "Enquiry", count: 3 }, { stage: "Qualify", count: 2 },
+      { stage: "Quote", count: 3 }, { stage: "Won", count: 2 },
+      { stage: "Deliver", count: 4 }, { stage: "Bill", count: 5 }, { stage: "Close", count: 2 },
+    ],
+  },
+};
+
+// Longest prefix wins, so /admin/crm/contacts is not answered by /admin/crm.
+const DEMO_ROUTES = [
+  ["/api/admin/analytics", () => DEMO.analytics],
+  ["/api/admin/clients", () => DEMO.clients],
+  ["/api/admin/invoices", () => DEMO.invoices],
+  ["/api/admin/quotes", () => DEMO.quotes],
+  ["/api/admin/leads", () => DEMO.leads],
+  ["/api/admin/projects", () => DEMO.projects],
+  ["/api/admin/receipts", () => DEMO.receipts],
+  ["/api/admin/team", () => DEMO.team],
+  ["/api/admin/requirements", () => DEMO.requirements],
+  ["/api/admin/agreements", () => DEMO.agreements],
+  ["/api/admin/documents", () => DEMO.documents],
+  ["/api/admin/dashboard", () => DEMO.analytics.kpis],
+  ["/api/admin/company", () => ({ company: { name: "Beplugged Tech (Demo)", email: "info@beplugged.co.za", city: "Johannesburg" } })],
+  ["/api/admin/crm/summary", () => ({ summary: { contacts: 6, activities: 14, due: 2 } })],
+];
+
+function handleDemoRequest(path, method) {
+  if (method !== "GET") {
+    return json(
+      { error: "This is a read-only demo. Sign in with a real account to make changes." },
+      { status: 403 },
+    );
+  }
+
+  const match = DEMO_ROUTES
+    .filter(([prefix]) => path === prefix || path.startsWith(prefix + "/") || path.startsWith(prefix + "?"))
+    .sort((a, b) => b[0].length - a[0].length)[0];
+
+  // Anything not fixtured returns an empty list rather than falling through
+  // to the real handlers, so no guest request can reach the database.
+  return json(match ? match[1]() : []);
+}
+
+async function handleGuestLogin(request, env) {
+  if (!env.SESSION_SECRET) {
+    return json({ error: "SESSION_SECRET is not configured" }, { status: 500 });
+  }
+  if (env.LOGIN_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.LOGIN_LIMITER.limit({ key: `guest:${clientIp}` });
+    if (!success) {
+      return json({ error: "Too many requests. Please try again shortly." }, { status: 429 });
+    }
+  }
+  return json({ ...(await createSessionToken(env, "guest")), role: "guest" });
 }
 
 async function handleForgotPassword(request, env) {

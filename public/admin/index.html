@@ -1737,6 +1737,10 @@
   </head>
   <body>
     <!-- Navigation -->
+    <div id="demo-banner" style="display:none;background:#a16a1b;color:#fff;padding:0.5rem 1rem;font-size:0.84rem;font-weight:600;text-align:center;">
+      Demo mode &mdash; sample data, read-only. Nothing here is a real client or invoice.
+      <a href="/admin/login.html" style="color:#fff;text-decoration:underline;margin-left:0.5rem;">Sign in</a>
+    </div>
     <div class="nav-backdrop" id="nav-backdrop"></div>
     <nav class="navbar">
       <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false">&#9776;</button>
@@ -11190,6 +11194,15 @@
         sessionStorage.removeItem("authTokenExpiresAt");
         redirectToLogin();
       }
+
+      // Guest sessions get a standing reminder that nothing on screen is real.
+      (function markDemo() {
+        if (sessionStorage.getItem("authRole") !== "guest") return;
+        document.addEventListener("DOMContentLoaded", function () {
+          var b = document.getElementById("demo-banner");
+          if (b) b.style.display = "block";
+        });
+      })();
 
       function redirectToLogin() {
         window.location.href = "/admin/login.html";
