@@ -2823,6 +2823,7 @@ async function handleForgotPassword(request, env) {
     const link = `${origin}/admin/reset.html?token=${token}`;
     await sendBrevoEmail(env, {
       to,
+      toName: "Beplugged Admin",
       subject: "Reset your Beplugged admin password",
       htmlContent: `
         <p>A password reset was requested for the Beplugged admin area.</p>
@@ -4960,9 +4961,14 @@ async function sendBrevoEmail(env, { to, toName, subject, htmlContent, attachmen
   }
 
   const senderName = env.BREVO_SENDER_NAME || "Beplugged Tech";
+  // Brevo rejects the whole send with 400 "name is missing in to" when the
+  // recipient name is blank, and several callers pass `x || ""` for a record
+  // that may not have a name. Falling back to the address's local part keeps
+  // those sends alive instead of failing them silently.
+  const recipientName = String(toName || "").trim() || String(to).split("@")[0];
   const payload = {
     sender: { name: senderName, email: env.BREVO_SENDER_EMAIL },
-    to: [{ email: to, name: toName || "" }],
+    to: [{ email: to, name: recipientName }],
     subject,
     htmlContent,
   };
