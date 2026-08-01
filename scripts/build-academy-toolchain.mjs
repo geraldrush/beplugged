@@ -33,6 +33,8 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
+const VENDOR_CACHE_VERSION = "8";
+
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
     "--loader:.py=text", "--loader:.txt=text", "--loader:.wasm=binary",
@@ -46,7 +48,45 @@ esbuild("node_modules/@gameguild/emception-browser/dist/worker-entry.js", `${VEN
 // browser will not load as a module.
 const main = `${VENDOR}/emception.bundle.js`;
 writeFileSync(main, readFileSync(main, "utf8")
-  .replaceAll('new URL("./worker-entry", import.meta.url)', 'new URL("./worker-entry.js", import.meta.url)'));
+  .replaceAll('new URL("./worker-entry", import.meta.url)', `new URL("./worker-entry.js?v=${VENDOR_CACHE_VERSION}", import.meta.url)`)
+  .replaceAll('new URL("./worker-entry.js", import.meta.url)', `new URL("./worker-entry.js?v=${VENDOR_CACHE_VERSION}", import.meta.url)`));
+
+const worker = `${VENDOR}/worker-entry.js`;
+{
+  const before = readFileSync(worker, "utf8");
+  const old = /      const BATCH = 100;\n      let warmed = 0;\n      for \(let i = 0; i < pyPaths\.length; i \+= BATCH\) \{\n        const batch = pyPaths\.slice\(i, i \+ BATCH\);\n        const results = await Promise\.all\(batch\.map\(\(p\) => this\.vfs\.fetchFile\(p\)\.catch\(\(\) => null\)\)\);\n        for \(let j = 0; j < batch\.length; j\+\+\) \{\n          if \(results\[j\]\) \{\n            try \{\n              instance\.FS\.writeFile\(batch\[j\], results\[j\]\);\n              warmed\+\+;\n            \} catch \{\n            \}\n          \}\n        \}\n      \}\n      console\.log\(`\$\{LOG_PREFIX2\}   Pre-warmed \$\{warmed\}\/\$\{pyPaths\.length\} python files in \$\{elapsed\(tWarm\)\}`\);/;
+  const patched = `      const BATCH = 100;
+      let warmed = 0;
+      let fsWarmed = 0;
+      const fsWriteFailures = [];
+      for (let i = 0; i < pyPaths.length; i += BATCH) {
+        const batch = pyPaths.slice(i, i + BATCH);
+        const results = await Promise.all(batch.map((p) => this.vfs.fetchFile(p).catch(() => null)));
+        for (let j = 0; j < batch.length; j++) {
+          const data = results[j];
+          if (data) {
+            fileData.set(batch[j], data);
+            warmed++;
+            try {
+              instance.FS.writeFile(batch[j], data);
+              fsWarmed++;
+            } catch (e) {
+              if (fsWriteFailures.length < 24) {
+                fsWriteFailures.push(batch[j]);
+              }
+            }
+          }
+        }
+      }
+      console.log(\`\${LOG_PREFIX2}   Pre-warmed \${warmed}/\${pyPaths.length} python files into VFSFS fileData in \${elapsed(tWarm)} (FS.writeFile accepted \${fsWarmed})\`);
+      if (fsWriteFailures.length > 0) {
+        console.warn(\`\${LOG_PREFIX2}   FS.writeFile skipped \${fsWriteFailures.length} pre-warmed Python path(s): \${fsWriteFailures.join(", ")}\`);
+      }`;
+  if (!old.test(before)) {
+    throw new Error("Could not patch worker-entry.js Python pre-warm block; inspect generated vendor bundle.");
+  }
+  writeFileSync(worker, before.replace(old, patched));
+}
 
 cpSync("node_modules/emception/cdn", CDN, { recursive: true });
 

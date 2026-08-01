@@ -79,7 +79,7 @@ window.CodeRunner = (function () {
 
   async function boot() {
     onProgress("Starting the compiler…");
-    const { createEmception } = await import("/academy/vendor/emception.bundle.js");
+    const { createEmception } = await import("/academy/vendor/emception.bundle.js?v=8");
     const em = await createEmception({
       manifestUrl: "/academy/cdn/manifest.json",
       tty: "none",
@@ -169,8 +169,9 @@ window.CodeRunner = (function () {
         .map((name) => manifest.bundles && manifest.bundles[name])
         .filter((b) => b && b.url)
         .map((b) => ({ url: b.url.replace(/^\/cdn/, "/academy/cdn"), size: b.size || 0 }));
-      // b.url already carries the ?v= stamp from the manifest, so the warmed
-      // URL and the one the compiler requests are identical.
+      // Bundle URLs are left exactly as the manifest declares them, because the
+      // loader keys extracted files by that URL. Cache-bust the vendor JS, not
+      // these payload URLs.
 
       const total = bundles.reduce((n, b) => n + b.size, 0);
       let loaded = 0;
