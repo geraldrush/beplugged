@@ -33,7 +33,7 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
-const VENDOR_CACHE_VERSION = "10";
+const VENDOR_CACHE_VERSION = "11";
 
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
@@ -94,7 +94,7 @@ const worker = `${VENDOR}/worker-entry.js`;
         }
         return \`/\${resolved.join("/")}\`;
       };
-      const manifestFiles = this.vfs.manifest?.files || {};
+      const manifestFiles = this.vfs.manifest?.files || this.vfs.lazyFs?.manifest?.files || {};
       const pythonStdlibAliases = Object.entries(manifestFiles)
         .filter(([path, entry]) => path.startsWith("/usr/lib/python3.13/") && path.endsWith(".py") && entry?.symlink)
         .map(([path, entry]) => [path, resolveManifestSymlink(path, entry.symlink)])
