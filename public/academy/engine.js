@@ -79,7 +79,7 @@ window.CodeRunner = (function () {
 
   async function boot() {
     onProgress("Starting the compiler…");
-    const { createEmception } = await import("/academy/vendor/emception.bundle.js?v=11");
+    const { createEmception } = await import("/academy/vendor/emception.bundle.js?v=12");
     const em = await createEmception({
       manifestUrl: "/academy/cdn/manifest.json",
       tty: "none",

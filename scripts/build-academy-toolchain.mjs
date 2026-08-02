@@ -33,7 +33,7 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
-const VENDOR_CACHE_VERSION = "11";
+const VENDOR_CACHE_VERSION = "12";
 
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
@@ -54,6 +54,25 @@ writeFileSync(main, readFileSync(main, "utf8")
 const worker = `${VENDOR}/worker-entry.js`;
 {
   const before = readFileSync(worker, "utf8");
+  const shimOld = `    request = json.dumps({'cmd': cmd_str, 'cwd': cwd or ''})
+    with open('/tmp/.subprocess_request', 'w') as f:
+        f.write(request)`;
+  const shimPatched = `    request = json.dumps({'cmd': cmd_str, 'cwd': cwd or ''}) + '\\n'
+    for p in ['/tmp/.subprocess_request', '/tmp/__dispatch_subprocess__', '/tmp/.subprocess_stdout', '/tmp/.subprocess_stderr']:
+        try:
+            os.unlink(p)
+        except (FileNotFoundError, OSError):
+            pass
+    with open('/tmp/.subprocess_request', 'w') as f:
+        f.write(request)`;
+  const requestParseOld = `const requestData = String(instanceRef.FS.readFile("/tmp/.subprocess_request", { encoding: "utf8" }));
+            const request = JSON.parse(requestData);`;
+  const requestParsePatched = `const requestData = String(instanceRef.FS.readFile("/tmp/.subprocess_request", { encoding: "utf8" }));
+            const request = JSON.parse(requestData.split("\\n", 1)[0]);`;
+  const requestAssignOld = `const requestData = String(instanceRef.FS.readFile("/tmp/.subprocess_request", { encoding: "utf8" }));
+            request = JSON.parse(requestData);`;
+  const requestAssignPatched = `const requestData = String(instanceRef.FS.readFile("/tmp/.subprocess_request", { encoding: "utf8" }));
+            request = JSON.parse(requestData.split("\\n", 1)[0]);`;
   const old = /      const BATCH = 100;\n      let warmed = 0;\n      for \(let i = 0; i < pyPaths\.length; i \+= BATCH\) \{\n        const batch = pyPaths\.slice\(i, i \+ BATCH\);\n        const results = await Promise\.all\(batch\.map\(\(p\) => this\.vfs\.fetchFile\(p\)\.catch\(\(\) => null\)\)\);\n        for \(let j = 0; j < batch\.length; j\+\+\) \{\n          if \(results\[j\]\) \{\n            try \{\n              instance\.FS\.writeFile\(batch\[j\], results\[j\]\);\n              warmed\+\+;\n            \} catch \{\n            \}\n          \}\n        \}\n      \}\n      console\.log\(`\$\{LOG_PREFIX2\}   Pre-warmed \$\{warmed\}\/\$\{pyPaths\.length\} python files in \$\{elapsed\(tWarm\)\}`\);/;
   const patched = `      const BATCH = 100;
       let warmed = 0;
@@ -114,10 +133,20 @@ const worker = `${VENDOR}/worker-entry.js`;
       if (aliasFailures.length > 0) {
         console.warn(\`\${LOG_PREFIX2}   Missing Python stdlib alias data: \${aliasFailures.join(", ")}\`);
       }`;
-  if (!old.test(before)) {
+  let next = before;
+  if (!next.includes(shimOld)) {
+    throw new Error("Could not patch subprocess shim request writer; inspect generated vendor bundle.");
+  }
+  next = next.replace(shimOld, shimPatched);
+  if (!next.includes(requestParseOld) || !next.includes(requestAssignOld)) {
+    throw new Error("Could not patch subprocess request parser; inspect generated vendor bundle.");
+  }
+  next = next.replaceAll(requestParseOld, requestParsePatched);
+  next = next.replaceAll(requestAssignOld, requestAssignPatched);
+  if (!old.test(next)) {
     throw new Error("Could not patch worker-entry.js Python pre-warm block; inspect generated vendor bundle.");
   }
-  writeFileSync(worker, before.replace(old, patched));
+  writeFileSync(worker, next.replace(old, patched));
 }
 
 cpSync("node_modules/emception/cdn", CDN, { recursive: true });
