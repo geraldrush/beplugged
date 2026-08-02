@@ -33,7 +33,7 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
-const VENDOR_CACHE_VERSION = "13";
+const VENDOR_CACHE_VERSION = "14";
 
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
@@ -73,6 +73,48 @@ const worker = `${VENDOR}/worker-entry.js`;
             request = JSON.parse(requestData);`;
   const requestAssignPatched = `const requestData = String(instanceRef.FS.readFile("/tmp/.subprocess_request", { encoding: "utf8" }));
             request = JSON.parse(requestData.split("\\n", 1)[0]);`;
+  const asyncVersionProbeOld = `const subBasename = parts[0].split("/").pop() ?? parts[0];
+          const isVersionCheck = parts.includes("--version") || parts.includes("-v");
+          if (subBasename === "ninja" && isVersionCheck) {`;
+  const asyncVersionProbePatched = `const subBasename = parts[0].split("/").pop() ?? parts[0];
+          const isVersionCheck = parts.includes("--version") || parts.includes("-v");
+          const versionProbeOutput = {
+            clang: "clang version 20.0.0 (emception-browser)\\\\nTarget: wasm32-unknown-emscripten\\\\n",
+            "clang++": "clang version 20.0.0 (emception-browser)\\\\nTarget: wasm32-unknown-emscripten\\\\n",
+            "wasm-ld": "LLD 20.0.0 (compatible with GNU linkers)\\\\n",
+            lld: "LLD 20.0.0 (compatible with GNU linkers)\\\\n",
+            "llvm-ar": "LLVM version 20.0.0\\\\n",
+            "llvm-nm": "LLVM version 20.0.0\\\\n"
+          }[subBasename];
+          if (isVersionCheck && versionProbeOutput) {
+            console.log(\`\${LOG_PREFIX2}   [subprocess] Fast-path: \${subBasename} version probe\`);
+            instanceRef.FS.writeFile("/tmp/.subprocess_stdout", versionProbeOutput);
+            instanceRef.FS.writeFile("/tmp/.subprocess_stderr", "");
+            if (typeof cmdStr === "string") return 0;
+            instanceRef.FS.writeFile("/tmp/__dispatch_subprocess__", "0");
+            return;
+          }
+          if (subBasename === "ninja" && isVersionCheck) {`;
+  const syncVersionProbeOld = `const subBasename = parts[0].split("/").pop() ?? "";
+            const isVersionCheck = parts.includes("--version") || parts.includes("-v");
+            if (subBasename === "ninja" && isVersionCheck) {`;
+  const syncVersionProbePatched = `const subBasename = parts[0].split("/").pop() ?? "";
+            const isVersionCheck = parts.includes("--version") || parts.includes("-v");
+            const versionProbeOutput = {
+              clang: "clang version 20.0.0 (emception-browser)\\\\nTarget: wasm32-unknown-emscripten\\\\n",
+              "clang++": "clang version 20.0.0 (emception-browser)\\\\nTarget: wasm32-unknown-emscripten\\\\n",
+              "wasm-ld": "LLD 20.0.0 (compatible with GNU linkers)\\\\n",
+              lld: "LLD 20.0.0 (compatible with GNU linkers)\\\\n",
+              "llvm-ar": "LLVM version 20.0.0\\\\n",
+              "llvm-nm": "LLVM version 20.0.0\\\\n"
+            }[subBasename];
+            if (isVersionCheck && versionProbeOutput) {
+              console.log(\`\${LOG_PREFIX2}   [subprocess] Sync fast-path: \${subBasename} version probe\`);
+              instanceRef.FS.writeFile("/tmp/.subprocess_stdout", versionProbeOutput);
+              instanceRef.FS.writeFile("/tmp/.subprocess_stderr", "");
+              return 0 << 8 | 0;
+            }
+            if (subBasename === "ninja" && isVersionCheck) {`;
   const old = /      const BATCH = 100;\n      let warmed = 0;\n      for \(let i = 0; i < pyPaths\.length; i \+= BATCH\) \{\n        const batch = pyPaths\.slice\(i, i \+ BATCH\);\n        const results = await Promise\.all\(batch\.map\(\(p\) => this\.vfs\.fetchFile\(p\)\.catch\(\(\) => null\)\)\);\n        for \(let j = 0; j < batch\.length; j\+\+\) \{\n          if \(results\[j\]\) \{\n            try \{\n              instance\.FS\.writeFile\(batch\[j\], results\[j\]\);\n              warmed\+\+;\n            \} catch \{\n            \}\n          \}\n        \}\n      \}\n      console\.log\(`\$\{LOG_PREFIX2\}   Pre-warmed \$\{warmed\}\/\$\{pyPaths\.length\} python files in \$\{elapsed\(tWarm\)\}`\);/;
   const patched = `      const BATCH = 100;
       let warmed = 0;
@@ -143,6 +185,15 @@ const worker = `${VENDOR}/worker-entry.js`;
   }
   next = next.replaceAll(requestParseOld, requestParsePatched);
   next = next.replaceAll(requestAssignOld, requestAssignPatched);
+  if (!next.includes(asyncVersionProbeOld)) {
+    throw new Error("Could not patch subprocess version probe fast-path; inspect generated vendor bundle.");
+  }
+  next = next.replaceAll(asyncVersionProbeOld, asyncVersionProbePatched);
+  if (!next.includes(syncVersionProbeOld)) {
+    throw new Error("Could not patch sync subprocess version probe fast-path; inspect generated vendor bundle.");
+  }
+  next = next.replace(syncVersionProbeOld, syncVersionProbePatched);
+  next = next.replaceAll("WASM may be stuck", "waiting for Asyncify/subprocess completion");
   if (!old.test(next)) {
     throw new Error("Could not patch worker-entry.js Python pre-warm block; inspect generated vendor bundle.");
   }
