@@ -33,7 +33,7 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
-const VENDOR_CACHE_VERSION = "9";
+const VENDOR_CACHE_VERSION = "10";
 
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
@@ -82,35 +82,38 @@ const worker = `${VENDOR}/worker-entry.js`;
       if (fsWriteFailures.length > 0) {
         console.warn(\`\${LOG_PREFIX2}   FS.writeFile skipped \${fsWriteFailures.length} pre-warmed Python path(s): \${fsWriteFailures.join(", ")}\`);
       }
-      const encodingFallbacks = [
-        "__init__.py",
-        "aliases.py",
-        "ascii.py",
-        "idna.py",
-        "latin_1.py",
-        "mbcs.py",
-        "unicode_escape.py",
-        "utf_16.py",
-        "utf_16_be.py",
-        "utf_16_le.py",
-        "utf_32.py",
-        "utf_32_be.py",
-        "utf_32_le.py",
-        "utf_7.py",
-        "utf_8.py",
-        "utf_8_sig.py"
-      ];
-      let codecSeeded = 0;
-      for (const name of encodingFallbacks) {
-        const py313 = \`/usr/lib/python3.13/encodings/\${name}\`;
-        const py312 = \`/usr/lib/python3.12/encodings/\${name}\`;
-        const data = fileData.get(py313) || fileData.get(py312) || await this.vfs.fetchFile(py313).catch(() => null) || await this.vfs.fetchFile(py312).catch(() => null);
+      const resolveManifestSymlink = (from, target) => {
+        if (target.startsWith("/")) return target;
+        const base = from.slice(0, from.lastIndexOf("/") + 1);
+        const parts = \`\${base}\${target}\`.split("/");
+        const resolved = [];
+        for (const part of parts) {
+          if (!part || part === ".") continue;
+          if (part === "..") resolved.pop();
+          else resolved.push(part);
+        }
+        return \`/\${resolved.join("/")}\`;
+      };
+      const manifestFiles = this.vfs.manifest?.files || {};
+      const pythonStdlibAliases = Object.entries(manifestFiles)
+        .filter(([path, entry]) => path.startsWith("/usr/lib/python3.13/") && path.endsWith(".py") && entry?.symlink)
+        .map(([path, entry]) => [path, resolveManifestSymlink(path, entry.symlink)])
+        .filter(([, target]) => target.startsWith("/usr/lib/python3.12/") && target.endsWith(".py"));
+      let aliasSeeded = 0;
+      const aliasFailures = [];
+      for (const [py313, py312] of pythonStdlibAliases) {
+        const data = fileData.get(py313) || fileData.get(py312) || await this.vfs.fetchFile(py312).catch(() => null);
         if (data) {
           fileData.set(py313, data);
-          codecSeeded++;
+          aliasSeeded++;
+        } else if (aliasFailures.length < 24) {
+          aliasFailures.push(\`\${py313} -> \${py312}\`);
         }
       }
-      console.log(\`\${LOG_PREFIX2}   Seeded \${codecSeeded}/\${encodingFallbacks.length} Python codec source files at python3.13 paths\`);`;
+      console.log(\`\${LOG_PREFIX2}   Seeded \${aliasSeeded}/\${pythonStdlibAliases.length} Python 3.13 stdlib symlink source files from python3.12 targets\`);
+      if (aliasFailures.length > 0) {
+        console.warn(\`\${LOG_PREFIX2}   Missing Python stdlib alias data: \${aliasFailures.join(", ")}\`);
+      }`;
   if (!old.test(before)) {
     throw new Error("Could not patch worker-entry.js Python pre-warm block; inspect generated vendor bundle.");
   }
