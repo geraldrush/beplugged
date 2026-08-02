@@ -33,7 +33,7 @@ writeFileSync(".build/xterm-stub.js",
   "export default { TTYBridge };\n");
 writeFileSync(".build/entry.mjs", "export { createEmception } from '@gameguild/emception-browser';\n");
 
-const VENDOR_CACHE_VERSION = "12";
+const VENDOR_CACHE_VERSION = "13";
 
 const esbuild = (entry, outfile) =>
   execFileSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--platform=browser",
@@ -57,7 +57,7 @@ const worker = `${VENDOR}/worker-entry.js`;
   const shimOld = `    request = json.dumps({'cmd': cmd_str, 'cwd': cwd or ''})
     with open('/tmp/.subprocess_request', 'w') as f:
         f.write(request)`;
-  const shimPatched = `    request = json.dumps({'cmd': cmd_str, 'cwd': cwd or ''}) + '\\n'
+  const shimPatched = `    request = json.dumps({'cmd': cmd_str, 'cwd': cwd or ''}) + '\\\\n'
     for p in ['/tmp/.subprocess_request', '/tmp/__dispatch_subprocess__', '/tmp/.subprocess_stdout', '/tmp/.subprocess_stderr']:
         try:
             os.unlink(p)
