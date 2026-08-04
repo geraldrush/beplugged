@@ -1041,10 +1041,316 @@ int main()
   },
 
   /* ============ THE PATH AHEAD ============ */
-  { part: "Part II · Conditional execution", lesson: 13, title: "Switch statements", pending: true },
-  { part: "Part II · Conditional execution", lesson: 14, title: "More while loops", pending: true },
-  { part: "Part II · Conditional execution", lesson: 15, title: "For loops", pending: true },
-  { part: "Part II · Conditional execution", lesson: 16, title: "Nested loops", pending: true },
+  {
+    id: "l13-switch",
+    part: "Part II · Conditional execution",
+    lesson: 13,
+    title: "Switch statements",
+    teach: [
+      { type: "p", text: "When a program has to pick exactly one of several routes, and the choice depends on the value of a single variable, a switch statement says it more clearly than a stack of else ifs." },
+      { type: "code", label: "The shape of it", text:
+'switch (Selector)\n{\n   case Label1:\n      Statements1;\n      break;\n   case Label2:\n      Statements2;\n      break;\n   default:\n      StatementsD;\n}' },
+      { type: "p", text: "The selector must be an ordinal type — an int or a char. It cannot be a float and it cannot be a string. The labels must be values of that same type, and no value may appear on more than one label." },
+      { type: "note", text: "Once a label matches, execution carries on through every case below it until a break is reached. This is called falling through, and forgetting break is the classic switch bug: the right case runs, and then all the wrong ones do too." },
+      { type: "p", text: "Falling through on purpose is how several values share one outcome." },
+      { type: "code", label: "Deliberate fall-through", text:
+'switch (day)\n{\n   case 6:\n   case 7:\n      cout << "Weekend" << endl;\n      break;\n   default:\n      cout << "Weekday" << endl;\n}' },
+      { type: "p", text: "The default part is optional. It catches everything the labels did not, and runs unless a break was hit first. The statements under a label do not need braces, however many of them there are." },
+      { type: "note", text: "A switch only works when every alternative turns on the same ordinal variable. If the choices depend on different variables, or on a floating point value, you need nested ifs. Any switch can be rewritten as ifs; the reverse is not always true." },
+      { type: "p", text: "Put the cases that come up most often at the top, so the common ones are found with the least testing." },
+    ],
+    task: "Write a program for the cashier at a parkade. Ask whether the vehicle is a motorcar or a truck, then read how many hours it was parked — any part of an hour counts as a whole one. The charges are R2 for the first hour, R3 for 2 hours, R5 for 3 to 5 hours and R10 for more than 5 hours, with an extra R1 for trucks. Assume nothing is parked for longer than 24 hours. Use a switch statement.",
+    starter:
+`//Works out what is owed at a parkade
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    char vehicle;
+    int hours;
+    float charge;
+
+    cout << "Motorcar or truck (c/t)? ";
+    cin >> vehicle;
+    cout << "How many hours? ";
+    cin >> hours;
+
+    // A switch on hours to set the charge
+    // Remember 3, 4 and 5 all cost the same
+
+    // Add R1 if it is a truck, then display the charge
+
+    return 0;
+}
+`,
+    sampleInput: "t\n4\n",
+    theory: [
+      {
+        id: "13.1",
+        ask: [
+          { type: "p", text: "Your daughter wants to go to university and you set out the terms: 90% or higher and she may go anywhere and gets a car. 75% to 89% and she earns more than R5 000 over the December holidays, same again. More than 74% but without earning enough, she may still choose her university but gets no car. Less than 75% but more than 59%, she must attend the nearest university. Below 60%, no university." },
+          { type: "p", text: "Write a program that reads her average mark and her holiday earnings, and displays which university she may attend. It must use a switch statement." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Decides which university a mark allows\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int mark;\n    float earned;\n\n    cout << "Average mark: ";\n    cin >> mark;\n    cout << "Earned in December: ";\n    cin >> earned;\n\n    switch (mark / 10)\n    {\n       case 10:\n       case 9:\n          cout << "Any university, and a car." << endl;\n          break;\n       case 8:\n       case 7:\n          if (mark >= 75)\n             if (earned > 5000)\n                cout << "Any university, and a car." << endl;\n             else\n                cout << "Any university, but no car." << endl;\n          else\n             cout << "The nearest university." << endl;\n          break;\n       case 6:\n          cout << "The nearest university." << endl;\n          break;\n       default:\n          cout << "No university. Consider the alternatives." << endl;\n    }\n\n    return 0;\n}' },
+          { type: "note", text: "A switch needs whole-number labels, but the rules break at 75 and 90, which are not tens. Dividing the mark by 10 turns it into a case per decade, and the awkward decade — the seventies, split at 75 — is handled with ifs inside its case. Note that case 10 is needed for a mark of exactly 100." },
+        ],
+      },
+      {
+        id: "13.2",
+        ask: [
+          { type: "p", text: "Do Exercise 12.2 again, this time with a switch statement. It read two numbers representing a throw of two dice: a total of 7 or 11 displays “You win!”, 2 displays “Snake eyes!”, 12 displays “Good shot!”, and anything else displays “Try again.”" },
+        ],
+        answer: [
+          { type: "code", text:
+'//Reports the result of a throw of two dice\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int first, second;\n\n    cout << "Enter the two dice: ";\n    cin >> first >> second;\n\n    switch (first + second)\n    {\n       case 7:\n       case 11:\n          cout << "You win!" << endl;\n          break;\n       case 2:\n          cout << "Snake eyes!" << endl;\n          break;\n       case 12:\n          cout << "Good shot!" << endl;\n          break;\n       default:\n          cout << "Try again." << endl;\n    }\n\n    return 0;\n}' },
+          { type: "p", text: "This is what a switch is for. The whole decision turns on one whole number, so the else if chain from Lesson 12 becomes a flat list of the values that matter. Cases 7 and 11 share an outcome, so 7 falls through to 11 with nothing in between." },
+        ],
+      },
+      {
+        id: "13.4",
+        ask: [
+          { type: "p", text: "Write a switch statement that takes two integer variables, month (1 to 12) and year, and displays the number of days in that month. Leap years must be taken into account, so February needs nested if statements inside the switch." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Displays the number of days in a month\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int month, year, days;\n\n    cout << "Enter the month (1-12): ";\n    cin >> month;\n    cout << "Enter the year: ";\n    cin >> year;\n\n    switch (month)\n    {\n       case 4:\n       case 6:\n       case 9:\n       case 11:\n          days = 30;\n          break;\n       case 2:\n          if (year % 4 != 0)\n             days = 28;\n          else if (year % 100 != 0)\n             days = 29;\n          else if (year % 400 == 0)\n             days = 29;\n          else\n             days = 28;\n          break;\n       default:\n          days = 31;\n    }\n\n    cout << "That month has " << days << " days." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The four thirty-day months share one outcome, so they stack as empty cases. Everything not named has 31 days, which is what default is for. Test it with February 1900 (28 days) and February 2000 (29), because those are the two the leap year rule catches out." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l14-more-while",
+    part: "Part II · Conditional execution",
+    lesson: 14,
+    title: "More while loops",
+    teach: [
+      { type: "p", text: "A while loop tests its condition before the body runs, so the body may never run at all. Sometimes you want the opposite: do the thing once, then decide whether to do it again." },
+      { type: "code", label: "The do..while loop", text:
+'do\n{\n   cout << "Enter a positive number: ";\n   cin >> number;\n}\nwhile (number <= 0);' },
+      { type: "p", text: "A while loop is a pretest loop — the condition is checked first. A do..while is a posttest loop — the body runs, then the condition is checked. A do..while always runs at least once." },
+      { type: "note", text: "Note the semicolon after while (Condition); on a do..while. It is the end of the statement, and leaving it out is a syntax error that reads very strangely." },
+      { type: "p", text: "Because the body runs before the condition is tested, a do..while often does not need its control variable set up beforehand — the body can set it. That leaves two rules instead of the three you learned for while: the body must change the control variable, and the condition must test it." },
+      { type: "p", text: "Two loop shapes come up constantly. The first is counter-driven, where you know in advance how many times to go round." },
+      { type: "code", label: "Counter-driven", text:
+'count = 1;\n\nwhile (count <= 10)\n{\n   cout << "Iteration number " << count << endl;\n   count++;\n}' },
+      { type: "p", text: "The second accumulates a total. A variable acts as the accumulator, is set to 0 before the loop, and has each value added to it inside." },
+      { type: "code", label: "Accumulating a sum", text:
+'count = 1;\nsum = 0;\n\nwhile (count <= 10)\n{\n   cin >> value;\n   sum += value;\n   count++;\n}' },
+      { type: "p", text: "A variable declared inside braces is a block variable. It exists only within that block, and while it exists it hides any variable of the same name outside." },
+      { type: "note", text: "That hiding is a real source of confusion. If you declare int i inside a loop body when there is already an i outside, the outer one is untouched by anything the loop does to its own — and when the loop ends, the inner one is gone." },
+    ],
+    task: "Write a program that maintains a simple cheque account. Ask for an opening balance, then for a sequence of transactions — deposits as positive values, cheques as negative values. Display the new balance after each one. The transactions end when 0 is entered.",
+    starter:
+`//Keeps a running balance for a cheque account
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main()
+{
+    float balance, transaction;
+
+    cout << "Opening balance: ";
+    cin >> balance;
+
+    cout << fixed << setprecision(2);
+
+    // Read a transaction, and keep going until it is 0.
+    // After each one, add it to the balance and display the new balance.
+
+    return 0;
+}
+`,
+    sampleInput: "1000\n250\n-400\n100\n0\n",
+    theory: [
+      {
+        id: "14.1",
+        ask: [{ type: "p", text: "Write a program that asks how many people took part in a survey, then inputs the height of each one and calculates the average height." }],
+        answer: [
+          { type: "code", text:
+'//Works out the average height from a survey\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    int people, count = 1;\n    float height, total = 0.0;\n\n    cout << "How many people took part? ";\n    cin >> people;\n\n    while (count <= people)\n    {\n       cout << "Height of person " << count << ": ";\n       cin >> height;\n       total += height;\n       count++;\n    }\n\n    cout << fixed << setprecision(2);\n    if (people > 0)\n       cout << "Average height: " << total / people << endl;\n    else\n       cout << "Nobody took part." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "Both patterns from the lesson are here at once: a counter to control the number of iterations, and an accumulator to build the total. The check for people > 0 is there because dividing by zero would otherwise crash the program if the user answers 0." },
+        ],
+      },
+      {
+        id: "14.3",
+        ask: [
+          { type: "p", text: "Write a program that displays the words of this song, using a while loop." },
+          { type: "code", text:
+'There were 10 in the bed\nAnd the little one said:\n"Roll over, roll over!"\nSo they all rolled over,\nAnd one fell out,\nThere were 9 in the bed\nAnd the little one said:\n:\n:\nThere was 1 in the bed\nAnd the little one said:\n"Good night!"' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Sings ten in the bed\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int inBed = 10;\n\n    while (inBed > 1)\n    {\n       cout << "There were " << inBed << " in the bed" << endl;\n       cout << "And the little one said:" << endl;\n       cout << "\\"Roll over, roll over!\\"" << endl;\n       cout << "So they all rolled over," << endl;\n       cout << "And one fell out," << endl;\n       inBed--;\n    }\n\n    cout << "There was 1 in the bed" << endl;\n    cout << "And the little one said:" << endl;\n    cout << "\\"Good night!\\"" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The last verse is different — were becomes was, and the little one says good night instead of roll over — so the loop stops at 1 and the final verse is printed after it. Trying to force the odd verse into the loop with an if inside costs more than it saves." },
+        ],
+      },
+      {
+        id: "14.4",
+        ask: [
+          { type: "p", text: "Write a program that inputs a list of yearly salaries and counts how many exceed R100 000. The number of salaries is not known and there is no sentinel value, so the program must repeatedly ask whether there are more values to enter. It should end by displaying what percentage of the salaries entered were above R100 000. Use a do..while loop." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Counts how many salaries exceed R100 000\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    const float THRESHOLD = 100000.0;\n    float salary;\n    int total = 0, above = 0;\n    char more;\n\n    do\n    {\n       cout << "Enter a salary: ";\n       cin >> salary;\n       total++;\n\n       if (salary > THRESHOLD)\n          above++;\n\n       cout << "Any more (y/n)? ";\n       cin >> more;\n    }\n    while (more == \'y\' || more == \'Y\');\n\n    cout << fixed << setprecision(1);\n    cout << above << " of " << total << " salaries are above R100 000, which is "\n         << 100.0 * above / total << "%" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "A do..while fits because there is always at least one salary to enter, so asking first would be pointless. Note 100.0 * above / total rather than above / total * 100 — both are ints, so dividing first would give 0 every time." },
+        ],
+      },
+      {
+        id: "14.5",
+        ask: [
+          { type: "p", text: "What will the output of this program be? Explain your answer." },
+          { type: "code", text:
+'//Variable scope\n#include <iostream>\nusing namespace std;\n\nint i = 23;\n\nint main( )\n{\n   int i = 5;\n   int j = 10;\n\n   while (j > 0)\n   {\n      int i = j*j;\n      j--;\n   }\n\n   cout << "The value of i is " << i << endl;\n\n   return 0;\n}' },
+        ],
+        answer: [
+          { type: "code", label: "The output", text: 'The value of i is 5' },
+          { type: "p", text: "There are three different variables called i in this program, and the cout prints the one declared in main." },
+          { type: "list", items: [
+            "The i = 23 outside main is a global variable. It is hidden the moment main declares its own i.",
+            "The i = 5 in main is the one that is still in scope at the cout, so it is the one printed.",
+            "The i = j*j inside the loop body is a block variable. It is created afresh on every pass, hides the other two while the body runs, and is destroyed when the body ends. It never touches the i in main.",
+          ] },
+          { type: "note", text: "The loop looks like it is doing something and changes nothing that survives it. That is why declaring a variable inside a loop with the same name as one outside is worth avoiding — the code reads as though it is assigning to the outer variable." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l15-for",
+    part: "Part II · Conditional execution",
+    lesson: 15,
+    title: "For loops",
+    teach: [
+      { type: "p", text: "A for loop is a counter-driven loop with the setting up, the testing and the stepping all written on one line, so a reader can see the whole pattern at a glance." },
+      { type: "code", label: "The shape of it", text:
+'for (int counter = 1; counter <= 10; counter++)\n   cout << counter << endl;' },
+      { type: "p", text: "The three parts run at different times: the first once before anything else, the second before every pass, and the third after every pass. If the initial value is already past the final value the body never runs; if they are equal it runs exactly once." },
+      { type: "p", text: "To count down, decrement in the third part and turn the comparison around." },
+      { type: "code", label: "Counting down", text:
+'for (int counter = 10; counter >= 1; counter--)\n   cout << counter << endl;' },
+      { type: "note", text: "A counter declared inside the for statement does not exist after the loop. If you need its final value afterwards, declare it before the loop — and remember it ends up one past the final value, or one below it when counting down." },
+      { type: "p", text: "Use a for loop when you can work out the number of iterations before it starts. Use a while loop when you cannot — when it depends on what the user types, or on a value the loop itself discovers." },
+      { type: "note", text: "Do not change the counter inside the body. C++ allows it, and it makes the loop do something other than what its first line says it does, which is exactly the kind of bug that takes an afternoon to find." },
+      { type: "p", text: "Any relational operator can be used in the condition, but avoid !=. If the counter ever steps over the exact value being tested for, the loop never ends. Use <, <=, > or >= instead." },
+    ],
+    task: "Write a program that calculates and displays the sums of all the odd numbers up to a number n. The user supplies n, and the program must display all the partial sums along the way — including n itself if n is odd.",
+    starter:
+`//Displays the running sum of the odd numbers up to n
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    int n, sum = 0;
+
+    cout << "Enter a value for n: ";
+    cin >> n;
+
+    // Step through the odd numbers 1, 3, 5, ... up to n.
+    // Add each one to sum and display the running total.
+
+    return 0;
+}
+`,
+    sampleInput: "9\n",
+    theory: [
+      {
+        id: "15.2",
+        ask: [{ type: "p", text: "Write a program that uses a for loop to display all the characters with ASCII values from 32 to 255 on the screen." }],
+        answer: [
+          { type: "code", text:
+'//Displays the printable characters and their codes\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    for (int code = 32; code <= 255; code++)\n       cout << code << " " << char(code) << "   ";\n\n    cout << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "char(code) is an explicit conversion — without it, cout would print the number rather than the character it stands for. Codes above 127 are not standard ASCII and what appears for them depends on the machine, so do not be surprised if the tail end looks like nonsense." },
+        ],
+      },
+      {
+        id: "15.3",
+        ask: [{ type: "p", text: "Write a program that uses a for loop to display the ASCII values of all the upper case letters, each letter with its value on its own line." }],
+        answer: [
+          { type: "code", text:
+'//Displays each upper case letter with its ASCII value\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    for (char letter = \'A\'; letter <= \'Z\'; letter++)\n       cout << letter << " " << int(letter) << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The counter is a char here, not an int, which the lesson said is allowed. It works because the letters have consecutive codes, so letter++ moves to the next letter. A is 65 and Z is 90." },
+        ],
+      },
+      {
+        id: "15.4",
+        ask: [{ type: "p", text: "Redo Exercise 14.3 — the song about ten in the bed — using a for loop rather than a while loop." }],
+        answer: [
+          { type: "code", text:
+'//Sings ten in the bed\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    for (int inBed = 10; inBed > 1; inBed--)\n    {\n       cout << "There were " << inBed << " in the bed" << endl;\n       cout << "And the little one said:" << endl;\n       cout << "\\"Roll over, roll over!\\"" << endl;\n       cout << "So they all rolled over," << endl;\n       cout << "And one fell out," << endl;\n    }\n\n    cout << "There was 1 in the bed" << endl;\n    cout << "And the little one said:" << endl;\n    cout << "\\"Good night!\\"" << endl;\n\n    return 0;\n}' },
+          { type: "p", text: "Compare it with the while version. The three lines that dealt with the counter — setting it to 10, testing it, decreasing it — have collapsed into the for statement, and nothing else changed. This is the case a for loop is built for: the number of verses is known before the singing starts." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l16-nested-loops",
+    part: "Part II · Conditional execution",
+    lesson: 16,
+    title: "Nested loops",
+    teach: [
+      { type: "p", text: "A loop can contain another loop, exactly as an if can contain another if. The one on the outside is the outer loop, the one inside its body is the inner loop." },
+      { type: "p", text: "The order matters and catches people out: for every single pass of the outer loop, the inner loop runs all the way through from the beginning." },
+      { type: "code", label: "Three rows of four", text:
+'for (int row = 1; row <= 3; row++)\n{\n   for (int col = 1; col <= 4; col++)\n      cout << row << "," << col << "  ";\n\n   cout << endl;\n}' },
+      { type: "note", text: "That prints twelve pairs, not seven — the inner loop runs four times for each of the three passes of the outer one. The endl sits in the outer loop, after the inner loop has finished, which is what puts each row on its own line." },
+      { type: "p", text: "Nested loops are the natural fit for anything laid out in rows and columns: a table, a grid, a triangle of stars. The outer loop walks the rows and the inner one walks along each row." },
+      { type: "note", text: "Needing two loops does not mean they should be nested. If the second job starts only once the first has finished, put the loops one after the other instead. Nesting them would run the second one over and over for no reason." },
+    ],
+    task: "Write a program that uses nested for loops to display a multiplication table for 1 to 9, laid out as a triangle: row 1 has one entry, row 2 has two, and so on up to row 9 with nine. Put a heading row of the numbers 1 to 9 across the top.",
+    starter:
+`//Displays a triangular multiplication table
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main()
+{
+    // A heading row: a blank corner, then 1 to 9 across the top
+
+    // For each row 1 to 9:
+    //    print the row number, then row * col for each col up to row
+    //    end the line
+
+    return 0;
+}
+`,
+    theory: [
+      {
+        id: "16.1",
+        ask: [
+          { type: "p", text: "Write a program that calculates y in the equation y = x³ − 3x + 1 for various series of values of x. The program inputs a list of start and end values for x, and for each value of x from the start to the end it calculates y. For example, a start of 10 and an end of 20 calculates y for every x from 10 to 20. Each x and its y go on a separate line." },
+          { type: "p", text: "Pairs of start and end values should be input until both are 0." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Works out y = x^3 - 3x + 1 over ranges of x\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int start, end;\n\n    cout << "Enter a start and end value (0 0 to stop): ";\n    cin >> start >> end;\n\n    while (start != 0 || end != 0)\n    {\n       for (int x = start; x <= end; x++)\n       {\n          int y = x * x * x - 3 * x + 1;\n          cout << "x = " << x << "   y = " << y << endl;\n       }\n\n       cout << "Enter a start and end value (0 0 to stop): ";\n       cin >> start >> end;\n    }\n\n    return 0;\n}' },
+          { type: "note", text: "This is why both kinds of loop exist. The outer one is a while, because there is no way to know how many pairs the user will enter. The inner one is a for, because once a pair is in, the number of values of x is fixed. The condition stops only when both are 0, so || is right and && would be wrong." },
+        ],
+      },
+      {
+        id: "16.2",
+        ask: [
+          { type: "p", text: "Write a program that uses nested for loops to display this multiplication table." },
+          { type: "code", text:
+'     1   2    3    4    5    6    7    8    9\n 1   1\n 2   2   4\n 3   3   6    9\n 4   4   8    12   16\n 5   5   10   15   20   25\n 6   6   12   18   24   30   36\n 7   7   14   21   28   35   42   49\n 8   8   16   24   32   40   48   56   64\n 9   9   18   27   36   45   54   63   72   81' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Displays a triangular multiplication table\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    cout << setw(4) << " ";\n    for (int col = 1; col <= 9; col++)\n       cout << setw(5) << col;\n    cout << endl;\n\n    for (int row = 1; row <= 9; row++)\n    {\n       cout << setw(4) << row;\n\n       for (int col = 1; col <= row; col++)\n          cout << setw(5) << row * col;\n\n       cout << endl;\n    }\n\n    return 0;\n}' },
+          { type: "note", text: "The one thing that makes it a triangle rather than a square is col <= row in the inner loop, so each row stops at the diagonal. setw(5) from <iomanip> pads every number to the same width, which is what keeps the columns lined up once the numbers reach two digits." },
+        ],
+      },
+    ],
+  },
 
   { part: "Part III · Functions", lesson: 17, title: "Using functions", pending: true },
   { part: "Part III · Functions", lesson: 18, title: "Writing functions", pending: true },
