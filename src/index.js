@@ -3034,6 +3034,46 @@ function academyFromJudge0(submission) {
   };
 }
 
+/* Failures that mean the same thing whether we asked for a synchronous
+   result or an asynchronous one. Returns a reply to send straight back, or
+   null when the response is worth reading. */
+async function judge0PlanError(response) {
+  if (response.status === 401 || response.status === 403) {
+    // The body is the useful half: RapidAPI distinguishes a key it does not
+    // recognise from a valid key with no subscription to this API, and only
+    // one of those is fixed by changing the key.
+    const detail = (await response.text().catch(() => "")).slice(0, 300);
+    console.error(JSON.stringify({
+      message: "academy_judge0_auth",
+      status: response.status,
+      detail,
+    }));
+    return json(
+      {
+        error:
+          "The compiler service rejected this site's key. Check that the key " +
+          "is right and that this site is subscribed to Judge0 CE.",
+      },
+      { status: 502 },
+    );
+  }
+
+  if (response.status === 429) {
+    // The plan's quota, not our own per-address limiter, so say which.
+    console.error(JSON.stringify({ message: "academy_judge0_quota" }));
+    return json(
+      {
+        error:
+          "The compiler has reached its limit for now. Try again later, or " +
+          "let your tutor know if this keeps happening.",
+      },
+      { status: 429 },
+    );
+  }
+
+  return null;
+}
+
 async function runOnJudge0(env, source, stdin) {
   const host = env.JUDGE0_HOST || "judge0-ce.p.rapidapi.com";
   // 54 is C++ (GCC 9.2.0), present on every Judge0 CE deployment. Override
@@ -3053,52 +3093,70 @@ async function runOnJudge0(env, source, stdin) {
     wall_time_limit: 10,
   });
 
+  const submit = (wait) => fetch(
+    `https://${host}/submissions?base64_encoded=true&wait=${wait ? "true" : "false"}`,
+    { method: "POST", headers, body: payload },
+  );
+
+  /* Ask for the finished result in one request. That is one call against the
+     plan's quota rather than a submit plus a poll for every second the
+     program runs, which matters a great deal on a small plan. */
   let response;
   try {
-    response = await fetch(
-      `https://${host}/submissions?base64_encoded=true&wait=true`,
-      { method: "POST", headers, body: payload },
-    );
+    response = await submit(true);
   } catch (err) {
     console.error("academy judge0 unreachable", err);
     return json({ error: "The compiler service did not respond." }, { status: 502 });
   }
 
-  if (response.status === 401 || response.status === 403) {
-    console.error(JSON.stringify({ message: "academy_judge0_auth", status: response.status }));
-    return json(
-      { error: "The compiler service rejected this site's key. It needs to be renewed." },
-      { status: 502 },
-    );
-  }
+  let planError = await judge0PlanError(response);
+  if (planError) return planError;
 
-  if (response.status === 429) {
-    // The plan's quota, not our own per-address limiter, so say which.
-    console.error(JSON.stringify({ message: "academy_judge0_quota" }));
-    return json(
-      {
-        error:
-          "The compiler has reached its limit for now. Try again later, or " +
-          "let your tutor know if this keeps happening.",
-      },
-      { status: 429 },
-    );
-  }
+  let submission = null;
 
-  if (!response.ok) {
+  if (response.ok) {
+    submission = await response.json().catch(() => null);
+  } else {
+    /* Not every Judge0 deployment allows waiting — the hosted plans in
+       particular refuse it — and the refusal looks like a rejected
+       submission. Submitting asynchronously and polling is supported
+       everywhere, so fall back to it rather than reporting a failure the
+       student cannot do anything about. */
     const detail = (await response.text()).slice(0, 300);
-    console.error(JSON.stringify({ message: "academy_judge0_failed", status: response.status, detail }));
-    return json({ error: "The compiler service refused that request." }, { status: 502 });
+    console.error(JSON.stringify({
+      message: "academy_judge0_wait_refused",
+      status: response.status,
+      detail,
+    }));
+
+    try {
+      response = await submit(false);
+    } catch (err) {
+      console.error("academy judge0 unreachable", err);
+      return json({ error: "The compiler service did not respond." }, { status: 502 });
+    }
+
+    planError = await judge0PlanError(response);
+    if (planError) return planError;
+
+    if (!response.ok) {
+      const asyncDetail = (await response.text()).slice(0, 300);
+      console.error(JSON.stringify({
+        message: "academy_judge0_failed",
+        status: response.status,
+        detail: asyncDetail,
+      }));
+      return json({ error: "The compiler service refused that request." }, { status: 502 });
+    }
+
+    submission = await response.json().catch(() => null);
   }
 
-  let submission = await response.json().catch(() => null);
   if (!submission) {
     return json({ error: "The compiler service sent something unreadable." }, { status: 502 });
   }
 
-  /* wait=true normally returns the finished submission. Some Judge0 plans
-     disable it and hand back only a token, so fall back to polling rather
-     than failing on a difference the student cannot do anything about. */
+  // Either path can hand back a token instead of a result.
   if (submission.token && !submission.status) {
     submission = await pollJudge0(host, headers, submission.token);
     if (!submission) {
