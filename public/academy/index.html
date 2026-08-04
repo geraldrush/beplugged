@@ -148,6 +148,13 @@
     .bar-text{margin-top:5px;font-size:12px;color:var(--ink-400);
       display:flex;justify-content:space-between;gap:10px;}
     .ex.setup-item b{color:var(--brand);}
+    .theory{border-left:2px solid var(--brand);padding:2px 0 2px 13px;margin:13px 0;}
+    .theory-num{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+      color:var(--brand);margin-bottom:5px;}
+    .theory-btn{background:none;border:1px solid var(--ink-400);color:var(--ink-400);
+      font:inherit;font-size:12px;padding:3px 11px;border-radius:5px;cursor:pointer;margin-top:7px;}
+    .theory-btn:hover{border-color:var(--brand);color:var(--brand);}
+    .theory-answer{margin-top:9px;}
     .q .label{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
       color:var(--ink-400);margin:12px 0 5px;}
 
@@ -349,6 +356,41 @@
         outEl.firstChild.textContent = html;
       }
 
+      /* Lesson notes, past-paper briefs and the answers to theory questions
+         are all the same handful of shapes, so they share one renderer. */
+      function renderBlocks(target, blocks) {
+        (blocks || []).forEach(function (block) {
+          if (block.type === "p") {
+            var el = document.createElement("p");
+            el.textContent = block.text;
+            target.appendChild(el);
+          } else if (block.type === "note") {
+            var n = document.createElement("div");
+            n.className = "note-box";
+            n.textContent = block.text;
+            target.appendChild(n);
+          } else if (block.type === "list") {
+            var ul = document.createElement("ul");
+            block.items.forEach(function (i) {
+              var li = document.createElement("li");
+              li.textContent = i;
+              ul.appendChild(li);
+            });
+            target.appendChild(ul);
+          } else if (block.type === "code") {
+            if (block.label) {
+              var lbl = document.createElement("div");
+              lbl.className = "label";
+              lbl.textContent = block.label;
+              target.appendChild(lbl);
+            }
+            var pre = document.createElement("pre");
+            pre.textContent = block.text;
+            target.appendChild(pre);
+          }
+        });
+      }
+
       function renderQuestion(ex) {
         var q = document.getElementById("question");
         q.innerHTML = "";
@@ -367,36 +409,7 @@
         }
 
         // Lessons teach first; past papers only have the question.
-        (ex.teach || ex.brief || []).forEach(function (block) {
-          if (block.type === "p") {
-            var el = document.createElement("p");
-            el.textContent = block.text;
-            wrap.appendChild(el);
-          } else if (block.type === "note") {
-            var n = document.createElement("div");
-            n.className = "note-box";
-            n.textContent = block.text;
-            wrap.appendChild(n);
-          } else if (block.type === "list") {
-            var ul = document.createElement("ul");
-            block.items.forEach(function (i) {
-              var li = document.createElement("li");
-              li.textContent = i;
-              ul.appendChild(li);
-            });
-            wrap.appendChild(ul);
-          } else if (block.type === "code") {
-            if (block.label) {
-              var lbl = document.createElement("div");
-              lbl.className = "label";
-              lbl.textContent = block.label;
-              wrap.appendChild(lbl);
-            }
-            var pre = document.createElement("pre");
-            pre.textContent = block.text;
-            wrap.appendChild(pre);
-          }
-        });
+        renderBlocks(wrap, ex.teach || ex.brief || []);
 
         if (ex.task) {
           var tl = document.createElement("div");
@@ -407,6 +420,52 @@
           tb.className = "task-box";
           tb.textContent = ex.task;
           wrap.appendChild(tb);
+        }
+
+        /* The guide's own exercises. These are written out rather than typed
+           into the editor — several ask for a rewrite, or for which of four
+           fragments runs — so there is nothing to compile and nothing to mark
+           automatically. The answer is hidden behind a click so a student
+           commits to one before seeing it, which is the only part of this
+           that does any teaching. */
+        if (ex.theory && ex.theory.length) {
+          var tHead = document.createElement("div");
+          tHead.className = "label";
+          tHead.textContent = "Exercises from the study guide";
+          wrap.appendChild(tHead);
+
+          ex.theory.forEach(function (item) {
+            var box = document.createElement("div");
+            box.className = "theory";
+
+            var num = document.createElement("div");
+            num.className = "theory-num";
+            num.textContent = item.id ? "Exercise " + item.id : "Exercise";
+            box.appendChild(num);
+
+            renderBlocks(box, item.ask);
+
+            if (item.answer && item.answer.length) {
+              var reveal = document.createElement("button");
+              reveal.className = "theory-btn";
+              reveal.textContent = "Show answer";
+
+              var ans = document.createElement("div");
+              ans.className = "theory-answer";
+              ans.hidden = true;
+              renderBlocks(ans, item.answer);
+
+              reveal.addEventListener("click", function () {
+                ans.hidden = !ans.hidden;
+                reveal.textContent = ans.hidden ? "Show answer" : "Hide answer";
+              });
+
+              box.appendChild(reveal);
+              box.appendChild(ans);
+            }
+
+            wrap.appendChild(box);
+          });
         }
 
         if (ex.setup) {
@@ -522,6 +581,7 @@
           starter: l.starter || "",
           sampleInput: l.sampleInput,
           expectedOutput: l.expectedOutput,
+          theory: l.theory,
         };
       }).concat(EXERCISES.map(function (e) {
         return {
