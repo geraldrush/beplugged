@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v10";
+const CACHE_VERSION = "beplugged-v14";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -48,9 +48,9 @@ function shouldBypassCache(request) {
     return true;
   }
 
-  // The C++ toolchain is about 126MB and the compiler already keeps its own
-  // copy in IndexedDB. Caching it here as well would store it twice and eat
-  // a few hundred megabytes of the student's quota for nothing.
+  // The C++ toolchain payloads are large and the compiler already keeps its
+  // own copy in IndexedDB. Caching them here as well would store them twice
+  // and eat the student's quota for nothing.
   if (url.pathname.startsWith("/academy/cdn/")) {
     return true;
   }

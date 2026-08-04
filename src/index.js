@@ -2927,13 +2927,218 @@ function handleDemoRequest(path, method) {
    the browser never talks to it directly, so the address and any key stay
    on the server and every run can be rate limited.
 
-   Set ACADEMY_EXEC_URL to a Piston-compatible /execute endpoint, whether
-   that is a Cloudflare Container, a self-hosted Piston, or a managed one.
-   Optionally set ACADEMY_EXEC_TOKEN if the backend needs a bearer token.
+   Two backends are supported and picked by which secret is set:
+
+     JUDGE0_KEY        a Judge0 CE key (RapidAPI). Nothing to host.
+     ACADEMY_EXEC_URL  a Piston-compatible /execute endpoint, whether that is
+                       a Cloudflare Container, a self-hosted Piston, or a
+                       managed one. ACADEMY_EXEC_TOKEN is sent as a bearer
+                       token if the backend needs one.
+
+   Judge0 wins if both are set, so moving between them is a secret change
+   rather than a deploy.
    =================================================================== */
 
 const ACADEMY_MAX_SOURCE = 60000;
 const ACADEMY_MAX_STDIN = 10000;
+
+/* Judge0 status ids worth branching on. The rest (7 through 12) are the
+   various ways a program can crash, and all of them carry real output that a
+   student needs to see, so they are handled together. */
+const JUDGE0_TIME_LIMIT = 5;
+const JUDGE0_COMPILE_ERROR = 6;
+const JUDGE0_ACCEPTED = 3;
+
+/* Judge0's base64 mode. Plain mode is easier to read in a log but a program
+   that prints a stray control character can make the response invalid JSON,
+   and a student's half-written program prints stray anything. */
+function academyB64Encode(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  // Chunked because String.fromCharCode is applied to the whole array and a
+  // 60KB source would otherwise risk blowing the argument limit.
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function academyB64Decode(value) {
+  if (!value) return "";
+  try {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch (err) {
+    return "";
+  }
+}
+
+/* Turn a finished Judge0 submission into the shape the academy page expects.
+   Returns null when the failure is the service's rather than the student's,
+   so the caller can report it as a service problem instead of blaming their
+   code. */
+function academyFromJudge0(submission) {
+  const statusId = submission.status?.id ?? 0;
+  const stdout = academyB64Decode(submission.stdout);
+  const stderr = academyB64Decode(submission.stderr).trim();
+  const compileOutput = academyB64Decode(submission.compile_output).trim();
+  const message = academyB64Decode(submission.message).trim();
+
+  if (statusId === JUDGE0_COMPILE_ERROR) {
+    // Nothing ran, so the compiler's complaint is the entire answer.
+    return {
+      stdout: "",
+      stderr: compileOutput || "The program did not compile.",
+      exitCode: 1,
+      compiled: false,
+    };
+  }
+
+  if (statusId === JUDGE0_TIME_LIMIT) {
+    // Overwhelmingly this is cin waiting for input nobody typed, not a
+    // genuinely slow program, so lead with that.
+    return {
+      stdout,
+      stderr:
+        "The program ran too long and was stopped.\n\n" +
+        "Usually this means it is waiting for input that was not given, or a " +
+        "loop never ends. If the question asks the program to read values, " +
+        "type them into the input box below the editor, one per line.",
+      exitCode: 1,
+      compiled: true,
+    };
+  }
+
+  if (statusId < JUDGE0_ACCEPTED) {
+    // Still queued or processing: the caller polled as long as it was willing
+    // to, so treat it as the service being too slow rather than a result.
+    return null;
+  }
+
+  if (statusId > 12) {
+    // 13 internal error, 14 exec format error. Neither is the student's doing.
+    return null;
+  }
+
+  return {
+    stdout,
+    stderr: statusId === JUDGE0_ACCEPTED
+      ? stderr
+      : stderr || message || submission.status?.description || "The program stopped unexpectedly.",
+    exitCode: typeof submission.exit_code === "number"
+      ? submission.exit_code
+      : statusId === JUDGE0_ACCEPTED ? 0 : 1,
+    compiled: true,
+  };
+}
+
+async function runOnJudge0(env, source, stdin) {
+  const host = env.JUDGE0_HOST || "judge0-ce.p.rapidapi.com";
+  // 54 is C++ (GCC 9.2.0), present on every Judge0 CE deployment. Override
+  // with JUDGE0_LANGUAGE_ID if the instance offers a newer g++.
+  const languageId = Number(env.JUDGE0_LANGUAGE_ID) || 54;
+  const headers = {
+    "Content-Type": "application/json",
+    "X-RapidAPI-Key": env.JUDGE0_KEY,
+    "X-RapidAPI-Host": host,
+  };
+  const payload = JSON.stringify({
+    language_id: languageId,
+    source_code: academyB64Encode(source),
+    stdin: academyB64Encode(stdin),
+    // A COS1511 program that needs more than this is stuck, not busy.
+    cpu_time_limit: 5,
+    wall_time_limit: 10,
+  });
+
+  let response;
+  try {
+    response = await fetch(
+      `https://${host}/submissions?base64_encoded=true&wait=true`,
+      { method: "POST", headers, body: payload },
+    );
+  } catch (err) {
+    console.error("academy judge0 unreachable", err);
+    return json({ error: "The compiler service did not respond." }, { status: 502 });
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    console.error(JSON.stringify({ message: "academy_judge0_auth", status: response.status }));
+    return json(
+      { error: "The compiler service rejected this site's key. It needs to be renewed." },
+      { status: 502 },
+    );
+  }
+
+  if (response.status === 429) {
+    // The plan's quota, not our own per-address limiter, so say which.
+    console.error(JSON.stringify({ message: "academy_judge0_quota" }));
+    return json(
+      {
+        error:
+          "The compiler has reached its limit for now. Try again later, or " +
+          "let your tutor know if this keeps happening.",
+      },
+      { status: 429 },
+    );
+  }
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    console.error(JSON.stringify({ message: "academy_judge0_failed", status: response.status, detail }));
+    return json({ error: "The compiler service refused that request." }, { status: 502 });
+  }
+
+  let submission = await response.json().catch(() => null);
+  if (!submission) {
+    return json({ error: "The compiler service sent something unreadable." }, { status: 502 });
+  }
+
+  /* wait=true normally returns the finished submission. Some Judge0 plans
+     disable it and hand back only a token, so fall back to polling rather
+     than failing on a difference the student cannot do anything about. */
+  if (submission.token && !submission.status) {
+    submission = await pollJudge0(host, headers, submission.token);
+    if (!submission) {
+      return json({ error: "The compiler took too long to answer." }, { status: 504 });
+    }
+  }
+
+  const result = academyFromJudge0(submission);
+  if (!result) {
+    console.error(JSON.stringify({
+      message: "academy_judge0_status",
+      status: submission.status?.id,
+      description: submission.status?.description,
+    }));
+    return json({ error: "The compiler service could not run that." }, { status: 502 });
+  }
+
+  return json(result);
+}
+
+async function pollJudge0(host, headers, token) {
+  const url = `https://${host}/submissions/${token}?base64_encoded=true`;
+  // Roughly ten seconds in total, which comfortably covers a compile plus the
+  // five second CPU limit above.
+  for (let attempt = 0; attempt < 12; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 400 : 800));
+    let response;
+    try {
+      response = await fetch(url, { headers });
+    } catch (err) {
+      return null;
+    }
+    if (!response.ok) return null;
+    const submission = await response.json().catch(() => null);
+    if (!submission) return null;
+    const statusId = submission.status?.id ?? 0;
+    if (statusId >= JUDGE0_ACCEPTED) return submission;
+  }
+  return null;
+}
 
 // Streams a file that was deployed in numbered halves, because a single static
 // asset cannot exceed 25 MiB. The parts are concatenated in order without ever
@@ -2981,9 +3186,10 @@ async function handleSplitAsset(request, env, path, parts) {
     headers: {
       "Content-Type": "application/octet-stream",
       "Content-Length": String(total),
-      // Immutable content, but the URL carries a version so a bad copy can
-      // always be stepped over without anyone clearing a cache.
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // This URL is intentionally stable because the manifest points to it.
+      // Revalidate so a normal browser profile cannot keep an old compiler
+      // archive while a clean/incognito profile downloads the current one.
+      "Cache-Control": "public, max-age=0, must-revalidate",
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -2991,9 +3197,12 @@ async function handleSplitAsset(request, env, path, parts) {
 
 async function handleAcademyRun(request, env) {
   // Unauthenticated and it costs real compute, so throttle before any work.
-  if (env.CONTACT_LIMITER) {
+  // Prefers the academy's own budget; falls back to the contact limiter only
+  // so a Worker deployed before ACADEMY_LIMITER existed still throttles.
+  const limiter = env.ACADEMY_LIMITER || env.CONTACT_LIMITER;
+  if (limiter) {
     const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
-    const { success } = await env.CONTACT_LIMITER.limit({ key: `run:${clientIp}` });
+    const { success } = await limiter.limit({ key: `run:${clientIp}` });
     if (!success) {
       return json(
         { error: "You are running code very quickly. Give it a few seconds." },
@@ -3002,12 +3211,13 @@ async function handleAcademyRun(request, env) {
     }
   }
 
-  if (!env.ACADEMY_EXEC_URL) {
+  if (!env.JUDGE0_KEY && !env.ACADEMY_EXEC_URL) {
     return json(
       {
         error:
-          "No compiler is configured yet. Set ACADEMY_EXEC_URL on the Worker to a " +
-          "Piston-compatible execute endpoint and this will start working.",
+          "No compiler is configured yet. Set JUDGE0_KEY on the Worker to a " +
+          "Judge0 CE key, or ACADEMY_EXEC_URL to a Piston-compatible execute " +
+          "endpoint, and this will start working.",
         configured: false,
       },
       { status: 503 },
@@ -3023,6 +3233,10 @@ async function handleAcademyRun(request, env) {
   }
   if (source.length > ACADEMY_MAX_SOURCE || stdin.length > ACADEMY_MAX_STDIN) {
     return json({ error: "That program is larger than this page accepts." }, { status: 413 });
+  }
+
+  if (env.JUDGE0_KEY) {
+    return await runOnJudge0(env, source, stdin);
   }
 
   const headers = { "Content-Type": "application/json" };

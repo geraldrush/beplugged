@@ -12,25 +12,28 @@ const CURRICULUM = [
   {
     id: "setup",
     part: "Start here",
-    title: "Set up the compiler",
-    setup: true,
+    title: "How this page works",
     teach: [
-      { type: "p", text: "This page runs a real C++ compiler inside your browser. Nothing is sent to a server: your code is compiled on your own machine, which means it keeps working offline and costs nothing to use." },
-      { type: "p", text: "The trade is that the compiler has to be downloaded once, and it is not small." },
+      { type: "p", text: "There is nothing to install and nothing to download. Write C++ in the editor on the right, press Run, and a real compiler builds and runs it. It works on a laptop or a phone." },
       { type: "list", items: [
-        "About 100MB, downloaded once and then kept on this device",
-        "Use a computer if you can, and wifi rather than mobile data",
-        "It takes a few minutes on a normal connection",
-        "After this, everything is instant and works with no connection at all",
+        "The compiler is g++, the same one your assignments are marked against",
+        "Errors are shown exactly as the compiler reports them, so you learn to read them",
+        "If a question asks the program to read values, type them into the input box below the editor, one per line",
+        "Where a past paper prints its expected output, your output is checked against it",
       ] },
-      { type: "note", text: "Do this once, now, on wifi. If you wait and press Run in the middle of a lesson, you will be sitting through the download then instead." },
-      { type: "p", text: "Press the button below and leave the tab open. You can read Lesson 1 while it works." },
+      { type: "note", text: "You need a connection for Run to work, because the compiling happens on the server rather than on your device." },
+      { type: "p", text: "Try it now — the program below is already written. Press Run, then open Lesson 1." },
     ],
+    expectedOutput: "Ready to start.",
     starter:
-`// Nothing to write here yet.
-//
-// Press "Download the compiler" on the right.
-// When it finishes, open Lesson 1 and start writing C++.
+`#include <iostream>
+using namespace std;
+
+int main()
+{
+    cout << "Ready to start." << endl;
+    return 0;
+}
 `,
   },
 

@@ -25,6 +25,14 @@ BREVO_REPLY_TO = "info@beplugged.co.za"
 BREVO_SENDER_EMAIL = "info@beplugged.co.za"
 BREVO_SENDER_NAME = "BepluggedTech"
 
+# The academy compiler. The key itself is a secret:
+#   wrangler secret put JUDGE0_KEY
+# Language 54 is C++ (GCC 9.2.0), which every Judge0 CE deployment carries.
+# Raise it only after checking the instance actually offers the newer one,
+# because an unknown id fails every run.
+JUDGE0_HOST = "judge0-ce.p.rapidapi.com"
+JUDGE0_LANGUAGE_ID = "54"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "invoicing"
@@ -37,6 +45,19 @@ namespace_id = "1001"
 
   [ratelimits.simple]
   limit = 5
+  period = 60
+
+# The academy Run button. Its own namespace because a student debugging a loop
+# presses Run far more often than anyone submits the contact form, and because
+# a lab or household behind one address would otherwise lock its own students
+# out. Compiling costs real compute, so this is still a ceiling, just one set
+# for someone practising rather than someone filling in a form.
+[[ratelimits]]
+name = "ACADEMY_LIMITER"
+namespace_id = "1003"
+
+  [ratelimits.simple]
+  limit = 30
   period = 60
 
 # Separate namespace for admin login, so contact-form traffic can never

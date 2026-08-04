@@ -307,7 +307,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
   <script src="/academy/curriculum.js?v=14"></script>
   <script src="/academy/exercises.js?v=14"></script>
-  <script src="/academy/engine.js?v=14"></script>
+  <!-- Compiling happens on the server so a student can practise on any device
+       with no download. engine.js is the browser-hosted toolchain: it still
+       works, but it costs a ~39MB first visit and needs a desktop, so it is
+       not what a student lands on. -->
+  <script src="/academy/runner-server.js?v=1"></script>
   <script src="/academy/tour.js?v=14"></script>
   <script>
     (function () {
@@ -437,12 +441,13 @@
                   sizeEl.textContent = "";
                 }
                 statusEl.textContent = p.phase || "";
-              });
+              }, { force: already });
               fill.style.width = "100%";
               barWrap.classList.add("done");
               var secs = Math.round((Date.now() - t0) / 1000);
               phaseEl.textContent = "Done";
               prep.textContent = "\u2713 Compiler ready";
+              already = true;
               statusEl.textContent = "Compiler ready";
               say("Ready in " + secs + " seconds.\n\nThe compiler is stored on this device now, so it starts\ninstantly from here on and works with no connection.\n\nOpen Lesson 1 and write your first program.", "ok");
             } catch (err) {
@@ -600,8 +605,18 @@
         try {
           if (CodeRunner.setProgressHandler) {
             CodeRunner.setProgressHandler(function (msg) {
-              statusEl.textContent = msg;
-              say(msg + "\n\nThe first run downloads the compiler (about 100MB) and is slow.\nAfter that it is cached and starts quickly.");
+              var text = typeof msg === "string" ? msg : ((msg && msg.phase) || "");
+              var firstLine = text.split("\n")[0];
+              // Kept generic so the same page works against either runner:
+              // the server one only ever reports compiling and running, the
+              // browser-hosted one also reports downloading and unpacking.
+              var help = /Downloading/.test(text)
+                ? "The compiler is downloading to this device. This only happens once."
+                : /Starting|Building|Checking/.test(text)
+                  ? "The compiler may still be unpacking or reading files from browser storage. Leave this tab open."
+                  : "";
+              statusEl.textContent = firstLine || "Running...";
+              say(help ? text + "\n\n" + help : text);
             });
           }
           var result = await CodeRunner.run(getCode(), document.getElementById("stdin").value);
