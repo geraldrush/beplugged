@@ -117,37 +117,6 @@
       border-radius:6px;font-size:13.4px;line-height:1.55;color:#5a3a30;
     }
     .done-btn{margin:4px 0 8px;}
-    .setup-btn{margin:6px 0 10px;height:40px;font-size:14px;}
-    .bar-wrap{margin:2px 0 10px;display:none;}
-    .bar-wrap.on{display:block;}
-    .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;
-      position:relative;}
-    .bar span{
-      display:block;height:100%;width:0;border-radius:6px;
-      background:var(--brand);
-      transition:width .2s linear;
-      position:relative;overflow:hidden;
-    }
-    /* Moving stripes, so it is obvious work is happening even while a single
-       large bundle streams and the percentage barely changes. */
-    .bar span::after{
-      content:"";position:absolute;inset:0;
-      background-image:linear-gradient(115deg,
-        rgba(255,255,255,.32) 25%, transparent 25%,
-        transparent 50%, rgba(255,255,255,.32) 50%,
-        rgba(255,255,255,.32) 75%, transparent 75%);
-      background-size:22px 22px;
-      animation:bar-stripes .7s linear infinite;
-    }
-    @keyframes bar-stripes{ from{background-position:0 0;} to{background-position:22px 0;} }
-    /* Finished: stop the motion so "done" reads as done. */
-    .bar-wrap.done .bar span::after{animation:none;opacity:.35;}
-    @media (prefers-reduced-motion: reduce){
-      .bar span::after{animation:none;}
-    }
-    .bar-text{margin-top:5px;font-size:12px;color:var(--ink-400);
-      display:flex;justify-content:space-between;gap:10px;}
-    .ex.setup-item b{color:var(--brand);}
     .theory{border-left:2px solid var(--brand);padding:2px 0 2px 13px;margin:13px 0;}
     .theory-num{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
       color:var(--brand);margin-bottom:5px;}
@@ -247,17 +216,53 @@
     .btn.small{height:24px;padding:0 9px;font-size:11.5px;font-weight:600;}
     .pane.editor{flex:1 1 auto;min-height:90px;}
 
-    /* Below this the three columns stop making sense, so everything stacks and
-       the dividers stop being draggable. */
+    /* Tab bar, phone only. */
+    .tabs{display:none;flex:0 0 auto;background:var(--ink-900);}
+    .tabs button{
+      flex:1 1 0;min-width:0;height:46px;border:none;background:none;
+      font-family:inherit;font-size:13.5px;font-weight:600;color:#9fb0c6;
+      border-bottom:3px solid transparent;cursor:pointer;
+    }
+    .tabs button.on{color:#fff;border-bottom-color:var(--brand);}
+
+    /* Below this the three columns stop making sense. Rather than stack them
+       and leave four unusable slivers, one panel is shown at a time and the
+       tab bar switches between them. The dividers go: there is nothing left
+       to drag against. */
     @media (max-width:900px){
+      .tabs{display:flex;}
       .wrap{flex-direction:column;}
-      .pane.list{flex:0 0 168px;}
-      .pane.side{flex:0 0 auto;max-height:44vh;}
-      .col-centre{flex:1 1 auto;min-height:340px;}
-      .pane.output{flex:0 0 200px;}
       .gutter.v{display:none;}
+      .wrap > .pane,.wrap > .col-centre{display:none;}
+      .wrap[data-view="list"] > .pane.list{display:flex;flex:1 1 auto;}
+      .wrap[data-view="notes"] > .pane.side{display:flex;flex:1 1 auto;}
+      .wrap[data-view="code"] > .col-centre{display:flex;flex:1 1 auto;}
+      /* Editor and output share the screen, output a little under half so the
+         keyboard input line stays reachable without scrolling. */
+      .pane.editor{flex:1 1 auto;min-height:0;}
+      .pane.output{flex:0 0 47%;}
       .gutter.h{flex:0 0 6px;}
-      .pane.list,.pane.side{border-top:1px solid var(--line);}
+
+      /* Touch targets. 32px is comfortable with a mouse and fiddly with a
+         thumb. */
+      .btn{height:42px;font-size:14px;padding:0 15px;}
+      .btn.small{height:34px;font-size:12.5px;}
+      .pane-head{flex-wrap:wrap;gap:7px;padding-top:7px;padding-bottom:7px;}
+      .ex{padding-top:12px;padding-bottom:12px;}
+      .theory-btn{height:38px;padding:0 15px;}
+
+      /* Long words and wide code must not push the page sideways. */
+      .q{overflow-wrap:break-word;}
+      #stdout{font-size:12.5px;}
+      .CodeMirror{font-size:12.5px;}
+    }
+
+    /* Phones held upright, where the header eats a real share of the screen. */
+    @media (max-width:560px){
+      .bar{padding-left:12px;padding-right:12px;gap:10px;}
+      .bar img{height:24px;}
+      .bar .title span{display:none;}
+      .bar a{display:none;}
     }
   </style>
 </head>
@@ -270,7 +275,17 @@
     <a href="/training/unisa-cos1511-tutorial-class">About this course</a>
   </div>
 
-  <div class="wrap" id="wrap">
+  <!-- Phone only. Four panes stacked in a phone viewport gives four boxes too
+       short to use any of them, so on a narrow screen one panel gets the whole
+       screen and these switch between them. Hidden entirely on desktop, where
+       the three columns are visible at once. -->
+  <nav class="tabs" id="tabs">
+    <button type="button" data-view="list">Lessons</button>
+    <button type="button" data-view="notes">Notes</button>
+    <button type="button" data-view="code">Code</button>
+  </nav>
+
+  <div class="wrap" id="wrap" data-view="notes">
     <!-- Exercises -->
     <section class="pane list">
       <div class="pane-head">Exercises</div>
@@ -468,65 +483,6 @@
           });
         }
 
-        if (ex.setup) {
-          var prep = document.createElement("button");
-          prep.className = "btn run setup-btn";
-          var already = CodeRunner.isPrepared && CodeRunner.isPrepared();
-          prep.textContent = already ? "\u2713 Compiler ready \u2014 download again" : "Download the compiler";
-
-          var barWrap = document.createElement("div");
-          barWrap.className = "bar-wrap";
-          barWrap.innerHTML = '<div class="bar"><span></span></div>' +
-            '<div class="bar-text"><em class="bar-phase"></em><em class="bar-size"></em></div>';
-          var fill = barWrap.querySelector(".bar span");
-          var phaseEl = barWrap.querySelector(".bar-phase");
-          var sizeEl = barWrap.querySelector(".bar-size");
-
-          var mb = function (n) { return (n / 1048576).toFixed(1) + " MB"; };
-
-          prep.addEventListener("click", async function () {
-            prep.disabled = true;
-            prep.textContent = "Downloading\u2026";
-            barWrap.classList.add("on");
-            barWrap.classList.remove("done");
-            var t0 = Date.now();
-            try {
-              await CodeRunner.prepare(function (p) {
-                // Tolerate an older engine that reports a plain string.
-                if (typeof p === "string") p = { phase: p, loaded: 0, total: 0 };
-                phaseEl.textContent = p.phase || "";
-                if (p.total > 0) {
-                  var pct = Math.min(100, Math.round((p.loaded / p.total) * 100));
-                  fill.style.width = pct + "%";
-                  sizeEl.textContent = mb(p.loaded) + " of " + mb(p.total) + "  \u00b7  " + pct + "%";
-                  prep.textContent = "Downloading\u2026 " + pct + "%";
-                } else {
-                  sizeEl.textContent = "";
-                }
-                statusEl.textContent = p.phase || "";
-              }, { force: already });
-              fill.style.width = "100%";
-              barWrap.classList.add("done");
-              var secs = Math.round((Date.now() - t0) / 1000);
-              phaseEl.textContent = "Done";
-              prep.textContent = "\u2713 Compiler ready";
-              already = true;
-              statusEl.textContent = "Compiler ready";
-              say("Ready in " + secs + " seconds.\n\nThe compiler is stored on this device now, so it starts\ninstantly from here on and works with no connection.\n\nOpen Lesson 1 and write your first program.", "ok");
-            } catch (err) {
-              phaseEl.textContent = "Stopped";
-              prep.textContent = "Try again";
-              statusEl.textContent = "Setup failed";
-              say("Setup did not finish:\n\n" + (err && err.message ? err.message : err), "err");
-            }
-            prep.disabled = false;
-          });
-
-          wrap.appendChild(prep);
-          wrap.appendChild(barWrap);
-          q.appendChild(wrap);
-          return;
-        }
 
         // Progress is the student's own claim, not a mark. It only tracks
         // where they got to.
@@ -546,6 +502,29 @@
 
         q.appendChild(wrap);
       }
+
+      /* On a phone only one panel is on screen, so choosing something has to
+         take you to it. On desktop these are no-ops: everything is already
+         visible and moving the view would be meaningless. */
+      var wrapEl = document.getElementById("wrap");
+
+      function isNarrow() {
+        return window.matchMedia("(max-width:900px)").matches;
+      }
+
+      function showView(view) {
+        wrapEl.dataset.view = view;
+        [].forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+          b.classList.toggle("on", b.dataset.view === view);
+        });
+        // CodeMirror measures itself when it is laid out. Revealing the editor
+        // after it was display:none leaves it sized for nothing until told.
+        if (view === "code" && editor) setTimeout(function () { editor.refresh(); }, 0);
+      }
+
+      [].forEach.call(document.querySelectorAll(".tabs button"), function (b) {
+        b.addEventListener("click", function () { showView(b.dataset.view); });
+      });
 
       function select(id) {
         var ex = ITEMS.find(function (e) { return e.id === id; });
@@ -575,7 +554,6 @@
           lesson: l.lesson,
           title: l.title,
           pending: !!l.pending,
-          setup: !!l.setup,
           teach: l.teach,
           task: l.task,
           starter: l.starter || "",
@@ -638,7 +616,11 @@
           }
 
           if (!item.pending) {
-            b.addEventListener("click", function () { select(item.id); });
+            b.addEventListener("click", function () {
+              select(item.id);
+              // Picking a lesson means you want to read it.
+              if (isNarrow()) showView("notes");
+            });
           }
           list.appendChild(b);
         });
@@ -662,6 +644,9 @@
       document.getElementById("run-btn").addEventListener("click", async function () {
         var btn = this;
         save();
+        // The output appears in the code panel, so make sure that is the one
+        // being looked at before anything is written to it.
+        if (isNarrow()) showView("code");
         btn.disabled = true;
         statusEl.textContent = "Running...";
         say("Compiling...");
@@ -849,6 +834,7 @@
 
       buildList();
       select(ITEMS[0].id);
+      showView("notes");
 
       CodeRunner.ready().then(function (info) {
         statusEl.textContent = info.label;
