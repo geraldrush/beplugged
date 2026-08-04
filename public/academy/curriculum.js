@@ -70,6 +70,36 @@ int main()
     return 0;
 }
 `,
+    theory: [
+      {
+        id: "1.1",
+        ask: [
+          { type: "p", text: "Every program in this module has the same three parts. In the skeleton above, which part is the descriptive comment? Which is the standard header file, and which is the statement sequence?" },
+        ],
+        answer: [
+          { type: "list", items: [
+            "The descriptive comment is the // line at the top saying what the program does. It is for the reader; the compiler ignores it entirely.",
+            "The standard header file is #include <iostream>, which brings in the ability to read and print.",
+            "The statement sequence is everything between the braces of main — the lines that actually run, in the order they are written.",
+          ] },
+          { type: "note", text: "using namespace std; is not one of the three, but without it you would have to write std::cout instead of cout every time." },
+        ],
+      },
+      {
+        id: "1.2",
+        ask: [
+          { type: "p", text: "Write a program to display the following poem on the screen." },
+          { type: "code", text:
+'Twinkle, twinkle, little bat!\nHow I wonder what you’re at?\nUp above the world you fly,\nLike a tea-tray in the sky.' },
+          { type: "p", text: "It is from Alice's Adventures in Wonderland by Lewis Carroll." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Displays a verse from Alice\'s Adventures in Wonderland\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    cout << "Twinkle, twinkle, little bat!" << endl;\n    cout << "How I wonder what you\'re at?" << endl;\n    cout << "Up above the world you fly," << endl;\n    cout << "Like a tea-tray in the sky." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The apostrophe in you're sits inside double quotes, so it needs no special treatment. A double quote inside the text would, and is written \\\" — Lesson 7 covers that." },
+        ],
+      },
+    ],
   },
 
   {
@@ -104,6 +134,45 @@ int main()
 }
 `,
     sampleInput: "19 5\n",
+    theory: [
+      {
+        id: "2.1",
+        ask: [
+          { type: "p", text: "Add round brackets to these expressions to show the order in which the operators are evaluated, then give the value of each one." },
+          { type: "code", text:
+'(i)   80 / 5 + 70 / 6\n(ii)  -5 + -4 - -3\n(iii) 6 * 7 / 8 * 9\n(iv)  1 - 2 + 3 / 4 * 5\n(v)   -1 + 23 / -4 + 56' },
+        ],
+        answer: [
+          { type: "code", text:
+'(i)   (80 / 5) + (70 / 6)        = 16 + 11  = 27\n(ii)  ((-5) + (-4)) - (-3)       = -9 + 3   = -6\n(iii) ((6 * 7) / 8) * 9          = 5 * 9    = 45\n(iv)  (1 - 2) + ((3 / 4) * 5)    = -1 + 0   = -1\n(v)   ((-1) + (23 / (-4))) + 56  = -1 - 5 + 56 = 50' },
+          { type: "note", text: "Every surprise here comes from integer division throwing the remainder away. 70 / 6 is 11, not 11.67. 3 / 4 is 0, which is why (iv) collapses to -1. And 23 / -4 is -5, because the division truncates towards zero rather than rounding down." },
+        ],
+      },
+      {
+        id: "2.2",
+        ask: [
+          { type: "p", text: "Write a program that produces this output, calculating the numbers in place of XXX, YYY and ZZZ." },
+          { type: "code", text:
+'There are 60 seconds in a minute.\nThere are XXX seconds in an hour.\nThere are YYY seconds in a day.\nThere are ZZZ seconds in a year.' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Displays the number of seconds in various periods\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    const int SECONDS_PER_MINUTE = 60;\n    const int MINUTES_PER_HOUR = 60;\n    const int HOURS_PER_DAY = 24;\n    const int DAYS_PER_YEAR = 365;\n\n    int perHour = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;\n    int perDay = perHour * HOURS_PER_DAY;\n    long perYear = long(perDay) * DAYS_PER_YEAR;\n\n    cout << "There are " << SECONDS_PER_MINUTE << " seconds in a minute." << endl;\n    cout << "There are " << perHour << " seconds in an hour." << endl;\n    cout << "There are " << perDay << " seconds in a day." << endl;\n    cout << "There are " << perYear << " seconds in a year." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The answers are 3 600, 86 400 and 31 536 000. That last one is the reason for long: an int is only guaranteed to hold about 32 000, and although it is usually far larger in practice, a year of seconds is close enough to the edge to be worth being deliberate about." },
+        ],
+      },
+      {
+        id: "2.3",
+        ask: [
+          { type: "p", text: "Write a program to calculate the remainder of 234 divided by 13, remembering that / throws the remainder away. Hint: divide 234 by 13, multiply the result by 13 again, and the difference between that and 234 is the remainder." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Works out a remainder the long way round\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int number = 234;\n    int divisor = 13;\n    int quotient = number / divisor;\n    int remainder = number - quotient * divisor;\n\n    cout << "The remainder is " << remainder << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "234 / 13 is 18, and 18 * 13 is 234, so the remainder is 0 — 13 divides 234 exactly. C++ has an operator that does this in one step, %, and 234 % 13 gives the same answer. The exercise makes you do it the long way so you can see what % is actually doing." },
+        ],
+      },
+    ],
   },
 
   {
@@ -138,6 +207,50 @@ int main()
 }
 `,
     sampleInput: "21\n",
+    theory: [
+      {
+        id: "3.1",
+        ask: [{ type: "p", text: "Write a program that inputs three values and displays them on a single line in reverse order." }],
+        answer: [
+          { type: "code", text:
+'//Displays three values in reverse order\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int first, second, third;\n\n    cout << "Enter three values: ";\n    cin >> first >> second >> third;\n\n    cout << third << " " << second << " " << first << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "Nothing is reversed here in the sense of being rearranged in memory. The values sit exactly where they were put; only the order of the printing changed." },
+        ],
+      },
+      {
+        id: "3.2",
+        ask: [
+          { type: "p", text: "Answer these without typing the program in and running it." },
+          { type: "code", text:
+'#include <iostream>\nusing namespace std;\n\nint main( )\n{\n   int x, y, z;\n\n   cout << "Enter values for variables x, y and z:" << endl;\n   cin >> x >> y >> z;\n\n   cout << "x + y / z is " << x + y / z << endl;\n   cout << "x % z is " << x % z << endl;\n   cout << "y * z / x + 2 is " << y * z / x + 2 << endl;\n\n   return 0;\n}' },
+          { type: "list", items: [
+            "(i) What is the output if the user enters 2, 6 and 4?",
+            "(ii) What is the output if the user enters 5, 1 and 3?",
+            "(iii) If the last statement becomes y * (z / x + 2), what does it give for each of those two sets of values?",
+          ] },
+        ],
+        answer: [
+          { type: "code", label: "(i) x=2, y=6, z=4", text:
+'x + y / z is 3        because 6 / 4 is 1, then 2 + 1\nx % z is 2            because 2 divided by 4 leaves 2\ny * z / x + 2 is 14   because 6 * 4 is 24, / 2 is 12, + 2' },
+          { type: "code", label: "(ii) x=5, y=1, z=3", text:
+'x + y / z is 5        because 1 / 3 is 0, then 5 + 0\nx % z is 2            because 5 divided by 3 leaves 2\ny * z / x + 2 is 2    because 1 * 3 is 3, / 5 is 0, + 2' },
+          { type: "code", label: "(iii) with the brackets", text:
+'for (i):  6 * (4 / 2 + 2) = 6 * 4 = 24\nfor (ii): 1 * (3 / 5 + 2) = 1 * 2 = 2' },
+          { type: "note", text: "The brackets change the answer in (i) from 14 to 24 and leave (ii) at 2. Working through cases like this by hand is exactly what the exam asks for, and integer division is where the marks are lost." },
+        ],
+      },
+      {
+        id: "3.3",
+        ask: [
+          { type: "p", text: "Lorraine inherited her grandmother's cookbook, but every oven temperature is in Fahrenheit and her oven is only marked in Celsius. Write a program to help her. The formula is C = 5(F − 32) / 9." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Converts a Fahrenheit oven temperature to Celsius\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    float fahrenheit;\n\n    cout << "Enter the temperature in Fahrenheit: ";\n    cin >> fahrenheit;\n\n    cout << "That is " << 5 * (fahrenheit - 32) / 9\n         << " degrees Celsius" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "fahrenheit must be a float. With an int, 350 degrees comes out as 176 rather than 176.667 — and worse, writing the formula as 5 / 9 * (fahrenheit - 32) gives 0 every time, because 5 / 9 is worked out first and integer division makes it 0." },
+        ],
+      },
+    ],
   },
 
   {
@@ -170,6 +283,42 @@ int main()
 }
 `,
     sampleInput: "60\n75\n48\n",
+    theory: [
+      {
+        id: "4.1",
+        ask: [{ type: "p", text: "Redo Exercise 3.3, but store the result of the calculation in a variable instead of doing the calculation inside the output statement." }],
+        answer: [
+          { type: "code", text:
+'//Converts a Fahrenheit oven temperature to Celsius\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    float fahrenheit, celsius;\n\n    cout << "Enter the temperature in Fahrenheit: ";\n    cin >> fahrenheit;\n\n    celsius = 5 * (fahrenheit - 32) / 9;\n\n    cout << "That is " << celsius << " degrees Celsius" << endl;\n\n    return 0;\n}' },
+          { type: "p", text: "The output is identical. What changes is that the answer now has a name, so it can be used again, checked, or printed differently without recalculating it." },
+        ],
+      },
+      {
+        id: "4.2",
+        ask: [
+          { type: "p", text: "Sam runs a packaging business. Clients bring him a number of identical items and he packs as many as will fit into each box, then works out how many boxes he needs and how many items are left over." },
+          { type: "p", text: "Write a program that inputs the number of items and the number that fit in a box, then calculates how many boxes are needed and how many items are left over." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Works out boxes needed and items left over\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    int items, perBox, boxes, leftOver;\n\n    cout << "How many items? ";\n    cin >> items;\n    cout << "How many fit in a box? ";\n    cin >> perBox;\n\n    boxes = items / perBox;\n    leftOver = items % perBox;\n\n    cout << "Boxes needed: " << boxes << endl;\n    cout << "Items left over: " << leftOver << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "This is what / and % are for, and why integer division throwing the remainder away is a feature rather than a nuisance. With 47 items and 10 per box you get 4 full boxes and 7 left over." },
+        ],
+      },
+      {
+        id: "4.3",
+        ask: [
+          { type: "p", text: "What will the value of n be after this series of statements?" },
+          { type: "code", text:
+'int n = 10;\nn += 3;\nn /= 2;\nn++;\nn %= 4;\nn -= 5;' },
+        ],
+        answer: [
+          { type: "code", label: "Step by step", text:
+'int n = 10;    n is 10\nn += 3;        n is 13     (10 + 3)\nn /= 2;        n is 6      (13 / 2, remainder thrown away)\nn++;           n is 7      (6 + 1)\nn %= 4;        n is 3      (7 divided by 4 leaves 3)\nn -= 5;        n is -2     (3 - 5)' },
+          { type: "note", text: "The answer is -2. The step that catches people is n /= 2 — 13 / 2 is 6, not 6.5, because n is an int and there is nowhere to keep the half." },
+        ],
+      },
+    ],
   },
 
   {
@@ -203,6 +352,22 @@ int main()
 }
 `,
     expectedOutput: "27",
+    theory: [
+      {
+        id: "5.1",
+        ask: [
+          { type: "p", text: "Draw variable diagrams showing the value of each variable after each statement, and give the exact output of this program." },
+          { type: "code", text:
+' 1 //Tracing practice\n 2 #include <iostream>\n 3 using namespace std;\n 4\n 5 int main( )\n 6 {\n 7    int j, k, m, n;\n 8    j = 3;\n 9    k = 2;\n10    m = (j * j - 6) / k;\n11    n = j * j - 6 / k;\n12    cout << j << " " << k << " " << m << " " << n << endl;\n13    j = m / 2 + 3 * j;\n14    k = j - m * n;\n15    cout << j << " " << k << " " << m << " " << n << endl;\n16\n17    return 0;\n18 }' },
+        ],
+        answer: [
+          { type: "code", label: "Tracing it line by line", text:
+'line       j     k     m     n\n 7         ?     ?     ?     ?     declared, no values yet\n 8         3     ?     ?     ?\n 9         3     2     ?     ?\n10         3     2     1     ?     (3*3 - 6) / 2  =  3 / 2  =  1\n11         3     2     1     6     3*3 - 6/2      =  9 - 3  =  6\n12   prints "3 2 1 6"\n13         9     2     1     6     1/2 + 3*3      =  0 + 9  =  9\n14         9     3     1     6     9 - 1*6                  =  3\n15   prints "9 3 1 6"' },
+          { type: "code", label: "The exact output", text: '3 2 1 6\n9 3 1 6' },
+          { type: "note", text: "Lines 10 and 11 look almost the same and give completely different answers, which is the whole point of the exercise. In line 10 the brackets force the subtraction first; in line 11 the division happens before the subtraction. Line 13 has the other trap: m / 2 is 1 / 2, which is 0." },
+        ],
+      },
+    ],
   },
 
   {
@@ -241,6 +406,62 @@ int main()
 }
 `,
     sampleInput: "249.99\n15\n",
+    theory: [
+      {
+        id: "6.1",
+        ask: [{ type: "p", text: "Write a program that asks for and reads the length and width of a room in metres, then calculates and displays the area with a suitable heading. The output must be in fixed-point notation with three digits after the decimal point." }],
+        answer: [
+          { type: "code", text:
+'//Works out the area of a room\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    float length, width, area;\n\n    cout << "Enter the length of the room in metres: ";\n    cin >> length;\n    cout << "Enter the width of the room in metres: ";\n    cin >> width;\n\n    area = length * width;\n\n    cout << fixed << setprecision(3);\n    cout << "Area of the room: " << area << " square metres" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "fixed and setprecision come from <iomanip>, and setprecision means decimal places only once fixed is in force. Without fixed it means significant digits instead, which is the trap in Exercise 6.4." },
+        ],
+      },
+      {
+        id: "6.2",
+        ask: [{ type: "p", text: "Change the program from Exercise 6.1 so that it also calculates the total price of a wall-to-wall carpet for the room, at R59.50 per square metre." }],
+        answer: [
+          { type: "code", text:
+'//Works out the area of a room and the cost of carpeting it\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    const float PRICE_PER_SQUARE_METRE = 59.50;\n    float length, width, area, cost;\n\n    cout << "Enter the length of the room in metres: ";\n    cin >> length;\n    cout << "Enter the width of the room in metres: ";\n    cin >> width;\n\n    area = length * width;\n    cost = area * PRICE_PER_SQUARE_METRE;\n\n    cout << fixed << setprecision(3);\n    cout << "Area of the room: " << area << " square metres" << endl;\n    cout << setprecision(2);\n    cout << "Cost of the carpet: R" << cost << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The price drops to two decimals because it is money. setprecision stays in force until it is changed again, so it has to be set a second time rather than once at the top." },
+        ],
+      },
+      {
+        id: "6.3",
+        ask: [
+          { type: "p", text: "This program does nothing meaningful; it only illustrates integer and floating point numbers." },
+          { type: "code", text:
+' 7    int w, x;\n 8    float y, result, answer;\n 9\n10    cout << "Enter two integers: " << endl;\n11    cin >> w >> x;\n12\n13    y = w / x;\n14    result = w - y;\n15    y = float(w + x);\n16    answer = int(y / x);' },
+          { type: "list", items: [
+            "(i) Where do implicit and explicit type conversions take place?",
+            "(ii) What are the values of result and answer at the end if 13 and 5 are entered for w and x?",
+          ] },
+        ],
+        answer: [
+          { type: "code", label: "(i) the conversions", text:
+'line 13   implicit   w / x is worked out as ints (13 / 5 = 2),\n                     then the 2 is converted to float on assignment\nline 14   implicit   w is converted to float so it can be subtracted from y\nline 15   explicit   float(w + x) — you asked for it, with float(...)\nline 16   explicit   int(y / x) — you asked for it, with int(...)\nline 16   implicit   x is converted to float for the division, and the\n                     int result is converted back to float on assignment' },
+          { type: "code", label: "(ii) the values", text:
+'y      = 13 / 5     = 2      (integer division, then stored as 2.0)\nresult = 13 - 2.0   = 11.0\ny      = float(18)  = 18.0\nanswer = int(18.0 / 5) = int(3.6) = 3   (stored as 3.0)\n\nresult is 11 and answer is 3' },
+          { type: "note", text: "Line 13 is the one that costs marks. w and x are both ints, so the division is done in integer arithmetic and the 0.6 is gone before the float ever sees it. Declaring y as a float does not rescue a calculation that was already finished." },
+        ],
+      },
+      {
+        id: "6.4",
+        ask: [
+          { type: "p", text: "What is the exact output of this program, including spaces?" },
+          { type: "code", text:
+'float a, b, c;\n\ncout << "Enter three floating point numbers:" << endl;\ncin >> a >> b >> c;\n\ncout.precision(5);\ncout << a << " " << b << " " << c << endl;\n\ncout << "Enter two more floating point numbers:" << endl;\ncin >> b >> a;\n\ncout.setf(ios::fixed);\ncout.precision(3);\ncout << a << " " << b << " " << c << endl;' },
+          { type: "code", label: "The input", text: '14.0   1.123   64.9999\n73.46  27.2727' },
+        ],
+        answer: [
+          { type: "code", label: "The output", text:
+'Enter three floating point numbers:\n14 1.123 65\nEnter two more floating point numbers:\n27.273 73.460 65.000' },
+          { type: "p", text: "The first line has precision(5) but not fixed, so 5 means significant digits. 14.0 prints as 14 because trailing zeros are dropped, and 64.9999 rounds to 65." },
+          { type: "p", text: "Then b and a are read again, in that order, so b becomes 73.46 and a becomes 27.2727. c is never read again and keeps 64.9999." },
+          { type: "p", text: "The second line has fixed in force, so precision(3) now means three decimal places and nothing is dropped: 27.273, 73.460 and 65.000." },
+          { type: "note", text: "Two things to take from this. Reading into b then a is not a mistake in the question — it really does swap which value lands where. And the same precision(3) means something different before and after setf(ios::fixed)." },
+        ],
+      },
+    ],
   },
 
   {
@@ -279,6 +500,76 @@ int main()
 }
 `,
     sampleInput: "Thandi Nkosi\n",
+    theory: [
+      {
+        id: "7.1",
+        ask: [
+          { type: "p", text: "Consider this program." },
+          { type: "code", text:
+'int x, y, z;\n\ncout << "Enter two numbers for variables x and y: ";\ncin >> x >> y;\n\nz = x + y;\ncout << "x + y is " << z << endl;' },
+          { type: "list", items: [
+            "(i) What is the output if the user enters 123 and 456?",
+            "(ii) What if x, y and z are declared as string instead, with #include <string> added?",
+            "(iii) What if they are declared as char?",
+          ] },
+        ],
+        answer: [
+          { type: "code", text:
+'(i)   x + y is 579\n(ii)  x + y is 123456\n(iii) x + y is c' },
+          { type: "p", text: "In (i) they are numbers, so + adds them. In (ii) they are text, so + joins them end to end — 123 followed by 456, not five hundred and seventy nine." },
+          { type: "p", text: "In (iii) a char holds one character, so cin takes only the 1 from 123 and only the 4 from 456... except that whitespace is skipped, so x gets '1' and y gets the next non-space character, '2'. Their ASCII codes are 49 and 50, which add to 99, and 99 is the code for the letter c." },
+          { type: "note", text: "The same + does three different jobs depending on what it is given. This is worth remembering when a program prints something bizarre — check the types before you check the arithmetic." },
+        ],
+      },
+      {
+        id: "7.2",
+        ask: [
+          { type: "p", text: "Write a program that works out which letter of the alphabet a given upper case letter is." },
+          { type: "code", label: "The interface", text: 'Enter an upper case letter: E\nE is in position 5 in the alphabet' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Works out an upper case letter\'s position in the alphabet\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    char letter;\n\n    cout << "Enter an upper case letter: ";\n    cin >> letter;\n\n    cout << letter << " is in position " << letter - \'A\' + 1\n         << " in the alphabet" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The letters have consecutive ASCII codes, so subtracting 'A' gives the distance from the start of the alphabet: 'E' is 69 and 'A' is 65, so the difference is 4. Add 1 because A is position 1 rather than position 0." },
+        ],
+      },
+      {
+        id: "7.3",
+        ask: [{ type: "p", text: "Write a program that performs a spoonerism, where the first letters of two words are swapped. The spoonerism of Cold Blue is Bold Clue. The program must input two words and output their spoonerism." }],
+        answer: [
+          { type: "code", text:
+'//Swaps the first letters of two words\n#include <iostream>\n#include <string>\nusing namespace std;\n\nint main()\n{\n    string first, second;\n    char swap;\n\n    cout << "Enter two words: ";\n    cin >> first >> second;\n\n    swap = first[0];\n    first[0] = second[0];\n    second[0] = swap;\n\n    cout << first << " " << second << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "first[0] is the first character of the string, counting from 0. The third variable is needed because the moment you overwrite first[0] the original letter is gone, so it has to be put somewhere safe before the swap starts." },
+        ],
+      },
+      {
+        id: "7.4",
+        ask: [
+          { type: "p", text: "Write a program to allow the following interaction." },
+          { type: "code", text:
+'Enter a person\'s name: Peter\nEnter another person\'s name: Mary\nEnter a colour: purple\nEnter a number: 13\nEnter a noun: fish\nEnter an adjective: sweet\n\nDialogue\n========\nPeter: "Couldn\'t you see that the traffic light was purple?"\nMary:   "But I had 13 people and a fish in the car with me."\nPeter: "That is so sweet! You could have had them all killed."' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Builds a small dialogue out of words supplied by the user\n#include <iostream>\n#include <string>\nusing namespace std;\n\nint main()\n{\n    string nameOne, nameTwo, colour, noun, adjective;\n    int number;\n\n    cout << "Enter a person\'s name: ";\n    cin >> nameOne;\n    cout << "Enter another person\'s name: ";\n    cin >> nameTwo;\n    cout << "Enter a colour: ";\n    cin >> colour;\n    cout << "Enter a number: ";\n    cin >> number;\n    cout << "Enter a noun: ";\n    cin >> noun;\n    cout << "Enter an adjective: ";\n    cin >> adjective;\n\n    cout << endl;\n    cout << "Dialogue" << endl;\n    cout << "========" << endl;\n    cout << nameOne << ": \\"Couldn\'t you see that the traffic light was "\n         << colour << "?\\"" << endl;\n    cout << nameTwo << ":   \\"But I had " << number << " people and a "\n         << noun << " in the car with me.\\"" << endl;\n    cout << nameOne << ": \\"That is so " << adjective\n         << "! You could have had them all killed.\\"" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The double quotes inside the dialogue have to be written \\\" so the compiler knows they are part of the text rather than the end of it. That is the escape character from this lesson doing real work." },
+        ],
+      },
+      {
+        id: "7.5",
+        ask: [
+          { type: "p", text: "Write a program to perform this interaction, displaying the message as many times as the user asks for." },
+          { type: "code", text:
+'Computer punishment\n-------------------\n\nRepetitions? 10000\nMessage? I will not drive humans crazy again!\n\nI will not drive humans crazy again!\nI will not drive humans crazy again!\nI will not drive humans crazy again!\n:\nI will not drive humans crazy again!' },
+        ],
+        answer: [
+          { type: "note", text: "You cannot write this one yet, and that is deliberate — repeating something a given number of times needs a loop, which arrives in Lesson 9. Come back to it then. It is worth reading the question now so you know what you are working towards." },
+          { type: "code", label: "Once you have done Lesson 9", text:
+'//Displays a message a given number of times\n#include <iostream>\n#include <string>\nusing namespace std;\n\nint main()\n{\n    int repetitions, count = 0;\n    string message;\n\n    cout << "Computer punishment" << endl;\n    cout << "-------------------" << endl << endl;\n\n    cout << "Repetitions? ";\n    cin >> repetitions;\n    cin.ignore();\n    cout << "Message? ";\n    getline(cin, message);\n\n    cout << endl;\n\n    while (count < repetitions)\n    {\n       cout << message << endl;\n       count++;\n    }\n\n    return 0;\n}' },
+          { type: "note", text: "cin.ignore() is there because cin >> repetitions leaves the Enter key sitting in the input, and getline would otherwise read that empty remainder instead of waiting for the message." },
+        ],
+      },
+    ],
   },
 
   /* ================= PART II ================= */
@@ -628,19 +919,6 @@ int main()
     sampleInput: "4\ny\n45000\n28\n",
     theory: [
       {
-        id: "11.3",
-        ask: [
-          { type: "p", text: "Rewrite the following if statements as single assignment statements." },
-          { type: "code", text:
-'(i)   if (grade > 7)\n         highSchool = true;\n      else\n         highSchool = false;\n\n(ii)  if (age < 13 || age > 19)\n         teenager = false;\n      else\n         teenager = true;\n\n(iii) if (x < 0)\n         found = false;\n      else if (x % 4 == 0)\n         found = true;\n      else\n         found = false;' },
-        ],
-        answer: [
-          { type: "code", text:
-'(i)   highSchool = grade > 7;\n\n(ii)  teenager = !(age < 13 || age > 19);\n\n(iii) found = x >= 0 && x % 4 == 0;' },
-          { type: "note", text: "In (ii) the condition assigns false, so the answer is its opposite — hence the !. You could also write it as age >= 13 && age <= 19, which says the same thing and reads better. In (iii), found is true only in the middle branch, so both of its conditions have to hold." },
-        ],
-      },
-      {
         id: "11.1",
         ask: [
           { type: "p", text: "A municipality needs a program to calculate the amount payable for water. The rate depends on the number of units used." },
@@ -656,6 +934,19 @@ int main()
           { type: "code", text:
 '//Works out a water bill from the units used\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nint main()\n{\n    const float FREE_UNITS = 20.0;\n    const float RATE = 10.0;\n    float units, extra, amount;\n\n    cout << "Enter the units used: ";\n    cin >> units;\n\n    extra = units - FREE_UNITS;\n\n    if (units <= FREE_UNITS)\n       amount = 0.0;\n    else if (units <= 40)\n       amount = extra * RATE;\n    else if (units <= 100)\n       amount = extra * RATE * 1.5;\n    else\n       amount = extra * RATE * 2;\n\n    cout << fixed << setprecision(2);\n    cout << "Amount payable: R" << amount << endl;\n\n    return 0;\n}' },
           { type: "note", text: "Each condition only has to rule out what is above it, because the else if chain is read from the top and stops at the first true one. That is why the second test is just units <= 40 and not units > 20 && units <= 40." },
+        ],
+      },
+      {
+        id: "11.3",
+        ask: [
+          { type: "p", text: "Rewrite the following if statements as single assignment statements." },
+          { type: "code", text:
+'(i)   if (grade > 7)\n         highSchool = true;\n      else\n         highSchool = false;\n\n(ii)  if (age < 13 || age > 19)\n         teenager = false;\n      else\n         teenager = true;\n\n(iii) if (x < 0)\n         found = false;\n      else if (x % 4 == 0)\n         found = true;\n      else\n         found = false;' },
+        ],
+        answer: [
+          { type: "code", text:
+'(i)   highSchool = grade > 7;\n\n(ii)  teenager = !(age < 13 || age > 19);\n\n(iii) found = x >= 0 && x % 4 == 0;' },
+          { type: "note", text: "In (ii) the condition assigns false, so the answer is its opposite — hence the !. You could also write it as age >= 13 && age <= 19, which says the same thing and reads better. In (iii), found is true only in the middle branch, so both of its conditions have to hold." },
         ],
       },
       {
