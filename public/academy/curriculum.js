@@ -1352,10 +1352,305 @@ int main()
     ],
   },
 
-  { part: "Part III · Functions", lesson: 17, title: "Using functions", pending: true },
-  { part: "Part III · Functions", lesson: 18, title: "Writing functions", pending: true },
-  { part: "Part III · Functions", lesson: 19, title: "Local and global variables", pending: true },
-  { part: "Part III · Functions", lesson: 20, title: "Void functions", pending: true },
+  {
+    id: "l17-using-functions",
+    part: "Part III · Functions",
+    lesson: 17,
+    title: "Using functions",
+    teach: [
+      { type: "p", text: "C++ comes with a large collection of ready-made functions. You call one by writing its name followed by parentheses, with any values it needs inside them." },
+      { type: "code", label: "Calling a function", text:
+'#include <cmath>\n\nfloat distance = fabs(-6.32);   // 6.32\nfloat root = sqrt(49);          // 7\nfloat cube = pow(2, 3);         // 8' },
+      { type: "p", text: "A function that returns a value hands something back, and you have to do something with it. There are three usual places to put it." },
+      { type: "list", items: [
+        "Assign it: answer = sqrt(x);",
+        "Use it inside a bigger expression: answer = 20 * sqrt(x) - 41;",
+        "Send it straight to output: cout << sqrt(x) << endl;",
+      ] },
+      { type: "note", text: "The third works, but prefer the first. Giving the result a name makes the line easier to read and lets you use the value more than once without calling the function again." },
+      { type: "p", text: "Three functions worth knowing now: abs gives the absolute value of an integer and fabs the absolute value of a floating point number, sqrt gives a square root, and pow raises a number to a power. sqrt, fabs and pow need #include <cmath>." },
+      { type: "p", text: "rand returns a large random integer, and needs #include <cstdlib>. On its own it is not random at all — it produces the same sequence every time the program runs. To get different numbers each run, seed it once near the top of main." },
+      { type: "code", label: "Seeding the generator", text:
+'#include <cstdlib>\n#include <ctime>\n\nsrand(time(0));   // once, near the start of main' },
+      { type: "p", text: "time returns a large integer from the computer's clock, so it differs on each run, which is what makes the sequence differ. Once seeded, a random number in a range is built like this." },
+      { type: "code", label: "A number in a range", text:
+'RandomInteger = Smallest + Interval * (rand() % Many);\n\n// A random even number between 20 and 100:\n// 41 possible values, smallest 20, interval 2\nrandomEven = 2 * (rand() % 41) + 20;' },
+      { type: "note", text: "rand() % Many gives a value from 0 up to Many - 1, which is why Many is the count of possible values rather than the largest one. Getting that off by one is the usual mistake." },
+    ],
+    task: "Pythagoras found that in a right-angled triangle the squares of the two shorter sides add up to the square of the longest. So if the longest side is a and the others are b and c, then a is the square root of b² + c². Ask for the lengths of the two shorter sides, then use pow and sqrt to calculate and display the length of the longest one.",
+    starter:
+`//Works out the long side of a right-angled triangle
+#include <iostream>
+#include <cmath>
+using namespace std;
+
+int main()
+{
+    float shortSide, otherSide, longSide;
+
+    cout << "Enter the two shorter sides: ";
+    cin >> shortSide >> otherSide;
+
+    // Square each one with pow, add them, and take the square root
+
+    // Display the answer
+
+    return 0;
+}
+`,
+    sampleInput: "3 4\n",
+    theory: [
+      {
+        id: "17.2",
+        ask: [
+          { type: "p", text: "What results will these program fragments give? They also involve operator precedence, so the technique from Lesson 2 helps." },
+          { type: "code", text:
+'(i)   float x = -6.32;\n      float y = fabs(x) * 2;\n      What is y?\n\n(ii)  float x = 2;\n      float y = 2 * pow(x, 2) - 1;\n      float z = 2 * pow(x - 1, 2);\n      What are y and z?\n\n(iii) float x = -4;\n      float y = sqrt(fabs(x));\n      What is y?\n\n(iv)  float x = 3;\n      float y = 4;\n      float z = sqrt(pow(x, 2) + pow(y, 2));\n      What is z?' },
+        ],
+        answer: [
+          { type: "code", text:
+'(i)   y = 12.64      fabs(-6.32) is 6.32, then 6.32 * 2\n\n(ii)  y = 7         pow(2,2) is 4, so 2 * 4 - 1\n      z = 2         x - 1 is 1, pow(1,2) is 1, so 2 * 1\n\n(iii) y = 2         fabs(-4) is 4, and sqrt(4) is 2\n\n(iv)  z = 5         9 + 16 is 25, and sqrt(25) is 5' },
+          { type: "note", text: "Compare y and z in (ii). Both have a 2, a pow and a subtraction, and they differ only in where the brackets are — in y the subtraction happens after the power, in z it happens to the argument before it. That is the whole of operator precedence in one pair of lines." },
+        ],
+      },
+      {
+        id: "17.4",
+        ask: [
+          { type: "p", text: "toupper and tolower convert a character between upper and lower case. Write a short program to test toupper: input a character, display the result of applying toupper to it. Then answer — what happens to a lower case letter, to an upper case letter, and to a character that is not a letter at all?" },
+        ],
+        answer: [
+          { type: "code", text:
+'//Tests what toupper does to a character\n#include <iostream>\n#include <cctype>\nusing namespace std;\n\nint main()\n{\n    char letter;\n\n    cout << "Enter a character: ";\n    cin >> letter;\n\n    cout << letter << " becomes " << char(toupper(letter)) << endl;\n\n    return 0;\n}' },
+          { type: "list", items: [
+            "A lower case letter comes back as its upper case equivalent: a becomes A.",
+            "An upper case letter comes back unchanged. toupper does not toggle the case, it only ever converts upwards.",
+            "A character that is not a letter comes back unchanged: 7 stays 7 and ? stays ?.",
+          ] },
+          { type: "note", text: "char(...) around the call matters. toupper returns an int, so without the conversion cout prints 65 rather than A. Also note the header is <cctype>, not <cmath>." },
+        ],
+      },
+      {
+        id: "17.1",
+        ask: [{ type: "p", text: "Write a program to generate 6 random numbers for the South African Lottery. The numbers must all be between 1 and 49, and duplicates must be rejected by regenerating any number that has already come up." }],
+        answer: [
+          { type: "code", text:
+'//Draws six different lottery numbers between 1 and 49\n#include <iostream>\n#include <cstdlib>\n#include <ctime>\nusing namespace std;\n\nint main()\n{\n    int drawn[6];\n    int count = 0;\n\n    srand(time(0));\n\n    while (count < 6)\n    {\n       int number = rand() % 49 + 1;\n\n       bool alreadyDrawn = false;\n       for (int i = 0; i < count; i++)\n          if (drawn[i] == number)\n             alreadyDrawn = true;\n\n       if (!alreadyDrawn)\n       {\n          drawn[count] = number;\n          count++;\n       }\n    }\n\n    for (int i = 0; i < 6; i++)\n       cout << drawn[i] << " ";\n    cout << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "This one uses an array, which arrives properly in Lesson 24 — there is no other way to remember six numbers at once. The outer loop is a while rather than a for because a rejected duplicate means going round again without count moving, so the number of iterations is not known in advance." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l18-writing-functions",
+    part: "Part III · Functions",
+    lesson: 18,
+    title: "Writing functions",
+    teach: [
+      { type: "p", text: "You can write your own functions. One is worth writing whenever a piece of code is needed in more than one place, or when a chunk of work has a name that makes sense on its own." },
+      { type: "code", label: "The shape of it", text:
+'ReturnType FunctionName(ParameterList)\n{\n   Statements;\n   return ReturnValue;\n}' },
+      { type: "code", label: "A real one", text:
+'float areaOfCircle(float radius)\n{\n   const float PI = 3.14159;\n   return PI * radius * radius;\n}' },
+      { type: "p", text: "You already know this shape — main is a function, with return type int, an empty parameter list, and a return statement handing back an int." },
+      { type: "note", text: "return ends the function immediately. Any statements after it in the body are skipped, which is worth remembering when a function seems to be ignoring half of itself." },
+      { type: "p", text: "The names in the function header are the formal parameters. The values in the call are the actual parameters. When the function is called, the values are copied across in order — first to first, second to second." },
+      { type: "code", label: "Calling it", text:
+'int main()\n{\n    float r = 3.0;\n    float area = areaOfCircle(r);\n\n    cout << "Area: " << area << endl;\n\n    return 0;\n}' },
+      { type: "p", text: "The number of actual parameters must match the number of formal ones, and their types must match too, or the program will not compile." },
+      { type: "note", text: "Each function is a self-contained unit. A function cannot see the variables of the function that called it. If it needs a value, that value has to be passed in as a parameter — there is no other route." },
+      { type: "p", text: "Name a function after the value it gives back, since the call usually stands where that value is needed: areaOfCircle(r) reads properly, calculate(r) does not. Give the formal parameters different names from the variables you pass in, so it stays clear which is which." },
+    ],
+    task: "For every triangle, the sum of the lengths of any two sides is greater than the third side, which is how you test whether three numbers could be the sides of a real triangle. Write a bool function called isTriangle that takes three lengths and returns whether they form a valid triangle, then a main that reads three numbers and reports the answer.",
+    starter:
+`//Tests whether three lengths could form a triangle
+#include <iostream>
+using namespace std;
+
+// A bool function taking three floats.
+// All three pairs have to add up to more than the remaining side.
+
+
+int main()
+{
+    float sideA, sideB, sideC;
+
+    cout << "Enter three lengths: ";
+    cin >> sideA >> sideB >> sideC;
+
+    // Call the function and report the answer
+
+    return 0;
+}
+`,
+    sampleInput: "3 4 5\n",
+    theory: [
+      {
+        id: "18.1",
+        ask: [
+          { type: "p", text: "Look at this program skeleton and give the line numbers for each concept in the table below." },
+          { type: "code", text:
+' 1 // Illustrates reference parameters\n 2 #include <iostream>\n 3 using namespace std;\n 4\n 5 bool test(float par1, float par2, float par3)\n 6 {\n 7\n 8 }\n 9\n10 int main( )\n11 {\n12    float var1, var2, var3;\n13\n14    if (test(var1, var2, var3))\n15    {\n16\n17    }\n18\n19    return 0;\n20 }' },
+          { type: "code", text:
+'Concept                Line no(s)\n---------------------  ----------\nFunction heading\nFormal parameters\nReturn type\nFunction call\nActual parameters\nFirst line executed' },
+        ],
+        answer: [
+          { type: "code", text:
+'Concept                Line no(s)\n---------------------  ----------\nFunction heading       5\nFormal parameters      5           (par1, par2, par3)\nReturn type            5           (bool)\nFunction call          14\nActual parameters      14          (var1, var2, var3)\nFirst line executed    12' },
+          { type: "note", text: "The last row is the one people get wrong. Line 5 is the first line of the file with code on it, but a program starts running at the top of main — and the function on line 5 does not run until line 14 calls it. Being defined and being executed are different things." },
+        ],
+      },
+      {
+        id: "18.2",
+        ask: [{ type: "p", text: "For every triangle, the sum of any two sides is greater than the third. Write a program that uses this to test whether three numbers represent the valid sides of a triangle." }],
+        answer: [
+          { type: "code", text:
+'//Tests whether three lengths could form a triangle\n#include <iostream>\nusing namespace std;\n\nbool isTriangle(float first, float second, float third)\n{\n   return first + second > third\n       && first + third > second\n       && second + third > first;\n}\n\nint main()\n{\n    float sideA, sideB, sideC;\n\n    cout << "Enter three lengths: ";\n    cin >> sideA >> sideB >> sideC;\n\n    if (isTriangle(sideA, sideB, sideC))\n       cout << "Those are the sides of a triangle." << endl;\n    else\n       cout << "Those cannot be the sides of a triangle." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "All three pairs have to be checked, not just one. Try 1, 2 and 10: the first two add to 3, which is nowhere near 10, so it fails — but a test of only one pair would have let it through. The formal parameters are called first, second and third precisely so they cannot be confused with sideA, sideB and sideC in main." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l19-scope",
+    part: "Part III · Functions",
+    lesson: 19,
+    title: "Local and global variables",
+    teach: [
+      { type: "p", text: "Where a variable is declared decides who can see it. A variable declared inside a function is local to that function, and no other function can reach it. A variable declared before all the functions is global, and every function can reach it." },
+      { type: "code", label: "Local and global", text:
+'#include <iostream>\nusing namespace std;\n\nint counter;        // global - every function can see it\n\nint main()\n{\n    int total;      // local to main - only main can see it\n\n    return 0;\n}' },
+      { type: "p", text: "Globals look convenient, which is the problem. Any function can change one, so when its value turns out to be wrong there is nothing to narrow down the search: the culprit could be anywhere in the program." },
+      { type: "note", text: "Use local variables when a variable belongs to one function. When two functions need the same value, pass it as a parameter rather than making it global. Both rules exist to stop a function quietly changing something another function was relying on." },
+      { type: "p", text: "There is a second payoff. If a function takes everything it needs through its parameter list, that list tells the reader exactly what the function works on. Whatever local variables it uses inside are nobody else's business, and the function can be lifted into another program unchanged." },
+      { type: "note", text: "A local variable with the same name as a global one hides the global inside that function. The global still exists and still holds its value — the function simply cannot see it any more. That is a common source of a function that appears to change nothing." },
+    ],
+    task: "Write a program with two functions, sum and product, that each take an integer n and return the sum and the product of the numbers 1 to n. Use no global variables at all: n must be passed in as a parameter, and each function must keep its own running total in a local variable.",
+    starter:
+`//Works out the sum and the product of 1 to n
+#include <iostream>
+using namespace std;
+
+// int sum(int limit) - adds 1 + 2 + ... + limit
+
+
+// int product(int limit) - multiplies 1 * 2 * ... * limit
+
+
+int main()
+{
+    int n;
+
+    cout << "Enter a value for n: ";
+    cin >> n;
+
+    // Call both functions and display the two answers
+
+    return 0;
+}
+`,
+    sampleInput: "5\n",
+    theory: [
+      {
+        id: "19.2",
+        ask: [
+          { type: "p", text: "Study this program and state, in terms of line numbers, where each variable is accessible." },
+          { type: "code", text:
+' 1 //Determines the sum and product of 1 to n\n 2 #include <iostream>\n 3 using namespace std;\n 4\n 5 int n, answer;\n 6\n 7 int sum( )\n 8 {\n 9    int i;\n10    for (i = 1; i <= n; i++)\n11       answer += i;\n12    return answer;\n13 }\n14\n15 int product( )\n16 {\n17    int answer = 1;\n18    for (int i = 2; i <= n; i++)\n19       answer *= i;\n20    return answer;\n21 }' },
+        ],
+        answer: [
+          { type: "code", text:
+'n              global, declared line 5\n               accessible everywhere after line 5,\n               so lines 10 and 18\n\nanswer         global, declared line 5\n(the global)   accessible lines 11 and 12, but NOT inside\n               product, where a local of the same name hides it\n\ni in sum       local to sum, declared line 9\n               accessible lines 10, 11\n\nanswer         local to product, declared line 17\n(the local)    accessible lines 17 to 20, and hides the global\n\ni in product   declared inside the for statement on line 18\n               accessible only lines 18 and 19' },
+          { type: "note", text: "Two different variables here are called answer and two are called i, and the program works only by accident. sum adds to the global answer without ever setting it back to 0, so calling sum twice gives a wrong answer the second time. That is exactly the failure globals invite." },
+        ],
+      },
+      {
+        id: "19.1",
+        ask: [{ type: "p", text: "Rewrite the program from Exercise 19.2 so that it uses only local variables and parameters, and no global variables at all." }],
+        answer: [
+          { type: "code", text:
+'//Determines the sum and product of 1 to n\n#include <iostream>\nusing namespace std;\n\nint sum(int limit)\n{\n   int total = 0;\n\n   for (int i = 1; i <= limit; i++)\n      total += i;\n\n   return total;\n}\n\nint product(int limit)\n{\n   int total = 1;\n\n   for (int i = 2; i <= limit; i++)\n      total *= i;\n\n   return total;\n}\n\nint main()\n{\n    int n;\n\n    cout << "Enter a value for n: ";\n    cin >> n;\n\n    cout << "Sum: " << sum(n) << endl;\n    cout << "Product: " << product(n) << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "Every problem in the original is gone. Each function sets up its own total, so calling one twice gives the same answer twice. n arrives as a parameter, so the header says what the function needs. And either function could now be copied into another program without dragging a global along with it." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l20-void",
+    part: "Part III · Functions",
+    lesson: 20,
+    title: "Void functions",
+    teach: [
+      { type: "p", text: "Not every function has an answer to give back. A function that displays something, or draws something, does its work on the screen rather than handing a value to the caller. Its return type is void." },
+      { type: "code", label: "The shape of it", text:
+'void FunctionName(FormalParameterList)\n{\n   Statements;\n}' },
+      { type: "code", label: "A real one", text:
+'void printLine(char symbol, int width)\n{\n   for (int i = 1; i <= width; i++)\n      cout << symbol;\n\n   cout << endl;\n}' },
+      { type: "p", text: "Because there is no value coming back, a call to a void function is a statement in its own right rather than part of an expression." },
+      { type: "code", label: "Calling it", text:
+'printLine(\'*\', 20);      // a statement on its own line\n\n// not:\n// answer = printLine(\'*\', 20);' },
+      { type: "p", text: "The parameters work exactly as before. Values are copied across in order, first to first and second to second, and the number and types must match or it will not compile." },
+      { type: "note", text: "A void function may contain return; with no value, which ends it early. This module does not use it — if a function needs to stop halfway, an if is usually clearer." },
+      { type: "p", text: "Write a void function when a group of statements belong together as one subtask, when the same code appears in more than one place, or when a chunk of input or output is worth naming." },
+    ],
+    task: "Write a program that draws a frame of asterisks. The user enters two integers for the width and the height. A width of 7 and a height of 5 gives a frame 7 asterisks across and 5 rows deep, hollow in the middle, with the asterisks in the top and bottom rows separated by single spaces. Use void functions for the solid rows and the hollow ones.",
+    starter:
+`//Draws a hollow frame of asterisks
+#include <iostream>
+using namespace std;
+
+// void solidRow(int width) - a full row: * * * * *
+
+
+// void hollowRow(int width) - a star, spaces, then a star
+
+
+int main()
+{
+    int width, height;
+
+    cout << "Enter the width: ";
+    cin >> width;
+    cout << "Enter the height: ";
+    cin >> height;
+
+    // A solid row, then height - 2 hollow rows, then a solid row
+
+    return 0;
+}
+`,
+    sampleInput: "7\n5\n",
+    theory: [
+      {
+        id: "20.1",
+        ask: [
+          { type: "p", text: "Write a program to draw a frame of asterisks, where the user enters the width and the height." },
+          { type: "code", label: "Width 7, height 5", text:
+'* * * * * * *\n*           *\n*           *\n*           *\n* * * * * * *' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Draws a hollow frame of asterisks\n#include <iostream>\nusing namespace std;\n\nvoid solidRow(int width)\n{\n   for (int i = 1; i <= width; i++)\n      cout << "* ";\n\n   cout << endl;\n}\n\nvoid hollowRow(int width)\n{\n   cout << "* ";\n\n   for (int i = 2; i < width; i++)\n      cout << "  ";\n\n   cout << "*" << endl;\n}\n\nint main()\n{\n    int width, height;\n\n    cout << "Enter the width: ";\n    cin >> width;\n    cout << "Enter the height: ";\n    cin >> height;\n\n    solidRow(width);\n\n    for (int row = 2; row < height; row++)\n       hollowRow(width);\n\n    solidRow(width);\n\n    return 0;\n}' },
+          { type: "note", text: "The two middle-row spaces have to match the \"* \" of the solid row, two characters each, or the right edge will not line up. The loop runs from 2 to height - 1 because the first and last rows are drawn separately — that is height - 2 hollow rows, which is 3 when the height is 5." },
+        ],
+      },
+      {
+        id: "20.2",
+        ask: [
+          { type: "p", text: "Write a program to draw a tree, of any size the user asks for. The one below came from a size of 4." },
+          { type: "code", text:
+'   *\n  * *\n * * *\n* * * *\n   *\n   *' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Draws a tree of a size chosen by the user\n#include <iostream>\nusing namespace std;\n\nvoid treeRow(int row, int size)\n{\n   for (int space = 1; space <= size - row; space++)\n      cout << " ";\n\n   for (int star = 1; star <= row; star++)\n      cout << "* ";\n\n   cout << endl;\n}\n\nvoid trunkRow(int size)\n{\n   for (int space = 1; space < size; space++)\n      cout << " ";\n\n   cout << "*" << endl;\n}\n\nint main()\n{\n    int size;\n\n    cout << "Enter the size of the tree: ";\n    cin >> size;\n\n    for (int row = 1; row <= size; row++)\n       treeRow(row, size);\n\n    trunkRow(size);\n    trunkRow(size);\n\n    return 0;\n}' },
+          { type: "note", text: "The shape comes from the spaces, not the stars. Row 1 needs size - 1 spaces and one star, row 2 needs one space fewer and one star more, and so on — which is why treeRow needs to know both which row it is on and how big the tree is." },
+        ],
+      },
+    ],
+  },
   { part: "Part III · Functions", lesson: 21, title: "Reference parameters, part 1", pending: true },
   { part: "Part III · Functions", lesson: 22, title: "Reference parameters, part 2", pending: true },
   { part: "Part III · Functions", lesson: 23, title: "Variable diagrams again", pending: true },
