@@ -197,6 +197,10 @@
     #stdout .err{color:#ff9c8a;}
     #stdout .note{color:#9fb0c6;}
     #stdout .ok{color:#7fd6a2;}
+    /* What the student typed, shown the way a terminal would show it having
+       been echoed back: present, but visibly not the program's own output. */
+    #stdout .typed{color:#8fd0ff;}
+    #stdout .rule{color:#4a5d75;}
 
     /* Walkthrough */
     .tourx-veil{position:fixed;background:rgba(13,24,38,.66);z-index:5000;}
@@ -619,8 +623,42 @@
               say(help ? text + "\n\n" + help : text);
             });
           }
-          var result = await CodeRunner.run(getCode(), document.getElementById("stdin").value);
+          var typed = document.getElementById("stdin").value;
+          var result = await CodeRunner.run(getCode(), typed);
           outEl.innerHTML = "";
+
+          /* In Code::Blocks the values a student types appear after each
+             prompt, because the terminal echoes them. Nothing echoes here:
+             the program has already run to completion before any of this
+             reaches the screen.
+
+             They cannot be put back where they belong either. stdout records
+             what was printed, not where each read happened, and the two run
+             together — "Enter two numbers: " and "Sum: 22" arrive as a single
+             line with no marker between them. Guessing at the boundary would
+             put values on the wrong lines often enough to teach the wrong
+             thing about where input goes.
+
+             So the input is shown up front instead, marked as typed rather
+             than printed. It answers what a student is actually asking when
+             they look for it — what did the program read? — without
+             inventing a transcript. */
+          if (typed.trim() && result.stdout) {
+            var head = document.createElement("span");
+            head.className = "rule";
+            head.textContent = "─── what you typed ───\n";
+            outEl.appendChild(head);
+
+            var t = document.createElement("span");
+            t.className = "typed";
+            t.textContent = typed.replace(/\n+$/, "") + "\n";
+            outEl.appendChild(t);
+
+            var rule = document.createElement("span");
+            rule.className = "rule";
+            rule.textContent = "─── what your program printed ───\n";
+            outEl.appendChild(rule);
+          }
 
           if (result.stdout) {
             var o = document.createElement("span");
