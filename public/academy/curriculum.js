@@ -1651,9 +1651,222 @@ int main()
       },
     ],
   },
-  { part: "Part III · Functions", lesson: 21, title: "Reference parameters, part 1", pending: true },
-  { part: "Part III · Functions", lesson: 22, title: "Reference parameters, part 2", pending: true },
-  { part: "Part III · Functions", lesson: 23, title: "Variable diagrams again", pending: true },
+  {
+    id: "l21-reference-1",
+    part: "Part III · Functions",
+    lesson: 21,
+    title: "Reference parameters, part 1",
+    teach: [
+      { type: "p", text: "Everything you have passed to a function so far was copied. The function got its own copy, and anything it did to that copy vanished when the function ended. Those are value parameters." },
+      { type: "p", text: "A reference parameter is different. It does not copy anything — it gives the function a second name for the caller's own variable. Change the parameter and you change the caller's variable." },
+      { type: "code", label: "The & makes it a reference", text:
+'void addTen(int & number)\n{\n   number += 10;\n}\n\nint main()\n{\n    int score = 5;\n    addTen(score);\n    cout << score << endl;    // 15, not 5\n\n    return 0;\n}' },
+      { type: "note", text: "The & goes between the type and the name in the function header, and only there. The call looks exactly the same either way — addTen(score) — so you cannot tell from the call whether a variable is about to be changed. You have to look at the function." },
+      { type: "p", text: "A function can have as many reference parameters as it needs, and can mix them freely with value parameters." },
+      { type: "code", label: "One of each", text:
+'void applyDiscount(float price, float & total)\n{\n   total = total + price * 0.9;\n}' },
+      { type: "p", text: "This gives you a way around the one-value limit of return: a function that needs to hand back two or three answers can be a void function with a reference parameter for each of them." },
+      { type: "note", text: "Do not use a reference parameter when a value parameter would do. The & is a signal to the reader that this variable is going to be changed, and using it where nothing changes makes that signal worthless." },
+      { type: "p", text: "Naming follows from this. A void function does something, so name it with a verb — displayRow, calcAverage. A value-returning function stands for the value it gives back, so name it with a noun or an adjective — average, smallest." },
+      { type: "note", text: "Deciding between the two: ask whether what the function does matters more than what it gives back. If it returns one value and does no input or output, make it value-returning. If it does a lot of work, or any input or output, or has to hand back more than one answer, make it void with reference parameters. Do not combine the two — a value-returning function should not have reference parameters." },
+    ],
+    task: "Write a function that takes the radius of a circle as a value parameter and calculates both the area and the circumference, storing each in a reference parameter. Write a main that calls it. The formulas are area = π × radius² and circumference = 2 × π × radius. Test it with at least three different radii.",
+    starter:
+`//Works out the area and circumference of a circle
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+// void circleValues(float radius, float & area, float & circumference)
+// One value parameter in, two reference parameters out.
+
+
+int main()
+{
+    float radius, area, circumference;
+
+    cout << "Enter the radius: ";
+    cin >> radius;
+
+    // Call the function, then display both answers
+
+    cout << fixed << setprecision(2);
+
+    return 0;
+}
+`,
+    sampleInput: "5\n",
+    theory: [
+      {
+        id: "21.1",
+        ask: [
+          { type: "p", text: "This program throws dice until a total of 7 comes up." },
+          { type: "code", text:
+'int totalDice( )\n{\n   int die1 = rand( )%6 + 1;\n   int die2 = rand( )%6 + 1;\n   cout << "Throw: " << die1 << " and " << die2 << endl;\n   return die1 + die2;\n}\n\nint main( )\n{\n   srand(time(0));\n   int count = 0;\n\n   while (totalDice( ) != 7)\n      count++;\n\n   cout << "It took " << count << " throws ";\n   cout << "before 7 was thrown." << endl;\n\n   return 0;\n}' },
+          { type: "p", text: "totalDice returns a value but also does output, which the lesson says to avoid. Change it into a void function with a single reference parameter that stores the total instead of returning it. Rename it to suit, and change main to call it correctly." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Simulates throwing dice until a total of 7 is thrown\n#include <iostream>\n#include <cstdlib>\n#include <ctime>\nusing namespace std;\n\n//Throws two dice, displays them, and stores the total in total\nvoid throwDice(int & total)\n{\n   int die1 = rand( ) % 6 + 1;\n   int die2 = rand( ) % 6 + 1;\n\n   cout << "Throw: " << die1 << " and " << die2 << endl;\n\n   total = die1 + die2;\n}\n\nint main( )\n{\n    int count = 0;\n    int total;\n\n    srand(time(0));\n\n    throwDice(total);\n\n    while (total != 7)\n    {\n       count++;\n       throwDice(total);\n    }\n\n    cout << "It took " << count << " throws ";\n    cout << "before 7 was thrown." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The name changes from totalDice to throwDice because it is now a void function that does something rather than a function standing for a value — a verb, not a noun. main has to change shape too: a void call cannot sit inside a while condition, so the first throw happens before the loop and each further throw at the end of the body. That is the same read-before-the-loop pattern from Lesson 9." },
+        ],
+      },
+      {
+        id: "21.4",
+        ask: [{ type: "p", text: "Rewrite the circle function as two value-returning functions instead — one returning the area and one returning the circumference. Which version do you prefer, and why?" }],
+        answer: [
+          { type: "code", text:
+'//Works out the area and circumference of a circle\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nconst float PI = 3.14159;\n\n//Returns the area of a circle of the given radius\nfloat area(float radius)\n{\n   return PI * radius * radius;\n}\n\n//Returns the circumference of a circle of the given radius\nfloat circumference(float radius)\n{\n   return 2 * PI * radius;\n}\n\nint main()\n{\n    float radius;\n\n    cout << "Enter the radius: ";\n    cin >> radius;\n\n    cout << fixed << setprecision(2);\n    cout << "Area: " << area(radius) << endl;\n    cout << "Circumference: " << circumference(radius) << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "This version is better here, and the lesson's own rule says why: each function returns one value and does no input or output, which is exactly when a value-returning function is preferred. The names are nouns that stand for the value, so area(radius) reads as the thing it is. The reference-parameter version earns its keep when the two answers have to be worked out together — when computing one gives you most of the other for free." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l22-reference-2",
+    part: "Part III · Functions",
+    lesson: 22,
+    title: "Reference parameters, part 2",
+    teach: [
+      { type: "p", text: "Lesson 21 used a reference parameter to fill in a variable that had no value yet. A reference parameter can just as well update one — read its current value and work out a new one from it." },
+      { type: "code", label: "Updating rather than setting", text:
+'void addInterest(float & balance, float rate)\n{\n   balance = balance + balance * rate;\n}' },
+      { type: "p", text: "balance is read and written in the same statement. The caller's variable goes in holding one value and comes out holding another, which is what updating means." },
+      { type: "note", text: "The rule is unchanged: change a reference parameter and the caller's variable changes with it; change a value parameter and nothing outside the function is affected at all." },
+      { type: "p", text: "So the choice between the two kinds of function comes down to what should happen to the variable." },
+      { type: "list", items: [
+        "The variable itself should end up different — use a void function with a reference parameter.",
+        "The variable should be left alone and a separate answer worked out from it — use a value-returning function with a value parameter.",
+      ] },
+      { type: "code", label: "The same job, both ways", text:
+'// Changes the caller\'s balance\nvoid addInterest(float & balance, float rate)\n{\n   balance = balance + balance * rate;\n}\n\n// Leaves the caller\'s balance alone\nfloat withInterest(float balance, float rate)\n{\n   return balance + balance * rate;\n}' },
+      { type: "note", text: "Before writing any function, decide three things: what should be local variables, what should be value parameters, and what should be reference parameters. Getting that clear first is most of the work — the body usually follows easily once it is settled." },
+    ],
+    task: "Write a void function called swap that takes two integer reference parameters and exchanges their values. Add a comment saying what it does. Then write a main that reads two values, displays them, calls swap, and displays them again so the new order is visible.",
+    starter:
+`//Exchanges the values of two variables
+#include <iostream>
+using namespace std;
+
+// void swap(int & n1, int & n2)
+// You will need a third variable to hold one value while the swap happens.
+
+
+int main()
+{
+    int first, second;
+
+    cout << "Enter two numbers: ";
+    cin >> first >> second;
+
+    // Display them, swap them, display them again
+
+    return 0;
+}
+`,
+    sampleInput: "12 47\n",
+    theory: [
+      {
+        id: "22.1",
+        ask: [
+          { type: "p", text: "(i) Write a function named increment15, with a single integer reference parameter, that adds 15 to the variable it is given. Document it with a comment." },
+          { type: "p", text: "(ii) Write a simple main function and use suitable test cases to test it." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Adds 15 to the variable passed to it\n#include <iostream>\nusing namespace std;\n\n//Adds 15 to number, changing the caller\'s variable\nvoid increment15(int & number)\n{\n   number += 15;\n}\n\nint main()\n{\n    int value;\n\n    cout << "Enter a number: ";\n    cin >> value;\n\n    cout << "Before: " << value << endl;\n    increment15(value);\n    cout << "After:  " << value << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "Test with a positive number, a negative one and 0 — with 0 the answer is just 15, which is the easiest case to check by eye. Printing the value before and after is the point of the test: without the before line you cannot see that the function changed anything." },
+        ],
+      },
+      {
+        id: "22.2",
+        ask: [
+          { type: "p", text: "Consider this function." },
+          { type: "code", text:
+'void swap(int & n1, int & n2)\n{\n   int temp;\n   temp = n1;\n   n1 = n2;\n   n2 = temp;\n}' },
+          { type: "list", items: [
+            "(i) Add a comment telling a reader what the function does.",
+            "(ii) Write a program that inputs two variables, calls swap with them, and displays the values afterwards so the new order shows.",
+          ] },
+        ],
+        answer: [
+          { type: "code", text:
+'//Exchanges the values of two variables\n#include <iostream>\nusing namespace std;\n\n//Exchanges the values of n1 and n2\nvoid swap(int & n1, int & n2)\n{\n   int temp;\n\n   temp = n1;\n   n1 = n2;\n   n2 = temp;\n}\n\nint main()\n{\n    int first, second;\n\n    cout << "Enter two numbers: ";\n    cin >> first >> second;\n\n    cout << "Before: " << first << " " << second << endl;\n\n    swap(first, second);\n\n    cout << "After:  " << first << " " << second << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "temp exists because the first assignment destroys what was in n1. Without somewhere to put that value first, n1 = n2 would leave both variables holding the same thing. Both parameters must be references — with values, the function would swap its own two copies and the caller would see nothing change." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l23-diagrams-again",
+    part: "Part III · Functions",
+    lesson: 23,
+    title: "Variable diagrams again",
+    teach: [
+      { type: "p", text: "Variable diagrams were used in Lesson 5 to follow a single function. They are far more useful now, because parameters are where most confusion about functions lives, and a diagram settles it." },
+      { type: "p", text: "Six things they make obvious." },
+      { type: "list", items: [
+        "Parameters are matched by position, not by name. calcSquare(y, x) does something different from calcSquare(x, y), even if the formal parameters happen to be called x and y too.",
+        "A value parameter is a copy. It takes its own memory and behaves as a local variable for as long as the function runs.",
+        "A value parameter is destroyed when the function ends, and its value goes with it.",
+        "While a function runs, the local variables of the function that called it are hidden. They still exist and still hold their values, but that function cannot reach them.",
+        "The only way into a caller's local variable is a reference parameter, which gives the same piece of memory a second name.",
+        "When a function with a reference parameter ends, only the extra name disappears. The memory belongs to the caller and stays exactly as the function left it.",
+      ] },
+      { type: "note", text: "That fourth point is the one worth sitting with. A function cannot see the variables of the function that called it, no matter what they are called. If two functions both have an i, they are two unrelated variables." },
+      { type: "p", text: "Two habits follow. Always give a variable a value before using it — a diagram makes an uninitialised variable obvious, because there is nothing to write in the box. And do not reuse the same names for actual and formal parameters, or the diagram becomes as confusing as the code." },
+    ],
+    task: "Predict the output of the program in the editor before you run it. Write down what a, b and c hold after the call to test. Then run it and see whether you were right.",
+    starter:
+`// Exercise 23.1
+#include <iostream>
+using namespace std;
+
+void test(int x, int & y, int z)
+{
+    x += 10;
+    y += 10;
+    z += 10;
+}
+
+int main()
+{
+    int a = 6;
+    int b = 7;
+    int c = 8;
+
+    test(a, b, c);
+
+    cout << a << " " << b << " " << c << endl;
+
+    return 0;
+}
+`,
+    expectedOutput: "6 17 8",
+    theory: [
+      {
+        id: "23.1",
+        ask: [
+          { type: "p", text: "Draw a series of variable diagrams for this program." },
+          { type: "code", text:
+' 1 // Exercise 23.1\n 2 #include <iostream>\n 3 using namespace std;\n 4\n 5 void test(int x, int & y, int z)\n 6 {\n 7    x += 10;\n 8    y += 10;\n 9    z += 10;\n10 }\n11\n12 int main( )\n13 {\n14    int a = 6;\n15    int b = 7;\n16    int c = 8;\n17    test(a, b, c);\n18    return 0;\n19 }' },
+        ],
+        answer: [
+          { type: "code", label: "After lines 14 to 16", text:
+'main:   a [ 6 ]   b [ 7 ]   c [ 8 ]' },
+          { type: "code", label: "Entering test on line 17", text:
+'main:   a [ 6 ]   b [ 7 ]   c [ 8 ]\n                    ^\ntest:   x [ 6 ]     |     z [ 8 ]\n                    y  ---- the same box as b, under a second name' },
+          { type: "code", label: "After lines 7, 8 and 9", text:
+'main:   a [ 6 ]   b [ 17 ]   c [ 8 ]\n                     ^\ntest:   x [ 16 ]     |       z [ 18 ]\n                     y' },
+          { type: "code", label: "Back in main after test ends", text:
+'main:   a [ 6 ]   b [ 17 ]   c [ 8 ]\n\nOutput: 6 17 8' },
+          { type: "note", text: "x and z were copies, so adding 10 to them changed nothing that outlived the function, and both boxes were destroyed when test ended. y was never a box of its own — it was a second name for b — so line 8 wrote straight into main's variable, and that is why only b changed." },
+        ],
+      },
+    ],
+  },
 
   { part: "Part IV · Data structures", lesson: 24, title: "One-dimensional arrays", pending: true },
   { part: "Part IV · Data structures", lesson: 25, title: "Arrays as parameters", pending: true },
