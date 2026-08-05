@@ -2164,9 +2164,208 @@ int main()
       },
     ],
   },
-  { part: "Part IV · Data structures", lesson: 28, title: "Structs", pending: true },
-  { part: "Part IV · Data structures", lesson: 29, title: "Arrays of structs", pending: true },
-  { part: "Part IV · Data structures", lesson: 30, title: "Classes", pending: true },
+  {
+    id: "l28-structs",
+    part: "Part IV · Data structures",
+    lesson: 28,
+    title: "Structs",
+    teach: [
+      { type: "p", text: "An array keeps many values of the same type together. A struct keeps a few values of different types together — the things that describe one item." },
+      { type: "code", label: "Defining one", text:
+'struct Time\n{\n   int hours, minutes, seconds;\n};' },
+      { type: "code", label: "Fields of different types", text:
+'struct Student\n{\n   string name;\n   int studentNumber;\n   float average;\n};' },
+      { type: "note", text: "The semicolon after the closing brace is required. Leaving it out produces a confusing error pointing at whatever comes next, which is one of the harder ones to read in this module." },
+      { type: "p", text: "Defining a struct sets aside no memory — it describes a shape. You get an actual variable by declaring one, as with any other type." },
+      { type: "code", label: "Declaring and using", text:
+'Time start;\n\nstart.hours = 1;\nstart.minutes = 30;\nstart.seconds = 10;\n\ncout << start.hours << ":" << start.minutes << endl;' },
+      { type: "p", text: "The dot operator reaches a field. Input and output happen one field at a time — cin >> start; will not work any more than it did for arrays." },
+      { type: "p", text: "But unlike an array, a whole struct can be assigned in one statement, which copies every field." },
+      { type: "code", label: "This works, and copies everything", text:
+'Time finish;\n\nfinish = start;' },
+      { type: "note", text: "Worth noticing, because it is exactly what arrays cannot do. An array has to be copied element by element in a loop; a struct copies in one line." },
+      { type: "p", text: "A field can be any valid type, including an array or another struct. And two different structs may use the same field name without any conflict — shirt.price and trouser.price are separate things, because the field name belongs to the type." },
+      { type: "note", text: "Use a struct when related values would otherwise travel as a crowd of separate parameters. One Student parameter is easier to read, and harder to get in the wrong order, than a name, a number and an average passed side by side. The convention is a capital first letter for the struct type and a lower case one for variables of it." },
+    ],
+    task: "Define a struct called Book with a title, an author and a price. Read one book's details from the user, then display them neatly. Then declare a second Book, copy the first into it with a single assignment, and display that too to prove the copy worked.",
+    starter:
+`//A struct holding the details of one book
+#include <iostream>
+#include <iomanip>
+#include <string>
+using namespace std;
+
+// struct Book with title, author and price
+
+
+int main()
+{
+    // Declare a Book, read its three fields, display them
+
+    // Declare a second Book, copy the first into it, display it
+
+    return 0;
+}
+`,
+    sampleInput: "Things Fall Apart\nChinua Achebe\n189.99\n",
+    theory: [
+      {
+        id: "28.1",
+        ask: [
+          { type: "p", text: "Suppose we have this struct definition." },
+          { type: "code", text: 'struct Time\n{\n   int hours, minutes, seconds;\n};' },
+          { type: "p", text: "Write a void function changeTime that receives two parameters: timeP of type Time, and interval of type int, a number of seconds. The function must change the fields of timeP by adding interval to them. So if timeP is 1 hour, 30 minutes and 10 seconds and interval is 80 seconds, the fields must become 1 hour, 31 minutes and 30 seconds. Test it with a simple program." },
+        ],
+        answer: [
+          { type: "code", text:
+'//Adds a number of seconds to a Time\n#include <iostream>\n#include <iomanip>\nusing namespace std;\n\nstruct Time\n{\n   int hours, minutes, seconds;\n};\n\n//Adds interval seconds to timeP, carrying into minutes and hours\nvoid changeTime(Time & timeP, int interval)\n{\n   int total = timeP.hours * 3600\n             + timeP.minutes * 60\n             + timeP.seconds\n             + interval;\n\n   timeP.hours = total / 3600;\n   timeP.minutes = (total % 3600) / 60;\n   timeP.seconds = total % 60;\n}\n\nint main()\n{\n    Time now;\n\n    now.hours = 1;\n    now.minutes = 30;\n    now.seconds = 10;\n\n    changeTime(now, 80);\n\n    cout << setfill(\'0\');\n    cout << setw(2) << now.hours << ":"\n         << setw(2) << now.minutes << ":"\n         << setw(2) << now.seconds << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "timeP has to be a reference parameter — the function changes the caller's Time rather than returning anything, which is the Lesson 21 rule applied to a struct. Adding 80 to seconds directly would give 90 seconds, which is not a time; converting everything to seconds, adding, and converting back is what handles the carry. / and % do the converting back, exactly as in Exercise 4.2's boxes and leftovers." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l29-struct-arrays",
+    part: "Part IV · Data structures",
+    lesson: 29,
+    title: "Arrays of structs",
+    teach: [
+      { type: "p", text: "One struct describes one item. A whole list of items is an array whose elements are structs, and that is how most real data gets stored." },
+      { type: "code", label: "Declaring one", text:
+'const int MAX_ITEMS = 100;\n\nstruct Item\n{\n   string description;\n   int produced, sold;\n};\n\nItem stock[MAX_ITEMS];' },
+      { type: "p", text: "Each element is a complete struct, so you use a subscript to pick the element and then a dot to pick the field." },
+      { type: "code", label: "Reaching a field", text:
+'stock[0].description = "Blue widget";\nstock[0].produced = 500;\n\ncout << stock[3].sold << endl;' },
+      { type: "code", label: "Walking the list", text:
+'for (int i = 0; i < numItems; i++)\n{\n   cout << "Description: ";\n   getline(cin, stock[i].description);\n   cout << "Produced: ";\n   cin >> stock[i].produced;\n   cout << "Sold: ";\n   cin >> stock[i].sold;\n}' },
+      { type: "note", text: "The subscript comes before the dot: stock[i].produced, never stock.produced[i]. Pick the item first, then the field of that item." },
+      { type: "p", text: "Declare the array at its maximum size, then keep a separate count of how many elements are actually in use, and loop to that count rather than to the array's size." },
+      { type: "note", text: "Watch for parallel arrays — two or more arrays of the same length where element i of each describes the same thing, like names[i] going with marks[i]. That is a struct waiting to be written. Keeping them in step by hand is exactly the sort of thing that goes wrong when the list is sorted or an entry is removed." },
+    ],
+    task: "Write a program analysing production and sales for a company called LekkerKoop Ltd. For each kind of item store a description, the number produced, the number sold, and the difference between the two. Store all the items in an array holding at most 100 kinds. Ask how many kinds there are, read them in, then produce a clear report of the items where production exceeded sales.",
+    starter:
+`//Production and sales analysis for LekkerKoop Ltd
+#include <iostream>
+#include <iomanip>
+#include <string>
+using namespace std;
+
+const int MAX_ITEMS = 100;
+
+// struct Item with description, produced, sold and difference
+
+
+int main()
+{
+    Item items[MAX_ITEMS];
+    int numItems;
+
+    cout << "How many kinds of item? ";
+    cin >> numItems;
+    cin.ignore();
+
+    // Read each item, working out the difference as you go
+
+    // Report the items where produced is greater than sold
+
+    return 0;
+}
+`,
+    sampleInput: "3\nBlue widget\n500\n420\nRed widget\n300\n300\nGreen widget\n250\n310\n",
+    theory: [
+      {
+        id: "29.2",
+        ask: [
+          { type: "p", text: "A program keeps student names in one array and their averages in another, so that names[i] and averages[i] describe the same student. These are called parallel arrays. Rewrite this fragment to use a single array of structs instead, and explain what is gained." },
+          { type: "code", text:
+'const int MAX = 100;\n\nstring names[MAX];\nfloat averages[MAX];\n\nfor (int i = 0; i < count; i++)\n   if (averages[i] >= 50)\n      cout << names[i] << " passed" << endl;' },
+        ],
+        answer: [
+          { type: "code", text:
+'const int MAX = 100;\n\nstruct Student\n{\n   string name;\n   float average;\n};\n\nStudent students[MAX];\n\nfor (int i = 0; i < count; i++)\n   if (students[i].average >= 50)\n      cout << students[i].name << " passed" << endl;' },
+          { type: "p", text: "What is gained is that the two values can no longer drift apart. With parallel arrays, a name and an average are related only by both sitting at position i, and nothing in the program enforces that." },
+          { type: "note", text: "The danger shows up as soon as the data moves. Sort the averages to find the top students and, unless you remember to move every name in exactly the same way at exactly the same time, every name is now attached to the wrong mark. With one array of structs, the name travels with the average because they are one value. There is also one array to pass to a function instead of two, and one count instead of two that must agree." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l30-classes",
+    part: "Part IV · Data structures",
+    lesson: 30,
+    title: "Classes",
+    teach: [
+      { type: "p", text: "A class is a struct that also carries the functions that work on it, and that can keep its data private. It is the last thing in this module and the first thing in the next one." },
+      { type: "code", label: "The shape of it", text:
+'class ClassName\n{\n   public:\n      MemberFunctionList;\n   private:\n      MemberVariableList;\n};' },
+      { type: "code", label: "A real one", text:
+'class Rectangle\n{\n   public:\n      Rectangle(int l, int w);\n      int area( ) const;\n      void setLength(int l);\n   private:\n      int length, width;\n};' },
+      { type: "p", text: "The member functions are listed inside the class and defined after it. The definition puts the class name and :: in front of the function name, so C++ knows which class it belongs to." },
+      { type: "code", label: "Defining the members", text:
+'Rectangle::Rectangle(int l, int w)\n{\n   length = l;\n   width = w;\n}\n\nint Rectangle::area( ) const\n{\n   return length * width;\n}' },
+      { type: "p", text: "A member function can use the member variables directly, with no object name and no dot — inside area, length simply means this object's length." },
+      { type: "p", text: "The constructor is the function with the same name as the class and no return type at all, not even void. It runs automatically when an object is declared, and its job is to give the member variables their starting values." },
+      { type: "code", label: "Declaring an object", text:
+'Rectangle room(5, 4);       // the constructor runs here\n\ncout << room.area( ) << endl;    // 20' },
+      { type: "note", text: "A class does not have to have a constructor. If the values are going to be read in later, an inputData member function does the same job. But if the member variables need starting values, write one — an object whose variables were never initialised is the same trap as an uninitialised variable, just harder to spot." },
+      { type: "p", text: "const at the end of a member function header marks it as an accessor: it may read the member variables but not change them. A member function without const is a mutator and may change them." },
+      { type: "note", text: "Everything under private: is unreachable from main or from any function that is not a member of the class. main cannot write room.length at all — it has to go through the member functions the class provides. That is called encapsulation, and it means the class controls every change made to its own data." },
+      { type: "p", text: "Mark every accessor with const. It tells a reader which functions are safe to call without anything changing underneath them, and the compiler enforces it." },
+    ],
+    task: "Write a class called SwimmingPool with a constructor taking a length, a width, a deep-end depth and a shallow-end depth, and an accessor called volume that returns the volume. Take the average of the two depths as the depth. Write a main that creates a pool and displays its volume.",
+    starter:
+`//A class describing a swimming pool
+#include <iostream>
+using namespace std;
+
+class SwimmingPool
+{
+    public:
+      SwimmingPool(int l, int w, int d, int s);
+      int volume( ) const;
+    private:
+      int length, width, deepDepth, shallowDepth;
+};
+
+// Define the constructor and volume here, using SwimmingPool:: in front
+// of each name. Volume is length x width x the average of the two depths.
+
+
+int main()
+{
+    // Declare a pool and display its volume
+
+    return 0;
+}
+`,
+    theory: [
+      {
+        id: "30.3",
+        ask: [
+          { type: "p", text: "This class contains a constructor with parameters. Complete it: write the constructor and the volume member function, and a main that uses them. Take the depth of the pool as the average of the deep and shallow depths." },
+          { type: "code", text:
+'class SwimmingPool\n{\n   public:\n     SwimmingPool(int l, int w, int d, int s);\n     int volume( ) const;\n   private:\n     int length, width, deepDepth, shallowDepth;\n};' },
+        ],
+        answer: [
+          { type: "code", text:
+'//A class describing a swimming pool\n#include <iostream>\nusing namespace std;\n\nclass SwimmingPool\n{\n    public:\n      SwimmingPool(int l, int w, int d, int s);\n      int volume( ) const;\n    private:\n      int length, width, deepDepth, shallowDepth;\n};\n\n//Stores the dimensions of the pool\nSwimmingPool::SwimmingPool(int l, int w, int d, int s)\n{\n   length = l;\n   width = w;\n   deepDepth = d;\n   shallowDepth = s;\n}\n\n//Returns the volume, using the average of the two depths\nint SwimmingPool::volume( ) const\n{\n   return length * width * (deepDepth + shallowDepth) / 2;\n}\n\nint main()\n{\n    SwimmingPool pool(25, 10, 3, 1);\n\n    cout << "Volume: " << pool.volume( ) << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "volume is marked const in both the class and the definition — leave it off one of them and it will not compile, because the two headers no longer describe the same function. It is an accessor: it reads four member variables and changes none of them." },
+          { type: "p", text: "The parameters are called l, w, d and s while the member variables are length, width, deepDepth and shallowDepth. They have to differ, or length = length; inside the constructor would assign the parameter to itself and the member variable would keep whatever rubbish it started with." },
+        ],
+      },
+      {
+        id: "30.1",
+        ask: [{ type: "p", text: "Take a struct you have already written — the Student from Lesson 29, say — and rewrite it as a class. Make the member variables private, provide a constructor, and say which of your member functions are accessors and which are mutators." }],
+        answer: [
+          { type: "code", text:
+'//A student, as a class rather than a struct\n#include <iostream>\n#include <string>\nusing namespace std;\n\nclass Student\n{\n    public:\n      Student(string n, float a);\n      string getName( ) const;      // accessor\n      float getAverage( ) const;    // accessor\n      bool hasPassed( ) const;      // accessor\n      void setAverage(float a);     // mutator\n    private:\n      string name;\n      float average;\n};\n\nStudent::Student(string n, float a)\n{\n   name = n;\n   average = a;\n}\n\nstring Student::getName( ) const\n{\n   return name;\n}\n\nfloat Student::getAverage( ) const\n{\n   return average;\n}\n\nbool Student::hasPassed( ) const\n{\n   return average >= 50;\n}\n\nvoid Student::setAverage(float a)\n{\n   average = a;\n}\n\nint main()\n{\n    Student student("Thandi Nkosi", 64.5);\n\n    cout << student.getName( );\n\n    if (student.hasPassed( ))\n       cout << " passed" << endl;\n    else\n       cout << " failed" << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "Three accessors and one mutator, and only the mutator lacks const. Compare it with the struct: main could write student.average = 999; on a struct and nothing would stop it, but with the class the only way in is setAverage, which is the one place a check on the range could be added. That is what encapsulation buys." },
+        ],
+      },
+    ],
+  },
 ];
 
 /* Past paper questions, kept as the last stage: once the lessons are done,
