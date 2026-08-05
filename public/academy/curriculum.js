@@ -1868,10 +1868,302 @@ int main()
     ],
   },
 
-  { part: "Part IV · Data structures", lesson: 24, title: "One-dimensional arrays", pending: true },
-  { part: "Part IV · Data structures", lesson: 25, title: "Arrays as parameters", pending: true },
-  { part: "Part IV · Data structures", lesson: 26, title: "Two-dimensional arrays", pending: true },
-  { part: "Part IV · Data structures", lesson: 27, title: "String manipulation", pending: true },
+  {
+    id: "l24-arrays",
+    part: "Part IV · Data structures",
+    lesson: 24,
+    title: "One-dimensional arrays",
+    teach: [
+      { type: "p", text: "Twenty marks need twenty variables, and mark1 through mark20 is unworkable. An array stores many values of the same type under one name, and picks between them with a number." },
+      { type: "code", label: "Declaring one", text:
+'const int NUM_VALS = 10;\n\nint marks[NUM_VALS];      // room for 10 ints' },
+      { type: "note", text: "Declare the size as a constant rather than writing 10 in the brackets. The number appears again in every loop that walks the array, and a constant means changing it in one place instead of hunting for all of them." },
+      { type: "p", text: "You can fill an array as you declare it. Then the size can be left out, because the compiler counts the values for you." },
+      { type: "code", label: "Initialising in the declaration", text:
+'int marks[] = {10, 3, 56, 7, 0, 5, 44, 99, 76, 1};' },
+      { type: "p", text: "Reach an individual element with its index in square brackets. Indexes start at 0, so an array of 10 runs from 0 to 9." },
+      { type: "code", label: "Getting at the elements", text:
+'marks[0] = 75;                    // the first\ncout << marks[9] << endl;         // the last of ten' },
+      { type: "note", text: "The last index is one less than the size, and going past it is not an error the compiler catches. marks[10] on an array of 10 compiles, runs, and reads whatever happens to be in the next piece of memory. The answer is simply wrong, with nothing to tell you." },
+      { type: "p", text: "A for loop is the natural partner to an array, because both count." },
+      { type: "code", label: "Reading and writing all of them", text:
+'for (int i = 0; i < NUM_VALS; i++)\n{\n   cout << "Enter a value: ";\n   cin >> marks[i];\n}\n\nfor (int i = 0; i < NUM_VALS; i++)\n   cout << marks[i] << endl;' },
+      { type: "note", text: "Note i < NUM_VALS rather than i <= NUM_VALS. With ten elements the loop must run for 0 to 9, and <= would run it once more, off the end." },
+      { type: "p", text: "Three things you cannot do with an array as a whole: cin >> marks; will not read one, cout << marks; will not display one, and marks = other; will not copy one. Every one of those has to be done an element at a time in a loop." },
+      { type: "note", text: "Only use an array when the values are needed later. To add up twenty numbers, add them as they arrive and keep a running total — storing all twenty first is work for nothing. Use an array when you must go back over the values, to find the largest or print them in reverse." },
+    ],
+    task: "Write a program that finds the greatest element in an array and swaps it with the first element. Do not read the values in — initialise the array in its declaration with 10, 3, 56, 7, 0, 5, 44, 99, 76, 1. Display the array before and after the change.",
+    starter:
+`//Swaps the greatest element with the first
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    const int NUM_VALS = 10;
+    int values[] = {10, 3, 56, 7, 0, 5, 44, 99, 76, 1};
+
+    // Display the array
+
+    // Find the index of the greatest element
+
+    // Swap it with element 0, then display the array again
+
+    return 0;
+}
+`,
+    expectedOutput: "10 3 56 7 0 5 44 99 76 1\n99 3 56 7 0 5 44 10 76 1",
+    theory: [
+      {
+        id: "24.2",
+        ask: [{ type: "p", text: "Write a program that inputs 10 floating point numbers and displays them in reverse order." }],
+        answer: [
+          { type: "code", text:
+'//Displays ten numbers in reverse order\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    const int NUM_VALS = 10;\n    float values[NUM_VALS];\n\n    for (int i = 0; i < NUM_VALS; i++)\n    {\n       cout << "Enter a value: ";\n       cin >> values[i];\n    }\n\n    for (int i = NUM_VALS - 1; i >= 0; i--)\n       cout << values[i] << " ";\n\n    cout << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "This is the case that needs an array. The first value cannot be printed until the last one is in, so all ten have to be kept. The second loop starts at NUM_VALS - 1, which is 9, and stops at 0 — the same range as the first loop, walked backwards." },
+        ],
+      },
+      {
+        id: "24.3",
+        ask: [{ type: "p", text: "Write a program that determines whether the values in an array are stored in ascending order. The array should hold 20 elements and be initialised in its declaration. Display a suitable message." }],
+        answer: [
+          { type: "code", text:
+'//Checks whether an array is in ascending order\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    const int NUM_VALS = 20;\n    int values[NUM_VALS] = {2, 4, 6, 8, 10, 12, 14, 16, 18, 20,\n                            22, 24, 26, 28, 30, 32, 34, 36, 38, 40};\n    bool ascending = true;\n\n    for (int i = 1; i < NUM_VALS; i++)\n       if (values[i] < values[i - 1])\n          ascending = false;\n\n    if (ascending)\n       cout << "The values are in ascending order." << endl;\n    else\n       cout << "The values are not in ascending order." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The loop starts at 1, not 0, because each pass compares an element with the one before it and element 0 has nothing before it. Starting at 0 would read values[-1], which is off the front of the array." },
+        ],
+      },
+      {
+        id: "24.4",
+        ask: [{ type: "p", text: "Write a program that inputs 10 floating point numbers into an array and then assigns these values to a second array of the same type." }],
+        answer: [
+          { type: "code", text:
+'//Copies one array into another\n#include <iostream>\nusing namespace std;\n\nint main()\n{\n    const int NUM_VALS = 10;\n    float first[NUM_VALS], second[NUM_VALS];\n\n    for (int i = 0; i < NUM_VALS; i++)\n    {\n       cout << "Enter a value: ";\n       cin >> first[i];\n    }\n\n    for (int i = 0; i < NUM_VALS; i++)\n       second[i] = first[i];\n\n    for (int i = 0; i < NUM_VALS; i++)\n       cout << second[i] << " ";\n\n    cout << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The whole point of the exercise is that second = first; does not work. It will not compile, and even where something like it appears to work it does not copy the values. Copying an array means a loop, one element at a time." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l25-array-params",
+    part: "Part IV · Data structures",
+    lesson: 25,
+    title: "Arrays as parameters",
+    teach: [
+      { type: "p", text: "An array can be passed to a function. Write empty square brackets after the parameter name." },
+      { type: "code", label: "An array parameter", text:
+'float average(int values[], int numValues)\n{\n   int total = 0;\n\n   for (int i = 0; i < numValues; i++)\n      total += values[i];\n\n   return float(total) / numValues;\n}' },
+      { type: "note", text: "There is no point putting a size in the brackets — C++ ignores it. The function has no way to know how big the array is, so either pass the size as a second parameter, as above, or use a global constant." },
+      { type: "p", text: "Arrays are always passed by reference, whether you ask for it or not. Copying a whole array on every call would be slow and wasteful, so C++ never does it." },
+      { type: "note", text: "Do not write & on an array parameter. It is already a reference, and adding the & is wrong. This is the one place where the rules from Lesson 21 do not apply as written." },
+      { type: "p", text: "That has a consequence worth being deliberate about: a function can change the caller's array. If it should not, say so with const." },
+      { type: "code", label: "Passing by constant reference", text:
+'float average(const int values[], int numValues)' },
+      { type: "p", text: "With const in place, any statement in the function that tries to change an element will not compile. It documents the intention and enforces it at the same time." },
+      { type: "note", text: "A function cannot return an array. There is no way to write a value-returning function that hands a whole array back. To fill an array in a function, pass it in as a parameter and change it there — which works, because array parameters are references." },
+      { type: "p", text: "Choosing between a global constant and a size parameter comes down to one question: should this function work on arrays of different sizes? If yes, pass the size. If it should only ever handle one fixed-size array, a constant is clearer." },
+    ],
+    task: "Write a program that inputs 10 integers into an array, then: asks for an integer and reports whether it appears in the array; finds and displays the smallest element; and reverses the order of the elements and displays the result. Use functions for each of those jobs.",
+    starter:
+`//Searches, finds the smallest, and reverses an array
+#include <iostream>
+using namespace std;
+
+const int NUM_VALS = 10;
+
+// bool contains(const int values[], int wanted)
+// int smallest(const int values[])
+// void reverse(int values[])       <- this one changes the array, so no const
+// void display(const int values[])
+
+
+int main()
+{
+    int values[NUM_VALS], wanted;
+
+    // Read the ten values
+
+    // Ask for a value and report whether it is there
+
+    // Display the smallest
+
+    // Reverse the array and display it
+
+    return 0;
+}
+`,
+    sampleInput: "5 9 2 7 4 1 8 3 6 0\n7\n",
+    theory: [
+      {
+        id: "25.1",
+        ask: [
+          { type: "p", text: "Write a program that does the following, using functions as appropriate." },
+          { type: "list", items: [
+            "Inputs 10 integers into an array.",
+            "Inputs an integer and reports whether it appears in the array.",
+            "Determines the smallest element and displays it.",
+            "Reverses the order of the elements and displays the resulting array.",
+          ] },
+        ],
+        answer: [
+          { type: "code", text:
+'//Searches, finds the smallest, and reverses an array\n#include <iostream>\nusing namespace std;\n\nconst int NUM_VALS = 10;\n\n//Displays every element on one line\nvoid display(const int values[])\n{\n   for (int i = 0; i < NUM_VALS; i++)\n      cout << values[i] << " ";\n\n   cout << endl;\n}\n\n//Returns whether wanted appears in the array\nbool contains(const int values[], int wanted)\n{\n   for (int i = 0; i < NUM_VALS; i++)\n      if (values[i] == wanted)\n         return true;\n\n   return false;\n}\n\n//Returns the smallest element\nint smallest(const int values[])\n{\n   int lowest = values[0];\n\n   for (int i = 1; i < NUM_VALS; i++)\n      if (values[i] < lowest)\n         lowest = values[i];\n\n   return lowest;\n}\n\n//Reverses the order of the elements in place\nvoid reverse(int values[])\n{\n   for (int i = 0; i < NUM_VALS / 2; i++)\n   {\n      int temp = values[i];\n      values[i] = values[NUM_VALS - 1 - i];\n      values[NUM_VALS - 1 - i] = temp;\n   }\n}\n\nint main()\n{\n    int values[NUM_VALS], wanted;\n\n    for (int i = 0; i < NUM_VALS; i++)\n    {\n       cout << "Enter a value: ";\n       cin >> values[i];\n    }\n\n    cout << "Which value to look for? ";\n    cin >> wanted;\n\n    if (contains(values, wanted))\n       cout << wanted << " is in the array." << endl;\n    else\n       cout << wanted << " is not in the array." << endl;\n\n    cout << "Smallest: " << smallest(values) << endl;\n\n    reverse(values);\n    cout << "Reversed: ";\n    display(values);\n\n    return 0;\n}' },
+          { type: "note", text: "Three of the four functions take const, because only reverse should change anything — and reverse works precisely because array parameters are references, so main sees the change without anything being returned. The loop in reverse runs to NUM_VALS / 2, not NUM_VALS: each pass swaps a pair, so going the whole way would swap every pair twice and leave the array exactly as it started." },
+          { type: "p", text: "smallest starts from values[0] rather than from a made-up large number. Starting from something like 9999 gives the wrong answer the moment every value is bigger than it." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l26-2d-arrays",
+    part: "Part IV · Data structures",
+    lesson: 26,
+    title: "Two-dimensional arrays",
+    teach: [
+      { type: "p", text: "Data that comes in a table — rainfall by month and year, seats by row and number — belongs in a two-dimensional array. It is really a one-dimensional array whose elements are themselves arrays." },
+      { type: "code", label: "Declaring one", text:
+'const int NUM_ROWS = 6;\nconst int NUM_COLS = 12;\n\nfloat rainfall[NUM_ROWS][NUM_COLS];' },
+      { type: "p", text: "Two subscripts, so two loops. The outer one walks the rows and the inner one walks along each row — the nested loops from Lesson 16, doing the job they were built for." },
+      { type: "code", label: "Walking the whole table", text:
+'for (int row = 0; row < NUM_ROWS; row++)\n{\n   for (int col = 0; col < NUM_COLS; col++)\n      cout << rainfall[row][col] << " ";\n\n   cout << endl;\n}' },
+      { type: "p", text: "It can be initialised in its declaration too. Each row goes in its own braces, and the whole lot in another pair." },
+      { type: "code", label: "Initialising", text:
+'int mat2x3[][3] = {{1, 2, 3}, {4, 5, 6}};' },
+      { type: "note", text: "The number of rows can be left out, but the number of columns can never be. C++ needs the row length to work out where any element lives in memory, and it will not count them for you." },
+      { type: "p", text: "The same rule governs parameters, and it is stricter than for one-dimensional arrays." },
+      { type: "code", label: "As a parameter", text:
+'const int NUM_ROWS = 6;\nconst int NUM_COLS = 12;\n\nvoid display(float table[][NUM_COLS])\n{\n   ...\n}' },
+      { type: "note", text: "The first size may be omitted; the second must be there. So a function can be written to handle any number of rows — pass the row count as an extra parameter — but it can never handle a varying number of columns. That number is fixed when the function is written." },
+      { type: "p", text: "An array with the same number of rows and columns is called a matrix. An N×N matrix has N of each." },
+    ],
+    task: "Write a program that stores rainfall measurements for each month of the years 2000 to 2005 in a two-dimensional array, then uses that data to display the average annual rainfall over the period, the average monthly rainfall over the period, and which month between January 2000 and December 2005 had the highest rainfall.",
+    starter:
+`//Rainfall figures for 2000 to 2005
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+const int NUM_YEARS = 6;
+const int NUM_MONTHS = 12;
+
+int main()
+{
+    float rainfall[NUM_YEARS][NUM_MONTHS];
+
+    // Read the figures, year by year
+
+    // The average for each year: total that year's 12 months, divide by 12
+
+    // The average for each month across the years: total the same column
+    // for all 6 years, divide by 6
+
+    // The single highest figure, and which year and month it was in
+
+    return 0;
+}
+`,
+    theory: [
+      {
+        id: "26.1",
+        ask: [{ type: "p", text: "Write a program that inputs two N×N matrices and determines whether one is the transposition of the other. A matrix is the transposition of another when its rows are the other's columns — element [i][j] of one equals element [j][i] of the other." }],
+        answer: [
+          { type: "code", text:
+'//Checks whether one matrix is the transposition of another\n#include <iostream>\nusing namespace std;\n\nconst int N = 3;\n\nint main()\n{\n    int first[N][N], second[N][N];\n    bool isTransposition = true;\n\n    cout << "Enter the first matrix:" << endl;\n    for (int row = 0; row < N; row++)\n       for (int col = 0; col < N; col++)\n          cin >> first[row][col];\n\n    cout << "Enter the second matrix:" << endl;\n    for (int row = 0; row < N; row++)\n       for (int col = 0; col < N; col++)\n          cin >> second[row][col];\n\n    for (int row = 0; row < N; row++)\n       for (int col = 0; col < N; col++)\n          if (first[row][col] != second[col][row])\n             isTransposition = false;\n\n    if (isTransposition)\n       cout << "The second is the transposition of the first." << endl;\n    else\n       cout << "It is not." << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The whole exercise is in one line: first[row][col] != second[col][row]. Swapping the two subscripts on one side is what transposition means. Try 1 2 3 / 4 5 6 / 7 8 9 against 1 4 7 / 2 5 8 / 3 6 9." },
+        ],
+      },
+      {
+        id: "26.3",
+        ask: [
+          { type: "p", text: "Write a program that does reservations for a theatre with 5 rows of seats and 9 seats per row. The rows run 'A' to 'E' from the back forward, and the seats 1 to 9 in each row. Show the user a seat plan with the current bookings, from which seats in one row can be booked." },
+          { type: "code", text:
+'   1 2 3 4 5 6 7 8 9\nA: - - - - - - - - -\nB: - - - - - - - - -\nC: - - - - - - - - -\nD: - - - - - - - - -\nE: - - - - - - - - -\n     S C R E E N' },
+        ],
+        answer: [
+          { type: "code", text:
+'//Theatre seat reservations\n#include <iostream>\nusing namespace std;\n\nconst int NUM_ROWS = 5;\nconst int NUM_SEATS = 9;\n\n//Displays the seat plan with current bookings\nvoid displayPlan(const char seats[][NUM_SEATS])\n{\n   cout << "   1 2 3 4 5 6 7 8 9" << endl;\n\n   for (int row = 0; row < NUM_ROWS; row++)\n   {\n      cout << char(\'A\' + row) << ": ";\n\n      for (int seat = 0; seat < NUM_SEATS; seat++)\n         cout << seats[row][seat] << " ";\n\n      cout << endl;\n   }\n\n   cout << "     S C R E E N" << endl;\n}\n\nint main()\n{\n    char seats[NUM_ROWS][NUM_SEATS];\n    char row;\n    int first, howMany;\n\n    for (int r = 0; r < NUM_ROWS; r++)\n       for (int s = 0; s < NUM_SEATS; s++)\n          seats[r][s] = \'-\';\n\n    displayPlan(seats);\n\n    cout << "Which row (A-E)? ";\n    cin >> row;\n    cout << "First seat number? ";\n    cin >> first;\n    cout << "How many seats? ";\n    cin >> howMany;\n\n    int rowIndex = row - \'A\';\n\n    for (int s = first - 1; s < first - 1 + howMany; s++)\n       seats[rowIndex][s] = \'X\';\n\n    displayPlan(seats);\n\n    return 0;\n}' },
+          { type: "note", text: "Two conversions do the real work here. row - 'A' turns the letter the user typed into a row index, so 'C' becomes 2 — the same trick as Exercise 7.2. And first - 1 turns a seat number into an index, because the user counts from 1 and the array counts from 0. Getting either of those wrong books the wrong seats." },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: "l27-strings",
+    part: "Part IV · Data structures",
+    lesson: 27,
+    title: "String manipulation",
+    teach: [
+      { type: "p", text: "A string is a sequence of characters, and you can reach any one of them with a subscript, exactly as with an array. The subscripts start at 0." },
+      { type: "code", label: "Individual characters", text:
+'string word = "Programming";\n\ncout << word[0] << endl;     // P\ncout << word[4] << endl;     // r, the fifth character' },
+      { type: "p", text: "The string type also carries a set of member functions. You call one with a dot between the string and the function name." },
+      { type: "code", label: "size — how many characters", text:
+'string sentence = "How many?";\nint length = sentence.size();       // 9' },
+      { type: "code", label: "substr — a piece of it", text:
+'string sentence = "This is copied";\nstring word = sentence.substr(0, 4);    // "This"\nstring rest = sentence.substr(5);       // "is copied"' },
+      { type: "p", text: "substr takes a starting position and a length. Ask for more characters than remain and you get what is left, without an error. With only one argument it runs to the end of the string." },
+      { type: "code", label: "find — where something is", text:
+'int where = sentence.find("is");    // 2\n\nif (sentence.find("xyz") == string::npos)\n   cout << "not there" << endl;' },
+      { type: "note", text: "find returns string::npos when it does not find what it was looking for. It does not return -1 and it does not return 0 — 0 is a real answer, meaning found at the very start." },
+      { type: "p", text: "Some member functions change the string they are called on and some do not. The ones that leave it alone are accessors: size, substr and find. The ones that change it are mutators: insert, erase and replace." },
+      { type: "code", label: "Mutators change the string itself", text:
+'string s = "Hello world";\n\ns.insert(5, ",");            // "Hello, world"\ns.erase(0, 7);               // "world"\ns.replace(0, 5, "there");    // "there"' },
+      { type: "note", text: "Because a mutator changes the string in place, there is nothing to assign. Writing s = s.erase(0, 7); works but says the same thing twice, and s.substr(0, 4); on its own does nothing at all, because an accessor's answer is thrown away unless you catch it." },
+    ],
+    task: "Write a program that inputs a person's first names and surname, then displays just the initials. Peter John Smith should give PJS.",
+    starter:
+`//Displays the initials of a full name
+#include <iostream>
+#include <string>
+using namespace std;
+
+int main()
+{
+    string fullName;
+
+    cout << "Enter a full name: ";
+    getline(cin, fullName);
+
+    // The first letter is an initial. After that, any letter that follows
+    // a space is an initial too.
+
+    return 0;
+}
+`,
+    sampleInput: "Peter John Smith\n",
+    expectedOutput: "PJS",
+    theory: [
+      {
+        id: "27.1",
+        ask: [{ type: "p", text: "Write a function that converts a string to upper case. It should take a string as a parameter and return the converted string. Upper case and non-alphabetic characters must be left unchanged. Hint: use the toupper library function on every character." }],
+        answer: [
+          { type: "code", text:
+'//Converts a string to upper case\n#include <iostream>\n#include <string>\n#include <cctype>\nusing namespace std;\n\n//Returns an upper case copy of the string\nstring upperCase(string text)\n{\n   for (int i = 0; i < text.size(); i++)\n      text[i] = toupper(text[i]);\n\n   return text;\n}\n\nint main()\n{\n    string line;\n\n    cout << "Enter some text: ";\n    getline(cin, line);\n\n    cout << upperCase(line) << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The parameter is a value parameter, so the function works on its own copy and the caller's string is untouched — which is what the question asks for, since it wants the converted string returned rather than the original changed. From Exercise 17.4 you already know toupper leaves upper case letters and non-letters alone, so no if statement is needed." },
+        ],
+      },
+      {
+        id: "27.2",
+        ask: [{ type: "p", text: "Write a program that inputs a person's first names and surname, then displays just the initials. Peter John Smith gives PJS." }],
+        answer: [
+          { type: "code", text:
+'//Displays the initials of a full name\n#include <iostream>\n#include <string>\nusing namespace std;\n\nint main()\n{\n    string fullName;\n\n    cout << "Enter a full name: ";\n    getline(cin, fullName);\n\n    for (int i = 0; i < fullName.size(); i++)\n       if (i == 0 || fullName[i - 1] == \' \')\n          cout << fullName[i];\n\n    cout << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "A character is an initial if it is the very first one, or if the character before it is a space. Testing i == 0 first matters: without it, fullName[i - 1] on the first pass reads fullName[-1], off the front of the string. Because || stops as soon as the left side is true, i == 0 protects the test that follows it — the short-circuit evaluation from Lesson 11 doing something useful." },
+        ],
+      },
+      {
+        id: "27.3",
+        ask: [{ type: "p", text: "Write a program that inputs a sentence and then displays each word of the sentence on a separate line." }],
+        answer: [
+          { type: "code", text:
+'//Displays each word of a sentence on its own line\n#include <iostream>\n#include <string>\nusing namespace std;\n\nint main()\n{\n    string sentence, word;\n\n    cout << "Enter a sentence: ";\n    getline(cin, sentence);\n\n    for (int i = 0; i < sentence.size(); i++)\n    {\n       if (sentence[i] == \' \')\n       {\n          if (word.size() > 0)\n             cout << word << endl;\n\n          word = "";\n       }\n       else\n          word = word + sentence[i];\n    }\n\n    if (word.size() > 0)\n       cout << word << endl;\n\n    return 0;\n}' },
+          { type: "note", text: "The last word needs printing after the loop, because there is no space at the end of the sentence to trigger it. That trailing case is the part people leave out, and the symptom is a program that quietly drops the final word. The check on word.size() stops two spaces in a row printing a blank line." },
+        ],
+      },
+    ],
+  },
   { part: "Part IV · Data structures", lesson: 28, title: "Structs", pending: true },
   { part: "Part IV · Data structures", lesson: 29, title: "Arrays of structs", pending: true },
   { part: "Part IV · Data structures", lesson: 30, title: "Classes", pending: true },
