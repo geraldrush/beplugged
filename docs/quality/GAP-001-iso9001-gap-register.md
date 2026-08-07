@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Document reference** | QMS-2026-GAP-001 |
-| **Version** | 1.1 |
-| **Status** | Draft — 2 gaps closed, 36 open |
+| **Version** | 1.2 |
+| **Status** | Draft — 0 absent, 11 partial, 26 documented, 1 met |
 | **Category** | Gap Assessment |
 | **Owner** | Gerald Rushwaya |
 | **Assessed against** | ISO 9001:2015, clauses 4 to 10 |
@@ -23,7 +23,7 @@ This register is the working document for that preparation. It is closed when ev
 
 All requirement clauses of ISO 9001:2015 — clauses 4 through 10. Clauses 1 to 3 are scope, references and definitions, and contain no requirements.
 
-The assessment covers the twelve documents in `docs/` as at the assessment date, and the systems they describe.
+The assessment covered the twelve documents in `docs/` as at 2026-08-07. Eight further documents have since been written to close gaps; see §6.
 
 ## 3. A note on the standard used
 
@@ -50,37 +50,35 @@ The distinction between **Met** and **Documented** matters more than anything el
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-01 | 4.1 | Determine external and internal issues relevant to the business's purpose and strategic direction | None | **Absent** | A context document listing external issues (client sector conditions, competition, Cloudflare and other platform dependencies, load-shedding, exchange rate on tooling) and internal ones (single-person capacity, contractor availability, skills) |
-| G-02 | 4.2 | Determine interested parties and their relevant requirements | None | **Absent** | A table of interested parties — clients, contractors, Cloudflare, Brevo, RapidAPI, SARS, students on the academy — with what each requires of the business |
-| G-03 | 4.3 | Determine and document the scope of the QMS | None | **Absent** | A scope statement naming the services covered, the physical or logical boundaries, and any clause claimed as not applicable with justification |
-| G-04 | 4.4 | Determine the processes needed, their sequence, interaction, criteria and measures | SOPs describe individual processes | **Partial** | A process map showing how onboarding, quoting, delivery and invoicing feed one another, with the inputs, outputs and measures for each |
-
+| G-01 | 4.1 | Determine external and internal issues relevant to the business's purpose and strategic direction | QMS-001 §3.1 | **Documented** | **Closed.** External issues recorded. Reviewed at each management review |
+| G-02 | 4.2 | Determine interested parties and their relevant requirements | QMS-001 §4 | **Documented** | **Closed.** Interested parties and their requirements recorded |
+| G-03 | 4.3 | Determine and document the scope of the QMS | QMS-001 §2 | **Documented** | **Closed.** Scope stated, with 7.1.5 justified as not applicable |
+| G-04 | 4.4 | Determine the processes needed, their sequence, interaction, criteria and measures | QMS-001 §5 | **Documented** | **Closed.** Process map with inputs, outputs, owners and measures |
 ### Clause 5 — Leadership
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-05 | 5.1 | Top management demonstrates leadership and accountability for the QMS | Implied by POL-001 | **Partial** | Evidence rather than a statement: management review minutes, resources allocated, objectives set and tracked. Closes itself once §6 items operate |
+| G-05 | 5.1 | Top management demonstrates leadership and accountability for the QMS | QMS-001, OBJ-001, MRV-001 | **Partial** | Objectives now set and resources recorded. Evidenced once the first management review is held |
 | G-06 | 5.2 | Establish, communicate and make available a quality policy | POL-001, approved 2026-08-07 | **Documented** | **Approval done.** Remaining: record that it has been communicated to anyone doing work for the business |
-| G-07 | 5.3 | Assign and communicate roles, responsibilities and authorities | None | **Absent** | A short responsibilities table. Being a one-person business does not remove this — it makes it easy. Name who approves quotes, who authorises release, who owns the QMS, and what a contractor may and may not decide |
-
+| G-07 | 5.3 | Assign and communicate roles, responsibilities and authorities | QMS-002 | **Documented** | **Closed.** Roles, responsibilities and authorities recorded |
 ### Clause 6 — Planning
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-08 | 6.1 | Determine risks and opportunities arising from clause 4, and plan actions to address them | SEC-RISK-001 covers client data risk | **Partial** | Extend to business and quality risks — key-person dependency, a single client dominating revenue, platform lock-in, an unrenewed API quota stopping a service. Opportunities must be recorded too; the current register only has downside |
-| G-09 | 6.2 | Establish measurable quality objectives, with plans saying what, who, when and how evaluated | None | **Absent** | Three to five objectives with numbers against them. Examples: projects delivered by agreed date ≥ 90%; defects reaching a client after handover ≤ 1 per project; quotes within 10% of final invoice ≥ 80% |
+| G-08 | 6.1 | Determine risks and opportunities arising from clause 4, and plan actions to address them | SEC-RISK-001, QMS-001 §3 | **Partial** | Context now records business risks. Remaining: fold them into SEC-RISK-001 with scores, and add opportunities |
+| G-09 | 6.2 | Establish measurable quality objectives, with plans saying what, who, when and how evaluated | OBJ-001 | **Documented** | **Closed on paper.** Five objectives with measures and plans. Targets marked *[confirm]* need the owner's decision |
 | G-10 | 6.3 | Plan changes to the QMS rather than making them ad hoc | DOC-001 §6 | **Documented** | **Closed on paper.** Evidenced once a change is made through it |
 
 ### Clause 7 — Support
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-11 | 7.1.1–7.1.4 | Determine and provide the resources, people, infrastructure and working environment needed | None | **Absent** | A resources section: hardware, hosting and tooling relied on, and what happens when a person or a platform is unavailable |
-| G-12 | 7.1.5 | Control monitoring and measuring resources where used to verify conformity | None | **Absent** | Likely **not applicable** — no calibrated measuring equipment is used. Must be stated and justified in the scope document (G-03), not silently omitted |
-| G-13 | 7.1.6 | Determine and maintain the organizational knowledge needed | Partly in the SOPs | **Partial** | Say where knowledge lives — the repository, the SOPs, client documentation — and how it survives the owner being unavailable. This is the highest real risk in a one-person business |
-| G-14 | 7.2 | Determine necessary competence, ensure it, and retain evidence | None | **Absent** | A competence record: what skills the work requires, evidence for each (qualifications, experience), and how a contractor's competence is established before they touch client work |
-| G-15 | 7.3 | Ensure people are aware of the policy, objectives and their contribution | None | **Absent** | A record that anyone doing work has read the quality policy and knows the objectives. A signed acknowledgement is sufficient |
-| G-16 | 7.4 | Determine internal and external communications — what, when, with whom, how | None | **Absent** | A communication table. Much of this already happens through the invoicing system and the client portal; it needs writing down |
+| G-11 | 7.1.1–7.1.4 | Determine and provide the resources, people, infrastructure and working environment needed | SUP-001 §2 | **Documented** | **Closed.** People, infrastructure and environment recorded |
+| G-12 | 7.1.5 | Control monitoring and measuring resources where used to verify conformity | QMS-001 §2.2 | **Documented** | **Closed.** Stated as not applicable, with justification |
+| G-13 | 7.1.6 | Determine and maintain the organizational knowledge needed | SUP-001 §3 | **Documented** | **Closed.** Knowledge recorded, with the single-person risk stated and controls named |
+| G-14 | 7.2 | Determine necessary competence, ensure it, and retain evidence | SUP-001 §4 | **Partial** | Framework written. Owner's own competence evidence marked *[confirm]* and must be completed |
+| G-15 | 7.3 | Ensure people are aware of the policy, objectives and their contribution | SUP-001 §5 | **Documented** | **Closed.** Awareness requirements and record table in place |
+| G-16 | 7.4 | Determine internal and external communications — what, when, with whom, how | SUP-001 §6 | **Documented** | **Closed.** Internal and external communication tables |
 | G-17 | 7.5.1–7.5.2 | Maintain documented information, properly identified and reviewed | Every document carries reference, version, owner, approver and review date | **Met** | Nothing. This is done well already |
 | G-18 | 7.5.3 | Control documented information — availability, protection, distribution, retention, disposal, control of external documents | DOC-001 | **Documented** | **Closed.** Procedure written and approved, covering storage, approval, change, retention periods, external documents and withdrawal |
 
@@ -90,32 +88,31 @@ The distinction between **Met** and **Documented** matters more than anything el
 |---|---|---|---|---|---|
 | G-19 | 8.1 | Plan and control the processes needed to deliver the service | SOP-DEL-001 | **Documented** | Operate it on a real project and keep the records |
 | G-20 | 8.2.1–8.2.4 | Customer communication, determining and reviewing requirements, and handling changes to them | SOP-CLI-001, SOP-FIN-002 | **Documented** | Operate them and retain the records — the questionnaire, the scope agreement, the quote |
-| G-21 | 8.3.1–8.3.6 | Design and development: planning, inputs, controls, outputs, changes | None | **Absent** | **The largest gap.** Building websites and applications to a client's requirements *is* design and development, and it cannot be excluded. Needs a procedure covering design planning, what the inputs are (the scope agreement), design review and verification points, what the outputs are, how a design change is authorised, and the records kept at each stage |
-| G-22 | 8.4.1–8.4.3 | Control externally provided processes, products and services, with criteria for evaluation and re-evaluation | None | **Absent** | A supplier register with criteria. Your external providers include Cloudflare, Brevo, RapidAPI and any contractor. Each needs a basis for selection, a record of evaluation, and a statement of what is required of them |
+| G-21 | 8.3.1–8.3.6 | Design and development: planning, inputs, controls, outputs, changes | SOP-DES-001 | **Documented** | **Closed.** Full 8.3 procedure — planning, inputs, controls, outputs, changes, records |
+| G-22 | 8.4.1–8.4.3 | Control externally provided processes, products and services, with criteria for evaluation and re-evaluation | SOP-SUP-001 | **Documented** | **Closed on paper.** Register needs dates and any missing providers confirmed |
 | G-23 | 8.5.1 | Control service provision under controlled conditions | SOP-DEL-001 | **Documented** | Operate and record |
-| G-24 | 8.5.2 | Identify outputs and control their traceability where required | Partly — the D1 schema tracks projects, milestones and documents | **Partial** | State how a deliverable is identified and traced back to the requirement that asked for it |
-| G-25 | 8.5.3 | Protect property belonging to customers or external providers | Partly in POL-002 | **Partial** | Client property here means their domains, hosting credentials, content and data. Say explicitly how each is safeguarded, and what happens if any is lost or damaged |
+| G-24 | 8.5.2 | Identify outputs and control their traceability where required | SOP-DES-001 §11, D1 schema | **Partial** | Design records now traceable to requirements. Remaining: state how a live deliverable is identified |
+| G-25 | 8.5.3 | Protect property belonging to customers or external providers | POL-002, SOP-SUP-001 §7 | **Partial** | Contractor access controlled. Remaining: state explicitly how client domains, credentials and content are safeguarded and what happens if lost |
 | G-26 | 8.5.4 | Preserve outputs during delivery | Partly — repository and backups | **Partial** | Cover it in the backup and recovery document once G-31 is closed |
-| G-27 | 8.5.5 | Post-delivery activities — warranty, support, obligations | None | **Absent** | Write down the support commitment after handover: what is covered, for how long, and what is chargeable. This likely exists in your quotes already and needs stating as a procedure |
-| G-28 | 8.5.6 | Control changes to service provision | None | **Absent** | A change control clause: who authorises a change to a live client site, and what record is kept |
+| G-27 | 8.5.5 | Post-delivery activities — warranty, support, obligations | SOP-DES-001 §9 | **Documented** | **Closed.** Defect period and chargeable support defined. Period marked *[confirm]* |
+| G-28 | 8.5.6 | Control changes to service provision | SOP-DES-001 §10 | **Documented** | **Closed.** Change control, including the backup-and-reversibility rule for live systems |
 | G-29 | 8.6 | Release of products and services — verify requirements met, keep evidence and authorisation | SOP-DEL-001 has a launch checklist | **Partial** | Add the record: who authorised release, on what date, against which acceptance criteria |
-| G-30 | 8.7 | Control nonconforming outputs — identify, control, and record what was done | None | **Absent** | Distinct from corrective action. This is what happens to defective work *before* it reaches the client: how it is identified, held back, corrected, re-verified, and recorded |
-
+| G-30 | 8.7 | Control nonconforming outputs — identify, control, and record what was done | NCR-001 | **Documented** | **Closed.** Identification, containment, actions, re-verification and register |
 ### Clause 9 — Performance evaluation
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-31 | 9.1.1 | Determine what is monitored and measured, the methods, and when | Registers exist | **Partial** | Follows from the objectives in G-09. Once there are numbers to hit, say how each is measured and how often |
+| G-31 | 9.1.1 | Determine what is monitored and measured, the methods, and when | OBJ-001 §3, §4 | **Documented** | **Closed.** What is measured, how, from where, and how often |
 | G-32 | 9.1.2 | Monitor customer perception | FDB-001 | **Documented** | Send the feedback request on the next handover and record the response |
 | G-33 | 9.1.3 | Analyse and evaluate the data | MRV-001 agenda covers it | **Partial** | Needs data to analyse. Follows from G-09 and G-31 |
-| G-34 | 9.2 | Internal audit at planned intervals, with a programme, defined criteria, objective auditors, and records | None | **Absent** | **Mandatory and currently missing entirely.** Needs an audit programme covering all clauses over a defined cycle, a procedure, and audit reports. Objectivity is the difficulty in a one-person business — an auditor may not audit their own work, so this will require a contracted internal auditor |
+| G-34 | 9.2 | Internal audit at planned intervals, with a programme, defined criteria, objective auditors, and records | AUD-001 | **Partial** | Procedure and programme written. **Not closed** until an independent auditor is appointed and the first audit performed — see AUD-001 §2 |
 | G-35 | 9.3.1–9.3.3 | Management review at planned intervals, covering the required inputs, producing decisions and actions | MRV-001 | **Documented** | Hold the first review. The standing agenda already matches the required inputs |
 
 ### Clause 10 — Improvement
 
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
-| G-36 | 10.1 | Determine and select opportunities for improvement | Implied | **Partial** | Falls out of management review once it is held |
+| G-36 | 10.1 | Determine and select opportunities for improvement | AUD-001, MRV-001, GAP-001 | **Partial** | Improvement routes now exist. Evidenced once the first review and audit are held |
 | G-37 | 10.2 | React to nonconformity, evaluate the need for action, implement, review effectiveness, retain records | CAPA-001 | **Documented** | Well written, including the correction versus corrective action distinction. Needs its first real entry |
 | G-38 | 10.3 | Continually improve the suitability, adequacy and effectiveness of the QMS | None | **Partial** | Evidenced by the management review and gap register operating over time. Closes itself last |
 
@@ -124,18 +121,37 @@ The distinction between **Met** and **Documented** matters more than anything el
 | Rating | Count |
 |---|---|
 | Met | 1 |
-| Documented | 9 |
-| Partial | 12 |
-| Absent | 16 |
+| Documented | 26 |
+| Partial | 11 |
+| Absent | 0 |
 
-*Updated 2026-08-07: all twelve documents approved and in force, and DOC-001 written, moving G-06, G-10 and G-18.*
+*Updated 2026-08-07. Nothing is now absent. Eight documents were written to close the gaps:*
 
-Sixteen requirements have nothing behind them at all. The four that matter most, in order:
+| Document | Closes |
+|---|---|
+| QMS-001 — Scope, Context and Processes | G-01, G-02, G-03, G-04, G-12 |
+| QMS-002 — Roles, Responsibilities and Authorities | G-07 |
+| DOC-001 — Document Control | G-18, G-10 |
+| OBJ-001 — Quality Objectives | G-09, G-31 |
+| SUP-001 — Resources, Competence, Awareness, Communication | G-11, G-13, G-15, G-16 |
+| SOP-DES-001 — Design and Development | G-21, G-27, G-28 |
+| SOP-SUP-001 — Control of External Providers | G-22 |
+| NCR-001 — Control of Nonconforming Output | G-30 |
+| AUD-001 — Internal Audit | G-34 (procedure only) |
 
-1. **G-21 — design and development (8.3).** The core of what the business does, and entirely undocumented.
-2. **G-34 — internal audit (9.2).** Mandatory, absent, and needs an outside person.
-3. **G-03 — scope of the QMS (4.3).** Everything else is assessed against it, so it comes first in practice.
-4. **G-09 — quality objectives (6.2).** Without measurable objectives there is nothing for clause 9 to evaluate.
+**What remains is no longer writing. It is doing.** The eleven partial items fall into three kinds:
+
+**1. Needs a decision only the owner can make** — marked *[confirm]* in the documents:
+
+- OBJ-001 — the five targets
+- SUP-001 §4.2 — the owner's own competence evidence
+- QMS-002 §5 — the continuity arrangements
+- SOP-SUP-001 §5 — supplier evaluation dates and any missing providers
+- SOP-DES-001 §9 — the defect period
+
+**2. Needs an external person** — G-34. An independent internal auditor must be appointed and the first audit performed. This is the only item that cannot be completed without spending money, and it is the one most likely to block certification.
+
+**3. Closes itself once the system runs** — G-05, G-36, G-38 and the register entries. Nothing to write; they need a management review held, an audit performed, and real entries in the registers.
 
 ## 7. The gap that is not in the table
 
@@ -209,3 +225,4 @@ ISO 9001 certification is not awarded for documentation. A Stage 2 audit looks f
 |---|---|---|---|
 | 1.0 | 2026-08-07 | Gerald Rushwaya | Register created from an assessment of the twelve documents in `docs/` against ISO 9001:2015 clauses 4 to 10. 38 gaps recorded, none closed |
 | 1.1 | 2026-08-07 | Gerald Rushwaya | All twelve documents approved and in force. DOC-001 document control procedure written, closing G-18 and the change-planning part of G-10 |
+| 1.2 | 2026-08-07 | Gerald Rushwaya | Eight documents written closing every absent gap. 0 absent, 11 partial, 26 documented, 1 met. What remains needs owner decisions, an appointed auditor, and operating records |
