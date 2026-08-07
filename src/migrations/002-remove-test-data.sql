@@ -71,6 +71,42 @@ SELECT 'quote', quote_number, client_name, amount, date(created_at)
 
 
 -- ============================================================
+-- STEP 2b — Test questionnaires
+--
+-- Four questionnaires were submitted while testing the form. They are
+-- identifiable from their own answers — mydomain.com is a placeholder,
+-- "Money" is not a business purpose, and "Xes" and "producrts" are typos.
+-- None has a lead attached.
+--
+-- Look first:
+
+SELECT token, status, date(created_at) AS created, substr(answers,1,120) AS answers_start
+  FROM lead_questionnaires
+ WHERE token IN (
+   'Vhu5IfNCD2IPTzJaqc8vv7AXZa2qllhwuwpKsQ-vBSY',
+   'y4auMkmmPQLy1Wepb9oYqAaZvX8BDYX6AJP5G3LVaug',
+   '_b_8yEKSHFgNNN0E0ZOvML4yoPsns9ij9KA8Uu7RN9Y',
+   'z2eFdV2yM8Uqi9XUnvQFspVmk8UUUkUh_RQp5u9Mhww'
+ );
+
+-- Then delete:
+
+-- DELETE FROM lead_questionnaires
+--  WHERE token IN (
+--    'Vhu5IfNCD2IPTzJaqc8vv7AXZa2qllhwuwpKsQ-vBSY',
+--    'y4auMkmmPQLy1Wepb9oYqAaZvX8BDYX6AJP5G3LVaug',
+--    '_b_8yEKSHFgNNN0E0ZOvML4yoPsns9ij9KA8Uu7RN9Y',
+--    'z2eFdV2yM8Uqi9XUnvQFspVmk8UUUkUh_RQp5u9Mhww'
+--  );
+
+-- A fifth, vFhNZXFnx3u_wcR_uPiImbyXhepEJBqxsM6QzsDP5oc, was sent on
+-- 2026-07-30 with no lead attached and never submitted. It is NOT listed
+-- above. Confirm whether it went to a real prospect before touching it —
+-- deleting a questionnaire sent to a real person destroys evidence that
+-- they were approached.
+
+
+-- ============================================================
 -- STEP 3 — Anything else that was test data
 --
 -- Add further blocks here for any other test client, following the same
