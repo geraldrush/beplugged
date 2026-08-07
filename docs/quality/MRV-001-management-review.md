@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | QMS-2026-MRV-001 |
 | **Version** | 1.0 |
-| **Status** | Draft — template, no review held yet |
+| **Status** | Approved — in force — template, no review held yet |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Management Review |
 | **Owner** | Gerald Rushwaya |
 | **Frequency** | Quarterly |
@@ -96,3 +97,4 @@ Held quarterly. Attended by the owner, plus anyone accountable for an area under
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Template created. No review held yet |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | SEC-2026-ACCESS-001 |
 | **Version** | 1.0 |
-| **Status** | Draft — template, no review performed yet |
+| **Status** | Approved — in force — template, no review performed yet |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Access Review |
 | **Owner** | Gerald Rushwaya |
 | **Frequency** | Every 6 months, and on any team change |
@@ -94,3 +95,4 @@ Not findings; items already known to warrant checking.
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Template created. No review performed yet |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

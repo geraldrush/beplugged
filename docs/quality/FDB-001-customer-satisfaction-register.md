@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | QMS-2026-FDB-001 |
 | **Version** | 1.0 |
-| **Status** | Draft — no entries yet |
+| **Status** | Approved — in force — no entries yet |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Customer Feedback |
 | **Owner** | Gerald Rushwaya |
 | **Review frequency** | Reviewed at each management review |
@@ -76,3 +77,4 @@ A register that is only read at review time still works. A register that is neve
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Register created. No entries yet |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | QMS-2026-CAPA-001 |
 | **Version** | 1.0 |
-| **Status** | Draft — no entries yet |
+| **Status** | Approved — in force — no entries yet |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Corrective Action |
 | **Owner** | Gerald Rushwaya |
 | **Review frequency** | Open actions reviewed monthly; all reviewed at management review |
@@ -84,3 +85,4 @@ Included to show the expected level of detail. **This is an illustration, not a 
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Register created. No entries yet |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

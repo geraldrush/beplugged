@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | SEC-2026-RISK-001 |
 | **Version** | 1.1 |
-| **Status** | Draft — risks identified, one part treated, scores not yet accepted |
+| **Status** | Approved — in force — risks identified, one part treated, scores not yet accepted |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Risk Register |
 | **Owner** | Gerald Rushwaya |
 | **Frequency** | Reviewed at each management review |
@@ -83,3 +84,4 @@ the remaining half and closes the risk.
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Register created. Risks identified from current operations; scores proposed, not yet assessed |
 | 1.1 | 2026-07-29 | Gerald Rushwaya | R-03 part treated: rate limiting applied to the login endpoint, likelihood re-scored 3 to 2 |
+| 1.1 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

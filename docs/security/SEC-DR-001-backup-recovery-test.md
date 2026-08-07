@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | SEC-2026-DR-001 |
 | **Version** | 1.0 |
-| **Status** | Draft — template, no test performed yet |
+| **Status** | Approved — in force — template, no test performed yet |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Recovery Test |
 | **Owner** | Gerald Rushwaya |
 | **Frequency** | Quarterly |
@@ -86,3 +87,4 @@ These need a decision before the first test, so results can be judged against so
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Template created. No test performed yet |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Approved and issued for use. No change to the content |

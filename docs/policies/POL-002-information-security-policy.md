@@ -4,12 +4,13 @@
 |---|---|
 | **Document reference** | QMS-2026-POL-002 |
 | **Version** | 1.0 |
-| **Status** | Draft |
+| **Status** | Approved — in force |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Policy |
 | **Owner** | Gerald Rushwaya |
 | **Approver** | Gerald Rushwaya |
-| **Effective date** | *to be set on approval* |
-| **Next review** | *effective date + 12 months* |
+| **Effective date** | 2026-08-07 |
+| **Next review** | 2027-08-07 |
 
 ---
 
@@ -90,3 +91,4 @@ Access is reviewed at least every six months against SEC-2026-ACCESS-001, confir
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Initial draft |
+| 1.0 | 2026-08-07 | Gerald Rushwaya | Reviewed and approved for issue. No change to the content. Effective from 2026-08-07 |

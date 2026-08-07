@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | SOP-FIN-002 |
 | **Version** | 1.1 |
-| **Status** | Draft |
+| **Status** | Approved — in force |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Finance |
 | **Owner** | Gerald Rushwaya |
 | **Approver** | Gerald Rushwaya |
@@ -220,3 +221,4 @@ Proposed defaults. Confirm, then remove this section at version 1.1.
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Initial draft |
 | 1.1 | 2026-07-29 | Gerald Rushwaya | Quote sending, acceptance and conversion to a project are now handled in the system; sections 6.3, 6.6, 6.7 and 9 rewritten accordingly |
+| 1.1 | 2026-08-07 | Gerald Rushwaya | Reviewed and approved for issue. No change to the procedure. In operational use since 2026-07-28; records from that period are retained and remain valid evidence that the procedure was followed |

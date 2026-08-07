@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Document reference** | QMS-2026-GAP-001 |
-| **Version** | 1.0 |
-| **Status** | Draft — assessment complete, no gaps closed yet |
+| **Version** | 1.1 |
+| **Status** | Draft — 2 gaps closed, 36 open |
 | **Category** | Gap Assessment |
 | **Owner** | Gerald Rushwaya |
 | **Assessed against** | ISO 9001:2015, clauses 4 to 10 |
@@ -60,7 +60,7 @@ The distinction between **Met** and **Documented** matters more than anything el
 | Ref | Clause | Requirement in short | Current evidence | Rating | What closes it |
 |---|---|---|---|---|---|
 | G-05 | 5.1 | Top management demonstrates leadership and accountability for the QMS | Implied by POL-001 | **Partial** | Evidence rather than a statement: management review minutes, resources allocated, objectives set and tracked. Closes itself once §6 items operate |
-| G-06 | 5.2 | Establish, communicate and make available a quality policy | POL-001 | **Documented** | Approve it, set an effective date, and record that it has been communicated to anyone doing work for the business |
+| G-06 | 5.2 | Establish, communicate and make available a quality policy | POL-001, approved 2026-08-07 | **Documented** | **Approval done.** Remaining: record that it has been communicated to anyone doing work for the business |
 | G-07 | 5.3 | Assign and communicate roles, responsibilities and authorities | None | **Absent** | A short responsibilities table. Being a one-person business does not remove this — it makes it easy. Name who approves quotes, who authorises release, who owns the QMS, and what a contractor may and may not decide |
 
 ### Clause 6 — Planning
@@ -69,7 +69,7 @@ The distinction between **Met** and **Documented** matters more than anything el
 |---|---|---|---|---|---|
 | G-08 | 6.1 | Determine risks and opportunities arising from clause 4, and plan actions to address them | SEC-RISK-001 covers client data risk | **Partial** | Extend to business and quality risks — key-person dependency, a single client dominating revenue, platform lock-in, an unrenewed API quota stopping a service. Opportunities must be recorded too; the current register only has downside |
 | G-09 | 6.2 | Establish measurable quality objectives, with plans saying what, who, when and how evaluated | None | **Absent** | Three to five objectives with numbers against them. Examples: projects delivered by agreed date ≥ 90%; defects reaching a client after handover ≤ 1 per project; quotes within 10% of final invoice ≥ 80% |
-| G-10 | 6.3 | Plan changes to the QMS rather than making them ad hoc | None | **Absent** | A short clause in the document control procedure: what triggers a change, who approves it, how the consequences are considered |
+| G-10 | 6.3 | Plan changes to the QMS rather than making them ad hoc | DOC-001 §6 | **Documented** | **Closed on paper.** Evidenced once a change is made through it |
 
 ### Clause 7 — Support
 
@@ -82,7 +82,7 @@ The distinction between **Met** and **Documented** matters more than anything el
 | G-15 | 7.3 | Ensure people are aware of the policy, objectives and their contribution | None | **Absent** | A record that anyone doing work has read the quality policy and knows the objectives. A signed acknowledgement is sufficient |
 | G-16 | 7.4 | Determine internal and external communications — what, when, with whom, how | None | **Absent** | A communication table. Much of this already happens through the invoicing system and the client portal; it needs writing down |
 | G-17 | 7.5.1–7.5.2 | Maintain documented information, properly identified and reviewed | Every document carries reference, version, owner, approver and review date | **Met** | Nothing. This is done well already |
-| G-18 | 7.5.3 | Control documented information — availability, protection, distribution, retention, disposal, control of external documents | None | **Absent** | A document control procedure. The headers exist but the rules behind them do not: where documents live, who may change them, how long records are kept, how the standard and other external documents are controlled |
+| G-18 | 7.5.3 | Control documented information — availability, protection, distribution, retention, disposal, control of external documents | DOC-001 | **Documented** | **Closed.** Procedure written and approved, covering storage, approval, change, retention periods, external documents and withdrawal |
 
 ### Clause 8 — Operation
 
@@ -124,11 +124,13 @@ The distinction between **Met** and **Documented** matters more than anything el
 | Rating | Count |
 |---|---|
 | Met | 1 |
-| Documented | 7 |
+| Documented | 9 |
 | Partial | 12 |
-| Absent | 18 |
+| Absent | 16 |
 
-Eighteen requirements have nothing behind them at all. The four that matter most, in order:
+*Updated 2026-08-07: all twelve documents approved and in force, and DOC-001 written, moving G-06, G-10 and G-18.*
+
+Sixteen requirements have nothing behind them at all. The four that matter most, in order:
 
 1. **G-21 — design and development (8.3).** The core of what the business does, and entirely undocumented.
 2. **G-34 — internal audit (9.2).** Mandatory, absent, and needs an outside person.
@@ -206,3 +208,4 @@ ISO 9001 certification is not awarded for documentation. A Stage 2 audit looks f
 | Version | Date | Author | Change |
 |---|---|---|---|
 | 1.0 | 2026-08-07 | Gerald Rushwaya | Register created from an assessment of the twelve documents in `docs/` against ISO 9001:2015 clauses 4 to 10. 38 gaps recorded, none closed |
+| 1.1 | 2026-08-07 | Gerald Rushwaya | All twelve documents approved and in force. DOC-001 document control procedure written, closing G-18 and the change-planning part of G-10 |

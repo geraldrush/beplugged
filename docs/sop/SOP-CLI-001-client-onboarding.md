@@ -4,7 +4,8 @@
 |---|---|
 | **Document reference** | SOP-CLI-001 |
 | **Version** | 1.1 |
-| **Status** | Draft |
+| **Status** | Approved — in force |
+| **Approved** | 2026-08-07 by Gerald Rushwaya |
 | **Category** | Client |
 | **Owner** | Gerald Rushwaya |
 | **Approver** | Gerald Rushwaya |
@@ -245,3 +246,4 @@ Timeline and budget were also lifted out of the catch-all question into their ow
 |---|---|---|---|
 | 1.0 | 2026-07-28 | Gerald Rushwaya | Initial draft. Questionnaire based on the existing client intake questions, extended per Appendix B. |
 | 1.1 | 2026-07-29 | Gerald Rushwaya | The questionnaire is now emailed from the system and requirements are confirmed by a signed scope agreement; sections 5.2, 5.6 and 6 updated |
+| 1.1 | 2026-08-07 | Gerald Rushwaya | Reviewed and approved for issue. No change to the procedure. In operational use since 2026-07-28; records from that period are retained and remain valid evidence that the procedure was followed |
