@@ -14,14 +14,14 @@
     },
     {
       target: ".pane.list",
-      title: "1. Pick a question",
-      body: "Each one is taken from a past paper, with the paper and the marks shown underneath. They start easier and get harder.",
-      use: "Your work is kept separately for each question, so you can move between them without losing anything.",
+      title: "1. Pick a lesson",
+      body: "The course path starts with guided lessons, then moves into past-paper practice once the foundations are in place.",
+      use: "Your work is kept separately for each lesson, so you can move between them without losing anything.",
     },
     {
       target: ".pane.side",
       title: "2. Read what is being asked",
-      body: "The question sits on the right. Where the paper printed the expected output, it is shown here too — your program has to produce exactly that, spaces and all.",
+      body: "The lesson brief sits on the right. Where the paper printed the expected output, it is shown here too — your program has to produce exactly that, spaces and all.",
       use: "Read the whole question before typing. Marks are lost more often to misread requirements than to bad code.",
     },
     {

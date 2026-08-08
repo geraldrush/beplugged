@@ -44,3 +44,9 @@ Study Guide.pdf
 public/academy/cdn/
 public/academy/vendor/
 .build/
+
+# Local backups taken before edits — these hold live data, keep them off git
+/backup.sql
+/backup-before-migrations-*.sql
+/catalogue-backup-*.json
+/img-originals-*/

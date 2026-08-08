@@ -14,7 +14,7 @@ binding = "ASSETS"
 # Static assets are normally served at the edge without running the Worker.
 # These two pages have their card grids filled in from the catalogue, so the
 # Worker has to see the request before the asset is returned.
-run_worker_first = ["/service", "/training"]
+run_worker_first = ["/service", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
 
 [vars]
 ENVIRONMENT = "production"
