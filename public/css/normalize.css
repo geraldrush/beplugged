@@ -517,7 +517,10 @@ Preloader Area CSS
 	z-index:22;
 	text-align:center;
 }
-.breadcrumbs h2{
+/* h1 added alongside h2 so the page title can be marked up as the h1 it is
+   without changing a single pixel. 26 catalogue pages had no h1 at all. */
+.breadcrumbs h2,
+.breadcrumbs h1{
 	color: #fff;
 	text-transform:capitalize;
 	font-size: 38px;

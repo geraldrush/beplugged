@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v14";
+const CACHE_VERSION = "beplugged-v18";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -15,6 +15,7 @@ const CORE_ASSETS = [
   "/portfolio-details",
   "/contact",
   "/training",
+  "/training/unisa_modules/cos1511/",
   OFFLINE_URL,
   "/style.css",
   "/css/bootstrap.min.css",

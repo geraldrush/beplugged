@@ -8945,7 +8945,7 @@ function categoryPageHtml(category, courses, origin) {
   <div class="container">
     <div class="bread-inner">
       <div class="row"><div class="col-12">
-        <h2>${escapeHtml(category.title)}</h2>
+        <h1>${escapeHtml(category.title)}</h1>
         <ul class="bread-list">
           <li><a href="/">Home</a></li>
           <li><i class="icofont-simple-right"></i></li>
@@ -9136,7 +9136,7 @@ function cataloguePageHtml(item, related, origin) {
   <div class="container">
     <div class="bread-inner">
       <div class="row"><div class="col-12">
-        <h2>${escapeHtml(item.title)}</h2>
+        <h1>${escapeHtml(item.title)}</h1>
         <ul class="bread-list">
           <li><a href="/">Home</a></li>
           <li><i class="icofont-simple-right"></i></li>
