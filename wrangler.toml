@@ -4,17 +4,27 @@ preview_urls = true
 main = "src/index.js"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
+# www is routed too, not because anything is served there, but because nothing
+# was: the hostname resolved and then 404ed. The Worker redirects it to the
+# apex, which it can only do if the request reaches the Worker at all.
 routes = [
-  { pattern = "beplugged.co.za/*", zone_name = "beplugged.co.za" }
+  { pattern = "beplugged.co.za/*", zone_name = "beplugged.co.za" },
+  { pattern = "www.beplugged.co.za/*", zone_name = "beplugged.co.za" }
 ]
 
 [assets]
 directory = "public"
 binding = "ASSETS"
 # Static assets are normally served at the edge without running the Worker.
-# These two pages have their card grids filled in from the catalogue, so the
-# Worker has to see the request before the asset is returned.
-run_worker_first = ["/service", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
+# The catalogue listings have their card grids filled in from the database, so
+# the Worker has to see the request before the asset is returned.
+#
+# The remaining HTML pages are listed for a different reason: a request served
+# straight from assets never reaches the Worker, so the www redirect could not
+# fire and www/about answered 200 instead of redirecting. Only the indexable
+# pages are listed. Stylesheets and images stay on the edge path, since nobody
+# navigates to a stylesheet and no search engine indexes one as a page.
+run_worker_first = ["/", "/about", "/contact", "/portfolio-details", "/service", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
 
 [vars]
 ENVIRONMENT = "production"

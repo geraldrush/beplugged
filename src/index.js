@@ -222,6 +222,17 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
+    // www resolves but has nothing behind it, so every request there used to
+    // end in a 404. Send it to the apex permanently, keeping the path and the
+    // query, so visitors land where they meant to and any link pointing at
+    // www passes its weight to the hostname the canonicals actually name.
+    if (url.hostname.startsWith("www.")) {
+      const target = new URL(url);
+      target.hostname = url.hostname.slice(4);
+      target.protocol = "https:";
+      return Response.redirect(target.toString(), 301);
+    }
+
     const corsHeaders = getCorsHeaders(request);
     const jsonHeaders = {
       ...corsHeaders,
