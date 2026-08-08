@@ -222,13 +222,27 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // www resolves but has nothing behind it, so every request there used to
-    // end in a 404. Send it to the apex permanently, keeping the path and the
-    // query, so visitors land where they meant to and any link pointing at
-    // www passes its weight to the hostname the canonicals actually name.
-    if (url.hostname.startsWith("www.")) {
+    // There is one address this site lives at: https on the apex. www resolved
+    // but served nothing, and http served the whole site insecurely, so both
+    // were separate copies as far as a search engine is concerned. Corrected
+    // together rather than in sequence, so no visitor ever pays two hops.
+    //
+    // Cloudflare terminates TLS but request.url still carries the scheme the
+    // client actually used, so http is visible here. The cf-visitor header is
+    // consulted as well for the case where a proxy in front has rewritten it.
+    const forwardedScheme = (() => {
+      try {
+        return JSON.parse(request.headers.get("cf-visitor") || "{}").scheme;
+      } catch {
+        return null;
+      }
+    })();
+    const isInsecure = url.protocol === "http:" || forwardedScheme === "http";
+    if (url.hostname.startsWith("www.") || isInsecure) {
       const target = new URL(url);
-      target.hostname = url.hostname.slice(4);
+      if (target.hostname.startsWith("www.")) {
+        target.hostname = target.hostname.slice(4);
+      }
       target.protocol = "https:";
       return Response.redirect(target.toString(), 301);
     }
