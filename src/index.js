@@ -470,6 +470,11 @@ export default {
         }
 
         const seg = path.split("/").filter(Boolean);
+        // Location pages sit at the root, so they are matched before anything
+        // that reads a single segment as something else.
+        if (seg.length === 1 && LOCATION_SLUGS.has(seg[0])) {
+          return await handleLocationPage(env, request, seg[0]);
+        }
         // /training/categories/<slug> is checked before /training/<slug>, so
         // the three-segment category path is never read as a course slug.
         if (seg.length === 3 && seg[0] === "training" && seg[1] === "categories") {
@@ -8995,7 +9000,9 @@ function cataloguePageHtml(item, related, origin) {
   const base = catalogueBase(item.kind);
   const isCourse = item.kind === "course";
   const listingBase = isCourse ? "/training" : base;
-  const url = `${origin}${base}/${item.slug}`;
+  // Location pages live at the root rather than under /services, so they pass
+  // their own canonical rather than having one derived from the kind.
+  const url = item.canonicalUrl || `${origin}${base}/${item.slug}`;
   const title = item.seo_title || `${item.title} | Beplugged Tech`;
   const description =
     item.seo_description ||
@@ -9026,6 +9033,11 @@ function cataloguePageHtml(item, related, origin) {
       url: origin,
     },
   };
+  // A location page is the same Service narrowed to one city, so it says so
+  // rather than implying an office there.
+  if (item.areaServed) {
+    schema.areaServed = { "@type": "City", name: item.areaServed };
+  }
   if (isCourse) {
     schema.hasCourseInstance = {
       "@type": "CourseInstance",
@@ -9295,6 +9307,180 @@ async function handleCatalogue(request, env, path, method) {
   return json({ error: "Method not allowed" }, { status: 405 });
 }
 
+// Location pages. These target the two commercial searches the site already
+// appears for. They are deliberately honest about geography: the business is
+// in Pretoria, and the Johannesburg page says so rather than implying an
+// office that does not exist.
+const LOCATION_PAGES = [
+  {
+    slug: "web-development-pretoria",
+    kind: "service",
+    title: "Web Development in Pretoria",
+    areaServed: "Pretoria",
+    summary:
+      "Websites, web applications and custom software built in Pretoria, for businesses that need the thing to actually work.",
+    seo_title: "Web Development in Pretoria | Beplugged Tech",
+    seo_description:
+      "Web development and website design in Pretoria. Based in Pretoria Central, building websites, web applications and custom software for Gauteng businesses.",
+    detail_1: "Pretoria Central",
+    detail_2: "Gauteng and nationwide",
+    body: `## Web development, from Pretoria
+
+We are based in Pretoria Central, at Praetor Forum on Lilian Ngoyi Street, and we build websites, web applications and custom business software for organisations here and across South Africa.
+
+That means you can meet the people building your system. It is not the only thing that matters, and plenty of good work is done remotely, but when a project involves your staff, your process and your money, being able to sit in a room occasionally is worth something.
+
+## What we build for Pretoria businesses
+
+- **Websites** that load quickly, work properly on a phone, and can be found by search engines
+- **Web applications** with logins, dashboards, bookings, approvals and payments
+- **Custom business systems** for CRM, invoicing, scheduling and administration
+- **Online stores** with South African payment gateways and real stock control
+- **Mobile apps** for Android and iPhone, connected to the same data as your web system
+- **Cloud hosting, domains and SSL**, set up properly and kept running
+
+## Why local matters, and where it does not
+
+Some of this genuinely benefits from proximity. Scoping a business system means understanding how your organisation actually works, and that conversation goes better in person than over a video call with three people talking at once. Training your team to use what we built is the same.
+
+Some of it does not benefit at all. Writing code, configuring hosting and fixing a bug at ten at night are identical whether we are down the road or in another province. We are straightforward about which is which, rather than charging you for meetings that exist to look attentive.
+
+## Areas we work in
+
+We work with businesses throughout Pretoria and the wider Tshwane area, including Pretoria Central, Arcadia, Sunnyside, Hatfield, Brooklyn, Menlyn, Lynnwood, Waterkloof, Garsfontein, Faerie Glen, Moreleta Park, Silverton, Montana, Wonderboom, Akasia, Centurion, Mamelodi, Atteridgeville and Soshanguve.
+
+We also work with clients across Gauteng and the rest of South Africa, and with organisations that have no interest in ever meeting us in person. Both are fine.
+
+## How we work
+
+We scope the work in writing before building, so you know what you are paying for and what is deliberately out of scope. Software projects rarely fail because of code. They fail because nobody agreed what was being built.
+
+You see progress as it happens rather than at the end. Feedback on something half built is cheap to act on. Feedback on something finished is expensive, and by then the budget is usually spent.
+
+When it is done, the code, the data, the hosting and the domain are yours, registered in your name. If you later want to work with someone else, you can. We would rather keep clients because the work is good than because leaving is difficult.
+
+## Questions we are often asked
+
+**Can we meet in person?**
+Yes. We are in Pretoria Central and happy to meet, particularly at the start of a project when the scoping conversation matters most.
+
+**Do you only work with Pretoria businesses?**
+No. Pretoria is where we are, not a limit on who we work with. We have clients elsewhere in Gauteng and around the country.
+
+**Do you do web development and hosting, or just the build?**
+Both. We set up hosting, the domain and SSL, and can keep the site maintained afterwards if you want that.
+
+**Can you fix or rebuild an existing website?**
+Often, yes. We will look at what you have and tell you honestly whether it is worth repairing or replacing. Sometimes the answer is that it is fine as it is.
+
+**Do you build custom software as well as websites?**
+Yes, and it is a large part of what we do. CRM, invoicing, booking and administration systems shaped around how your organisation actually operates.
+
+**How do we start?**
+Tell us what the problem is rather than what you think the solution should be. We will come back with an honest view on scope, including when the answer is that you do not need what you were about to buy.`,
+  },
+  {
+    slug: "app-development-johannesburg",
+    kind: "service",
+    title: "App Development in Johannesburg",
+    areaServed: "Johannesburg",
+    summary:
+      "Mobile and web application development for Johannesburg businesses, built from Pretoria and close enough to meet.",
+    seo_title: "App Development in Johannesburg | Beplugged Tech",
+    seo_description:
+      "App development for Johannesburg businesses. Android, iPhone and web applications built by a Gauteng team, with meetings in Johannesburg when they help.",
+    detail_1: "Serving Johannesburg",
+    detail_2: "Based in Pretoria",
+    body: `## App development for Johannesburg businesses
+
+We build mobile and web applications for businesses in Johannesburg. To be straightforward with you from the start: our office is in Pretoria, not Johannesburg. It is an hour up the road, we come down when a meeting is worth having, and the rest of the work happens the way software work always happens, which is remotely.
+
+We say that plainly because plenty of agencies list a Johannesburg address they do not occupy, and you deserve to know who you are dealing with.
+
+## What we build
+
+- **Mobile apps** for Android and iPhone, from a shared codebase where that suits the project
+- **Web applications** that run in a browser with no installation at all
+- **Custom business systems** for operations, scheduling, approvals and reporting
+- **Integrations** connecting an app to the systems you already run
+- **Store submission**, including developer accounts, listings and the review process
+
+## Do you actually need an app?
+
+This is the question worth answering before anything else, and the honest answer is often no.
+
+An app earns its place when your users open it several times a week, or when you need the camera, GPS, offline access or push notifications. If people would visit occasionally and everything happens in a browser anyway, a fast mobile website will serve you better for less money and less ongoing maintenance.
+
+We will tell you which situation you are in, including when that means a smaller project for us. An app nobody opens is worse than no app, because you paid for it and you still have to maintain it.
+
+## One system, not two
+
+The most expensive mistake in app projects is treating the app as separate from everything else. Two systems drift apart, records disagree, staff stop trusting either, and everyone quietly returns to the spreadsheet.
+
+We build the app against the same data as your web system, so there is one source of truth. Something changed on a phone in Sandton is changed everywhere, immediately, because it was never stored twice.
+
+## Areas we work in
+
+We work with businesses across Johannesburg and the wider Gauteng area, including the Johannesburg CBD, Sandton, Rosebank, Braamfontein, Illovo, Melrose Arch, Randburg, Fourways, Midrand, Woodmead, Bedfordview, Roodepoort, Soweto and Alberton.
+
+## How working with a Pretoria team actually goes
+
+Gauteng is small. Johannesburg and Pretoria are about an hour apart, which is less than crossing Johannesburg at the wrong time of day.
+
+In practice we meet in person for the parts that benefit from it, usually scoping at the start and handover at the end, and work remotely for everything in between. You get builds you can install on your own phone while the work is in progress, so your opinions come from having actually used the thing rather than from looking at a screenshot.
+
+## Questions we are often asked
+
+**Will it work on both Android and iPhone?**
+Yes. Where the project suits it we build both from one codebase, which keeps the build and the ongoing maintenance cheaper than two separate apps.
+
+**Can it work without signal?**
+Where the work needs it, yes. The app holds what it needs and syncs when the connection returns, which matters for field staff and inspections.
+
+**Who owns the app and the store listings?**
+You do. The Apple and Google developer accounts are registered in your name, along with the code and the data.
+
+**Will you come to Johannesburg?**
+Yes, when there is a reason to. We are not going to bill you for a trip that a call would have covered.
+
+**What happens after it launches?**
+Apps need maintenance as Android and iOS change. We are upfront that an app is an ongoing commitment rather than a once-off purchase, so you can budget for it honestly.
+
+**Can it connect to systems we already use?**
+Often, depending on what those systems allow. We check what is genuinely possible before it becomes an assumption in the plan.`,
+  },
+];
+
+const LOCATION_SLUGS = new Set(LOCATION_PAGES.map((p) => p.slug));
+
+async function handleLocationPage(env, request, slug) {
+  const page = LOCATION_PAGES.find((p) => p.slug === slug);
+  if (!page) return new Response("Not found", { status: 404 });
+
+  // Three real services to link on to, so the page is not a dead end for a
+  // visitor or for a crawler.
+  let rest = { results: [] };
+  try {
+    rest = await env.DB.prepare(
+      `SELECT kind, slug, title, summary, icon FROM catalogue_items
+       WHERE kind = 'service' AND status = 'published'
+       ORDER BY position ASC, title ASC LIMIT 3`,
+    ).all();
+  } catch (err) {
+    console.error("location related lookup failed", err);
+  }
+
+  const origin = new URL(request.url).origin;
+  const item = { ...page, canonicalUrl: `${origin}/${page.slug}` };
+  return new Response(cataloguePageHtml(item, rest.results || [], origin), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 async function handleSitemap(env, request) {
   // Same reasoning as the catalogue pages: this is a crawler-facing read, so
   // it must not sit behind the schema setup. A failed query still yields a
@@ -9310,7 +9496,10 @@ async function handleSitemap(env, request) {
     console.error("sitemap query failed", err);
   }
 
-  const statics = ["/", "/about", "/service", "/training", "/portfolio-details", "/contact"];
+  const statics = [
+    "/", "/about", "/service", "/training", "/portfolio-details", "/contact",
+    ...LOCATION_PAGES.map((p) => `/${p.slug}`),
+  ];
   const today = new Date().toISOString().slice(0, 10);
   const entry = (loc, mod, priority) =>
     `  <url>\n    <loc>${escapeHtml(loc)}</loc>\n    <lastmod>${escapeHtml(String(mod).slice(0, 10))}</lastmod>\n    <priority>${priority}</priority>\n  </url>`;
