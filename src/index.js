@@ -1,5 +1,34 @@
 import QRCode from "qrcode";
 
+const TRAINING_COURSES_BASE = "/training/courses";
+const UNISA_MODULES_BASE = "/training/unisa_modules";
+const COS1511_PRACTICE_PATH = `${UNISA_MODULES_BASE}/cos1511/`;
+const COS1511_APP_ASSET_PATH = "/academy/index.html";
+const UNISA_MODULE_INDEX_PATHS = new Set([
+  "/training/unisa_modules",
+  "/training/unisa_modules/",
+  "/training/unisa_modules/index.html",
+  "/training/unisa_module",
+  "/training/unisa_module/",
+  "/training/unisa_module/index.html",
+]);
+const COS1511_REDIRECT_PATHS = new Set([
+  "/academy",
+  "/academy/",
+  "/academy/index.html",
+  "/training/cos11",
+  "/training/cos11/",
+  "/training/cos11/index.html",
+  "/training/cos1511",
+  "/training/cos1511/index.html",
+  "/training/cos1511/",
+  "/training/unisa_module/cos1511",
+  "/training/unisa_module/cos1511/",
+  "/training/unisa_module/cos1511/index.html",
+  "/training/unisa_modules/cos1511",
+  "/training/unisa_modules/cos1511/index.html",
+]);
+
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const INVOICE_STATUSES = new Set([
   "draft",
@@ -7,7 +36,18 @@ const INVOICE_STATUSES = new Set([
   "viewed",
   "partially_paid",
   "paid",
+  // An invoice has to be able to end somewhere other than paid. Without
+  // these, a cold invoice sat at "viewed" forever and counted as money
+  // still expected. See src/migrations/001-invoice-lifecycle.sql.
+  "overdue",
+  "cancelled",
+  "written_off",
 ]);
+
+// Setting either of these without saying why leaves a closed invoice
+// indistinguishable from one lost by accident, so SOP-FIN-001 requires a
+// reason and the API enforces it.
+const INVOICE_STATUSES_NEEDING_REASON = new Set(["cancelled", "written_off"]);
 const QUOTE_STATUSES = new Set([
   "draft",
   "sent",
@@ -414,6 +454,21 @@ export default {
       // catalogue, so a new item added in the admin appears on the listing
       // and gets its own route without anyone editing HTML.
       if (method === "GET") {
+        if (UNISA_MODULE_INDEX_PATHS.has(path)) {
+          const target = new URL("/training", request.url);
+          target.search = url.search;
+          target.hash = "unisa-modules";
+          return Response.redirect(target.toString(), 301);
+        }
+        if (COS1511_REDIRECT_PATHS.has(path)) {
+          const target = new URL(COS1511_PRACTICE_PATH, request.url);
+          target.search = url.search;
+          return Response.redirect(target.toString(), 301);
+        }
+        if (path === COS1511_PRACTICE_PATH) {
+          return await handleCos1511PracticePage(request, env);
+        }
+
         const seg = path.split("/").filter(Boolean);
         // /training/categories/<slug> is checked before /training/<slug>, so
         // the three-segment category path is never read as a course slug.
@@ -421,14 +476,26 @@ export default {
           return await handleCategoryPage(env, request, seg[2]);
         }
         if (seg.length === 2 && seg[0] === "training" && seg[1] === "categories") {
-          return Response.redirect(new URL("/training", request.url).toString(), 301);
+          const target = new URL("/training", request.url);
+          target.search = url.search;
+          return Response.redirect(target.toString(), 301);
+        }
+        if (seg.length === 3 && seg[0] === "training" && seg[1] === "courses") {
+          return await handleCataloguePage(env, request, "course", seg[2]);
+        }
+        if (seg.length === 2 && seg[0] === "training" && seg[1] === "courses") {
+          const target = new URL("/training", request.url);
+          target.search = url.search;
+          return Response.redirect(target.toString(), 301);
         }
         if (seg.length === 2) {
           if (seg[0] === "services") {
             return await handleCataloguePage(env, request, "service", seg[1]);
           }
           if (seg[0] === "training") {
-            return await handleCataloguePage(env, request, "course", seg[1]);
+            const target = new URL(`${TRAINING_COURSES_BASE}/${seg[1]}`, request.url);
+            target.search = url.search;
+            return Response.redirect(target.toString(), 301);
           }
         }
         if (path === "/service" || path === "/training") {
@@ -494,6 +561,16 @@ function json(data, init = {}) {
       ...(init.headers || {}),
     },
   });
+}
+
+async function handleCos1511PracticePage(request, env) {
+  const assetUrl = new URL(COS1511_APP_ASSET_PATH, request.url);
+  const response = await env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+  const headers = new Headers(response.headers);
+  headers.delete("ETag");
+  headers.delete("Last-Modified");
+  headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  return new Response(response.body, { status: response.status, headers });
 }
 
 function base64UrlEncodeString(value) {
@@ -1333,7 +1410,12 @@ async function runSchemaSetup(env) {
       amount_cents INTEGER NOT NULL DEFAULT 0,
       tax REAL DEFAULT 0,
       tax_cents INTEGER NOT NULL DEFAULT 0,
-      status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'viewed', 'partially_paid', 'paid')),
+      status TEXT DEFAULT 'draft' CHECK (status IN (
+        'draft', 'sent', 'viewed', 'partially_paid', 'paid',
+        'overdue', 'cancelled', 'written_off'
+      )),
+      closed_reason TEXT,
+      closed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       due_date DATE,
       payment_terms TEXT,
@@ -8507,7 +8589,7 @@ const CATALOGUE_KINDS = new Set(["service", "course", "category"]);
 const CATEGORY_BASE = "/training/categories";
 
 function catalogueBase(kind) {
-  if (kind === "course") return "/training";
+  if (kind === "course") return TRAINING_COURSES_BASE;
   if (kind === "category") return CATEGORY_BASE;
   return "/services";
 }
@@ -8522,6 +8604,190 @@ function slugify(value) {
 }
 
 const DEFAULT_CATALOGUE_ITEMS = [
+  {
+    id: "default_category_coding_and_programming",
+    kind: "category",
+    slug: "coding-and-programming",
+    title: "Coding and Programming",
+    summary:
+      "Foundations through to building something that works, taught by writing code rather than watching it.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track is for learners who need programming foundations, problem solving, logic, debugging and practical code practice.",
+      "",
+      "It is a good starting point for school IT, university programming modules and first software projects.",
+    ].join("\n"),
+    icon: "code",
+    seo_title: "Coding and Programming Training | Beplugged Academy",
+    seo_description:
+      "Practical coding and programming training from Beplugged Academy, covering logic, problem solving and hands-on programming support.",
+    status: "published",
+    position: 1,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_web_development",
+    kind: "category",
+    slug: "web-development",
+    title: "Web Development",
+    summary:
+      "HTML, CSS and JavaScript, then putting a real site online and keeping it there.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track covers practical website and web application skills: page structure, styling, JavaScript, hosting and maintenance.",
+      "",
+      "Learners work toward building pages that can be published and improved over time.",
+    ].join("\n"),
+    icon: "web",
+    seo_title: "Web Development Training | Beplugged Academy",
+    seo_description:
+      "Hands-on web development training covering HTML, CSS, JavaScript, hosting and practical website skills.",
+    status: "published",
+    position: 2,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_app_development",
+    kind: "category",
+    slug: "app-development",
+    title: "App Development",
+    summary:
+      "Building applications for phones, and understanding what sits behind them.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track introduces the thinking behind app screens, data, user flows and the services that support a mobile application.",
+    ].join("\n"),
+    icon: "brand-android-robot",
+    seo_title: "App Development Training | Beplugged Academy",
+    seo_description:
+      "App development training for learners who want to understand mobile app screens, data and practical application workflows.",
+    status: "published",
+    position: 3,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_computer_literacy",
+    kind: "category",
+    slug: "computer-literacy",
+    title: "Computer Literacy",
+    summary:
+      "Practical skills for people who need to be confident with a computer at work or in study.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track focuses on everyday computing confidence: files, email, documents, online services, safe use and workplace basics.",
+    ].join("\n"),
+    icon: "computer",
+    seo_title: "Computer Literacy Training | Beplugged Academy",
+    seo_description:
+      "Computer literacy training for learners who need practical digital confidence for study, work and everyday tasks.",
+    status: "published",
+    position: 4,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_databases_and_sql",
+    kind: "category",
+    slug: "databases-and-sql",
+    title: "Databases and SQL",
+    summary:
+      "Designing data properly, and querying it to answer real questions.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track covers tables, relationships, queries, reporting and the way database design affects real business systems.",
+    ].join("\n"),
+    icon: "database",
+    seo_title: "Databases and SQL Training | Beplugged Academy",
+    seo_description:
+      "Practical database and SQL training covering table design, queries, reporting and business data skills.",
+    status: "published",
+    position: 5,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_cyber_awareness",
+    kind: "category",
+    slug: "cyber-awareness",
+    title: "Cyber Awareness",
+    summary:
+      "Passwords, phishing, access and safe practice for teams as much as individuals.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track covers practical security habits: password managers, phishing, access control, device safety and safer daily workflows.",
+    ].join("\n"),
+    icon: "shield",
+    seo_title: "Cyber Awareness Training | Beplugged Academy",
+    seo_description:
+      "Cyber awareness training for individuals and teams covering phishing, passwords, access and practical security habits.",
+    status: "published",
+    position: 6,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_cloud_and_platform_skills",
+    kind: "category",
+    slug: "cloud-and-platform-skills",
+    title: "Cloud and Platform Skills",
+    summary:
+      "Working with Microsoft, Google, AWS and Oracle tools as they are actually used day to day.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track supports learners and teams working with cloud platforms, productivity suites, collaboration tools and platform administration basics.",
+    ].join("\n"),
+    icon: "cloud",
+    seo_title: "Cloud and Platform Skills Training | Beplugged Academy",
+    seo_description:
+      "Cloud and platform skills training for Microsoft, Google, AWS, Oracle and everyday workplace technology.",
+    status: "published",
+    position: 7,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_digital_productivity",
+    kind: "category",
+    slug: "digital-productivity",
+    title: "Digital Productivity",
+    summary:
+      "Getting more out of the tools your organisation already pays for.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track is built around practical productivity: documents, spreadsheets, automation, collaboration and reporting workflows.",
+    ].join("\n"),
+    icon: "chart-bar-graph",
+    seo_title: "Digital Productivity Training | Beplugged Academy",
+    seo_description:
+      "Digital productivity training for documents, spreadsheets, collaboration, automation and workplace reporting.",
+    status: "published",
+    position: 8,
+    updated_at: "2026-08-05",
+  },
+  {
+    id: "default_category_certification_preparation",
+    kind: "category",
+    slug: "certification-preparation",
+    title: "Certification Preparation",
+    summary:
+      "Structured preparation for platform certifications, at your pace.",
+    body: [
+      "## What this track covers",
+      "",
+      "This track helps learners prepare for vendor and platform certifications with structured study, practical review and guided revision.",
+    ].join("\n"),
+    icon: "certificate",
+    seo_title: "Certification Preparation Training | Beplugged Academy",
+    seo_description:
+      "Certification preparation support for learners working toward technology and platform certifications.",
+    status: "published",
+    position: 9,
+    updated_at: "2026-08-05",
+  },
   {
     id: "default_unisa_cos1511_tutorial_class",
     kind: "course",
@@ -8554,7 +8820,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
       "",
       "Beplugged Academy provides independent private tuition and module support. We are not affiliated with, endorsed by, or acting on behalf of UNISA.",
     ].join("\n"),
-    category: "University Tutorials",
+    category: "coding-and-programming",
     icon: "code",
     detail_1: "Flexible sessions",
     detail_2: "Beginner",
@@ -8612,7 +8878,7 @@ function categoryPageHtml(category, courses, origin) {
         "@type": "ListItem",
         position: i + 1,
         name: c.title,
-        url: `${origin}/training/${c.slug}`,
+        url: `${origin}${TRAINING_COURSES_BASE}/${c.slug}`,
       })),
     },
   };
@@ -8727,8 +8993,9 @@ function categoryPageHtml(category, courses, origin) {
 
 function cataloguePageHtml(item, related, origin) {
   const base = catalogueBase(item.kind);
-  const url = `${origin}${base}/${item.slug}`;
   const isCourse = item.kind === "course";
+  const listingBase = isCourse ? "/training" : base;
+  const url = `${origin}${base}/${item.slug}`;
   const title = item.seo_title || `${item.title} | Beplugged Tech`;
   const description =
     item.seo_description ||
@@ -8873,7 +9140,7 @@ function cataloguePageHtml(item, related, origin) {
         <ul class="bread-list">
           <li><a href="/">Home</a></li>
           <li><i class="icofont-simple-right"></i></li>
-          <li><a href="${base}">${isCourse ? "Training" : "Services"}</a></li>
+          <li><a href="${listingBase}">${isCourse ? "Training" : "Services"}</a></li>
           <li><i class="icofont-simple-right"></i></li>
           <li class="active">${escapeHtml(item.title)}</li>
         </ul>
@@ -8913,7 +9180,7 @@ function cataloguePageHtml(item, related, origin) {
     <div class="container">
       <p>&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
         <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> &middot;
-        <a href="${base}">All ${isCourse ? "courses" : "services"}</a>
+        <a href="${listingBase}">All ${isCourse ? "courses" : "services"}</a>
       </p>
     </div>
   </div>
@@ -9204,11 +9471,13 @@ function catalogueMarkdown(md) {
 function catalogueCardHtml(item) {
   const href = `${catalogueBase(item.kind)}/${escapeAttr(item.slug)}`;
   const icon = item.icon ? `icofont-${String(item.icon).replace(/[^a-z0-9-]/gi, "")}` : "icofont-star";
+  const action = item.kind === "category" ? "View track" : item.kind === "course" ? "View course" : "View details";
   return `<div class="col-lg-4 col-md-6 col-12">
               <div class="single-service">
                 <i class="icofont ${icon}"></i>
                 <h4><a href="${href}">${escapeHtml(item.title)}</a></h4>
                 <p>${escapeHtml(item.summary || "")}</p>
+                <a href="${href}" class="catalogue-card-action">${action}</a>
               </div>
             </div>`;
 }
@@ -9325,6 +9594,23 @@ async function handleCategoryPage(env, request, slug) {
   }
 
   if (!category) {
+    category = defaultCatalogueItem("category", slug);
+  }
+
+  if (category) {
+    courses = [
+      ...courses,
+      ...DEFAULT_CATALOGUE_ITEMS.filter(
+        (item) =>
+          item.kind === "course" &&
+          item.status === "published" &&
+          item.category === slug &&
+          !courses.some((course) => course.slug === item.slug),
+      ),
+    ];
+  }
+
+  if (!category) {
     return new Response("Not found", {
       status: 404,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -9380,16 +9666,18 @@ async function handleCataloguePage(env, request, kind, slug) {
   // Resolve the category slug to its title so the sidebar can link to it.
   // A course whose category has been unpublished simply shows no link.
   if (kind === "course" && item.category) {
+    let cat = null;
     try {
-      const cat = await env.DB.prepare(
+      cat = await env.DB.prepare(
         "SELECT title FROM catalogue_items WHERE slug = ? AND kind = 'category' AND status = 'published'",
       )
         .bind(item.category)
         .first();
-      if (cat) item.categoryTitle = cat.title;
     } catch (err) {
       console.error("category title lookup failed", err);
     }
+    cat = cat || defaultCatalogueItem("category", item.category);
+    if (cat) item.categoryTitle = cat.title;
   }
 
   const origin = new URL(request.url).origin;

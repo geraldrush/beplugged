@@ -618,6 +618,35 @@
         color: #176b3f;
       }
 
+      .status-overdue {
+        background-color: rgba(192, 57, 43, 0.16);
+        color: #a5281c;
+      }
+
+      .status-cancelled,
+      .status-written_off {
+        background-color: rgba(107, 114, 128, 0.18);
+        color: #4b5563;
+      }
+
+      /* Why an invoice was cancelled or written off. Recorded on the row by
+         migration 001 and useless if it is never shown. */
+      .closed-reason {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-left: 3px solid #9ca3af;
+        background: #f9fafb;
+        border-radius: 0 5px 5px 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: #4b5563;
+      }
+      .closed-reason strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #374151;
+      }
+
       /* Scroll wide tables rather than clipping them, which cut columns off
          entirely on a narrow screen. */
       .table-responsive {
@@ -6527,11 +6556,13 @@
         open: "Open",
         organisation: "Organisation",
         partner: "Partner",
+        overdue: "Overdue",
         partially_paid: "Partially Paid",
         password_management: "Password Management",
         pending: "Pending",
         planned: "Planned",
         preventive_action: "Preventive Action",
+        written_off: "Written Off",
         project_issue: "Project Issue",
         proposal: "Proposal",
         purchase_order: "Purchase Order",
@@ -6737,6 +6768,12 @@
         viewed: "#f05023",
         partially_paid: "#e0a500",
         paid: "#1f8a52",
+        // An invoice that will not be collected. Red for overdue because it
+        // still needs chasing; grey for the two closed states because they
+        // are settled outcomes, not outstanding work.
+        overdue: "#c0392b",
+        cancelled: "#6b7280",
+        written_off: "#6b7280",
       };
 
       function fmtCurrency(value) {
@@ -9910,9 +9947,23 @@
               </tr>
             `;
           const body = document.getElementById("view-invoice-body");
+          // Why a cancelled or written-off invoice was closed. Recorded on
+          // the row by migration 001; without this it was in the database
+          // and nowhere on the screen.
+          const closedHtml = invoice.closed_reason
+            ? `<div class="closed-reason"><strong>${
+                invoice.status === "written_off" ? "Written off" : "Cancelled"
+              }${
+                invoice.closed_at
+                  ? " on " + new Date(invoice.closed_at).toLocaleDateString("en-GB",
+                      { day: "numeric", month: "short", year: "numeric" })
+                  : ""
+              }</strong>${escapeHtml(invoice.closed_reason)}</div>`
+            : "";
           body.innerHTML = `
           <div>
             <h5>${escapeHtml(invoice.invoice_number)}</h5>
+            ${closedHtml}
             <p><strong>Client:</strong> ${escapeHtml(invoice.client_name)}<br>
             <strong>Email:</strong> ${escapeHtml(invoice.client_email)}<br>
             <strong>Address:</strong> ${escapeHtml(invoice.client_address)}<br>
