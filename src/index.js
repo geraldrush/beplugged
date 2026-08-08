@@ -8987,7 +8987,9 @@ function categoryPageHtml(category, courses, origin) {
     <div class="container">
       <p>&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
         <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> &middot;
-        <a href="/training">All training</a>
+        <a href="/training">All training</a> &middot;
+        <a href="/web-development-pretoria">Web development Pretoria</a> &middot;
+        <a href="/app-development-johannesburg">App development Johannesburg</a>
       </p>
     </div>
   </div>
@@ -9192,7 +9194,9 @@ function cataloguePageHtml(item, related, origin) {
     <div class="container">
       <p>&copy; ${new Date().getFullYear()} Beplugged Tech &middot;
         <a href="mailto:info@beplugged.co.za">info@beplugged.co.za</a> &middot;
-        <a href="${listingBase}">All ${isCourse ? "courses" : "services"}</a>
+        <a href="${listingBase}">All ${isCourse ? "courses" : "services"}</a> &middot;
+        <a href="/web-development-pretoria">Web development Pretoria</a> &middot;
+        <a href="/app-development-johannesburg">App development Johannesburg</a>
       </p>
     </div>
   </div>

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v18";
+const CACHE_VERSION = "beplugged-v19";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
