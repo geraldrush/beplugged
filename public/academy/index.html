@@ -15,35 +15,63 @@
       --ink-900:#0d1826; --ink-800:#14233a; --ink-700:#1f3049; --ink-500:#4a5568;
       --ink-400:#6b7688; --line:#e3e8ef; --surface:#fff; --surface-alt:#f7f9fc;
       --brand:#f05023; --brand-dark:#d23f14; --ok:#1e8750; --warn:#a16a1b; --err:#c0392b;
-      --radius:6px; --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+      --focus:#2f80ed; --radius:6px; --radius-lg:8px; --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
     }
     *{box-sizing:border-box;}
     html,body{height:100%;}
     body{
       margin:0;display:flex;flex-direction:column;
       font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
-      color:var(--ink-500);background:var(--surface-alt);-webkit-font-smoothing:antialiased;
+      color:var(--ink-500);background:#eef2f7;-webkit-font-smoothing:antialiased;
     }
 
     /* Top bar */
     .bar{
       display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-      padding:10px 16px;background:var(--ink-900);color:#fff;flex:0 0 auto;
+      padding:10px 18px;background:var(--surface);color:var(--ink-900);flex:0 0 auto;
+      border-bottom:1px solid var(--line);
     }
     .bar img{height:30px;width:auto;}
+    .brand-lockup{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;}
     .bar .title{font-size:15px;font-weight:600;letter-spacing:-.01em;}
-    .bar .title span{color:rgba(255,255,255,.55);font-weight:400;}
+    .bar .title span{color:var(--ink-400);font-weight:400;}
     .bar .spacer{margin-left:auto;}
-    .bar a{color:rgba(255,255,255,.7);font-size:13.5px;text-decoration:none;}
-    .bar a:hover{color:#fff;}
+    .bar a{color:var(--ink-500);font-size:13.5px;text-decoration:none;}
+    .bar a:hover{color:var(--brand);}
+    .bar-actions{display:flex;align-items:center;gap:10px;margin-left:auto;}
+    .bar .btn{background:var(--ink-900);border-color:var(--ink-900);color:#fff;}
+    .bar .btn:hover{background:var(--ink-800);}
+
+    .academy-progress{
+      flex:0 0 auto;display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,2fr) auto;
+      gap:16px;align-items:center;padding:12px 18px;background:#fbfcfe;border-bottom:1px solid var(--line);
+    }
+    .academy-progress-main{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;}
+    .course-eyebrow{
+      color:var(--brand);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    }
+    #current-chip{
+      color:var(--ink-900);font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    #progress-count{color:var(--ink-400);font-size:12.5px;}
+    .academy-meter{
+      height:8px;overflow:hidden;border-radius:999px;background:#dfe7f1;
+    }
+    .academy-meter span{
+      display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),#1e8750);
+      border-radius:inherit;transition:width .24s ease;
+    }
+    .academy-progress-actions{display:flex;gap:8px;justify-content:flex-end;}
 
     /* Layout
        Three columns, with the middle one split so program output sits under
        the editor at full editor width instead of squeezed into a side column.
        Every divider drags, and the sizes are remembered per browser. */
     .wrap{
-      flex:1 1 auto;display:flex;min-height:0;
-      --w-list:260px; --w-side:330px; --h-output:260px;
+      flex:1 1 auto;display:flex;min-height:0;margin:14px 16px 16px;
+      overflow:hidden;background:var(--surface);border:1px solid var(--line);
+      border-radius:var(--radius-lg);box-shadow:0 14px 38px rgba(13,24,38,.08);
+      --w-list:292px; --w-side:390px; --h-output:240px;
     }
     .pane{min-width:0;min-height:0;display:flex;flex-direction:column;}
     .col-centre{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;}
@@ -52,7 +80,7 @@
     .pane.output{flex:0 0 var(--h-output);min-height:74px;}
 
     /* Drag handles */
-    .gutter{flex:0 0 6px;background:var(--line);position:relative;touch-action:none;}
+    .gutter{flex:0 0 6px;background:#edf1f6;position:relative;touch-action:none;}
     .gutter::after{
       content:"";position:absolute;inset:0;background:transparent;
     }
@@ -72,7 +100,7 @@
     body.resizing iframe,body.resizing .CodeMirror{pointer-events:none;}
     .pane-head{
       flex:0 0 auto;display:flex;align-items:center;gap:8px;
-      padding:9px 13px;background:var(--surface);border-bottom:1px solid var(--line);
+      padding:10px 14px;background:#fbfcfe;border-bottom:1px solid var(--line);
       font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);
     }
     .pane-body{flex:1 1 auto;overflow:auto;background:var(--surface);}
@@ -80,16 +108,16 @@
     /* Exercise list */
     .ex{
       display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);
-      background:none;padding:11px 13px;cursor:pointer;font-family:inherit;
+      background:none;padding:13px 14px;cursor:pointer;font-family:inherit;
     }
     .ex:hover{background:var(--surface-alt);}
-    .ex.active{background:#fff6f3;box-shadow:inset 3px 0 0 var(--brand);}
+    .ex.active{background:#fff6f3;box-shadow:inset 4px 0 0 var(--brand);}
     .ex b{display:block;font-size:13.5px;color:var(--ink-900);font-weight:600;line-height:1.35;}
     .ex small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-400);}
 
     /* Question text */
-    .q{padding:14px 15px;font-size:13.8px;line-height:1.62;}
-    .q h3{margin:0 0 4px;font-size:15px;color:var(--ink-900);}
+    .q{padding:18px 18px 20px;font-size:14.2px;line-height:1.68;}
+    .q h3{margin:0 0 6px;font-size:19px;color:var(--ink-900);line-height:1.28;}
     .q .marks{display:inline-block;margin-bottom:10px;padding:1px 7px;border-radius:20px;
       background:#fff1eb;color:var(--brand);font-size:11px;font-weight:700;}
     .q p{margin:0 0 9px;}
@@ -113,7 +141,7 @@
       border-radius:0 5px 5px 0;font-size:13px;line-height:1.55;color:#6b4a12;
     }
     .task-box{
-      margin:0 0 12px;padding:10px 12px;background:#fff6f3;border:1px solid #f7d4c5;
+      margin:0 0 12px;padding:12px 14px;background:#fff6f3;border:1px solid #f7d4c5;
       border-radius:6px;font-size:13.4px;line-height:1.55;color:#5a3a30;
     }
     .done-btn{margin:4px 0 8px;}
@@ -145,6 +173,7 @@
     .btn:hover{background:var(--surface-alt);}
     .btn.run{background:var(--brand);border-color:var(--brand);color:#fff;}
     .btn.run:hover{background:var(--brand-dark);}
+    .btn:focus-visible{outline:3px solid rgba(47,128,237,.28);outline-offset:2px;}
     .btn:disabled{opacity:.55;cursor:default;}
 
     /* Output */
@@ -212,26 +241,30 @@
     }
 
     .status{font-size:12px;color:var(--ink-400);margin-left:auto;}
+    .lesson-position{margin-left:auto;color:var(--ink-500);font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;}
     .spacer-sm{margin-left:auto;}
     .btn.small{height:24px;padding:0 9px;font-size:11.5px;font-weight:600;}
     .pane.editor{flex:1 1 auto;min-height:90px;}
 
     /* Tab bar, phone only. */
-    .tabs{display:none;flex:0 0 auto;background:var(--ink-900);}
+    .tabs{display:none;flex:0 0 auto;background:var(--surface);border-bottom:1px solid var(--line);}
     .tabs button{
       flex:1 1 0;min-width:0;height:46px;border:none;background:none;
-      font-family:inherit;font-size:13.5px;font-weight:600;color:#9fb0c6;
+      font-family:inherit;font-size:13.5px;font-weight:700;color:var(--ink-400);
       border-bottom:3px solid transparent;cursor:pointer;
     }
-    .tabs button.on{color:#fff;border-bottom-color:var(--brand);}
+    .tabs button.on{color:var(--ink-900);border-bottom-color:var(--brand);}
 
     /* Below this the three columns stop making sense. Rather than stack them
        and leave four unusable slivers, one panel is shown at a time and the
        tab bar switches between them. The dividers go: there is nothing left
        to drag against. */
     @media (max-width:900px){
+      .bar{padding:9px 12px;}
+      .academy-progress{grid-template-columns:1fr;gap:9px;padding:10px 12px;}
+      .academy-progress-actions{justify-content:flex-start;}
       .tabs{display:flex;}
-      .wrap{flex-direction:column;}
+      .wrap{flex-direction:column;margin:0;border-left:none;border-right:none;border-bottom:none;border-radius:0;box-shadow:none;}
       .gutter.v{display:none;}
       .wrap > .pane,.wrap > .col-centre{display:none;}
       .wrap[data-view="list"] > .pane.list{display:flex;flex:1 1 auto;}
@@ -262,17 +295,36 @@
       .bar{padding-left:12px;padding-right:12px;gap:10px;}
       .bar img{height:24px;}
       .bar .title span{display:none;}
-      .bar a{display:none;}
+      .bar-actions{width:100%;margin-left:0;justify-content:space-between;}
+      .bar .bar-link{display:none;}
+      #current-chip{white-space:normal;}
+      .academy-progress-actions .btn{flex:1 1 0;}
     }
   </style>
 </head>
 <body>
   <div class="bar">
-    <img src="/img/logo.png" alt="Beplugged Academy">
-    <div class="title">COS1511 Practice <span>&middot; Introduction to Programming</span></div>
-    <div class="spacer"></div>
-    <button type="button" class="btn small" id="guide-btn" style="background:transparent;border-color:rgba(255,255,255,.35);color:#fff;">Guide</button>
-    <a href="/training/unisa-cos1511-tutorial-class">About this course</a>
+    <a class="brand-lockup" href="/training/courses/unisa-cos1511-tutorial-class">
+      <img src="/img/logo.png" alt="Beplugged Academy">
+      <div class="title">COS1511 Practice <span>&middot; Introduction to Programming</span></div>
+    </a>
+    <div class="bar-actions">
+      <button type="button" class="btn small" id="guide-btn">Guide</button>
+      <a class="bar-link" href="/training/courses/unisa-cos1511-tutorial-class">About this course</a>
+    </div>
+  </div>
+
+  <div class="academy-progress" aria-label="Course progress">
+    <div class="academy-progress-main">
+      <span class="course-eyebrow">Course path</span>
+      <strong id="current-chip">Loading lesson</strong>
+      <span id="progress-count">0 completed</span>
+    </div>
+    <div class="academy-meter" aria-hidden="true"><span id="progress-fill"></span></div>
+    <div class="academy-progress-actions">
+      <button type="button" class="btn small" id="prev-lesson-btn">Previous</button>
+      <button type="button" class="btn small" id="next-lesson-btn">Next lesson</button>
+    </div>
   </div>
 
   <!-- Phone only. Four panes stacked in a phone viewport gives four boxes too
@@ -288,7 +340,7 @@
   <div class="wrap" id="wrap" data-view="notes">
     <!-- Exercises -->
     <section class="pane list">
-      <div class="pane-head">Exercises</div>
+      <div class="pane-head">Course path</div>
       <div class="pane-body" id="exercise-list"></div>
     </section>
 
@@ -309,7 +361,7 @@
 
       <section class="pane output">
         <div class="pane-head">
-          Output
+          Program output
           <span class="spacer-sm"></span>
           <button class="btn small" id="clear-btn">Clear</button>
           <button class="btn small" id="expand-btn" title="Make the output taller">Expand</button>
@@ -324,7 +376,7 @@
 
     <!-- Question and keyboard input -->
     <section class="pane side">
-      <div class="pane-head">Question</div>
+      <div class="pane-head">Lesson brief <span class="lesson-position" id="lesson-position">Lesson</span></div>
       <div class="pane-body" id="question"></div>
     </section>
   </div>
@@ -343,9 +395,16 @@
     (function () {
       var editor = null;
       var fallback = document.getElementById("fallback");
-      var statusEl = document.getElementById("status");
-      var outEl = document.getElementById("stdout");
-      var current = null;
+	      var statusEl = document.getElementById("status");
+	      var outEl = document.getElementById("stdout");
+	      var current = null;
+	      var activeIndex = -1;
+	      var currentChipEl = document.getElementById("current-chip");
+	      var progressCountEl = document.getElementById("progress-count");
+	      var progressFillEl = document.getElementById("progress-fill");
+	      var lessonPositionEl = document.getElementById("lesson-position");
+	      var prevLessonBtn = document.getElementById("prev-lesson-btn");
+	      var nextLessonBtn = document.getElementById("next-lesson-btn");
 
       // CodeMirror gives syntax highlighting and line numbers, which matter
       // when a student is hunting a missing semicolon. If the CDN is blocked
@@ -494,10 +553,11 @@
           try { localStorage.setItem(doneKey(ex.id), now ? "1" : "0"); } catch (e) {}
           done.textContent = now ? "✓ Marked as done" : "Mark as done";
           buildList();
-          [].forEach.call(document.querySelectorAll(".ex"), function (b) {
-            b.classList.toggle("active", b.dataset.id === ex.id);
-          });
-        });
+	          [].forEach.call(document.querySelectorAll(".ex"), function (b) {
+	            b.classList.toggle("active", b.dataset.id === ex.id);
+	          });
+	          updateProgress();
+	        });
         wrap.appendChild(done);
 
         q.appendChild(wrap);
@@ -526,23 +586,29 @@
         b.addEventListener("click", function () { showView(b.dataset.view); });
       });
 
-      function select(id) {
-        var ex = ITEMS.find(function (e) { return e.id === id; });
-        if (!ex) return;
-        current = ex;
+	      function select(id) {
+	        activeIndex = ITEMS.findIndex(function (e) { return e.id === id; });
+	        if (activeIndex < 0) return;
+	        var ex = ITEMS[activeIndex];
+	        current = ex;
 
-        [].forEach.call(document.querySelectorAll(".ex"), function (b) {
-          b.classList.toggle("active", b.dataset.id === id);
-        });
+	        [].forEach.call(document.querySelectorAll(".ex"), function (b) {
+	          b.classList.toggle("active", b.dataset.id === id);
+	        });
+	        var activeButton = document.querySelector('.ex.active');
+	        if (activeButton && activeButton.scrollIntoView) {
+	          activeButton.scrollIntoView({ block: "nearest" });
+	        }
 
-        var saved = null;
+	        var saved = null;
         try { saved = localStorage.getItem(storeKey(id)); } catch (e) {}
         setCode(saved !== null ? saved : ex.starter);
         document.getElementById("stdin").value = ex.sampleInput || "";
-        renderQuestion(ex);
-        say("Press Run to compile and execute.");
-        if (editor) setTimeout(function () { editor.refresh(); }, 0);
-      }
+	        renderQuestion(ex);
+	        say("Press Run to compile and execute.");
+	        updateProgress();
+	        if (editor) setTimeout(function () { editor.refresh(); }, 0);
+	      }
 
       // One ordered path: the lessons in study-guide order, then the past
       // paper questions. Past papers keep their own shape, so they are
@@ -574,12 +640,54 @@
         };
       }));
 
-      function doneKey(id) { return "cos1511:done:" + id; }
-      function isDone(id) {
-        try { return localStorage.getItem(doneKey(id)) === "1"; } catch (e) { return false; }
-      }
+	      function doneKey(id) { return "cos1511:done:" + id; }
+	      function isDone(id) {
+	        try { return localStorage.getItem(doneKey(id)) === "1"; } catch (e) { return false; }
+	      }
 
-      function buildList() {
+	      function availableItems() {
+	        return ITEMS.filter(function (item) { return !item.pending; });
+	      }
+
+	      function nextAvailableIndex(from, dir) {
+	        for (var i = from + dir; i >= 0 && i < ITEMS.length; i += dir) {
+	          if (!ITEMS[i].pending) return i;
+	        }
+	        return -1;
+	      }
+
+	      function currentPosition() {
+	        if (!current) return 0;
+	        return availableItems().findIndex(function (item) { return item.id === current.id; }) + 1;
+	      }
+
+	      function updateProgress() {
+	        var available = availableItems();
+	        var total = available.length;
+	        var complete = available.filter(function (item) { return isDone(item.id); }).length;
+	        var pos = currentPosition();
+	        var percent = total ? Math.round((complete / total) * 100) : 0;
+	        var title = current
+	          ? ((current.lesson ? "Lesson " + current.lesson + ": " : "") + current.title)
+	          : "Choose a lesson";
+
+	        currentChipEl.textContent = title;
+	        progressCountEl.textContent = complete + " of " + total + " complete";
+	        progressFillEl.style.width = percent + "%";
+	        lessonPositionEl.textContent = pos ? pos + " of " + total : "Lesson";
+
+	        prevLessonBtn.disabled = activeIndex < 0 || nextAvailableIndex(activeIndex, -1) < 0;
+	        nextLessonBtn.disabled = activeIndex < 0 || nextAvailableIndex(activeIndex, 1) < 0;
+	      }
+
+	      function goLesson(dir) {
+	        var target = nextAvailableIndex(activeIndex, dir);
+	        if (target < 0) return;
+	        select(ITEMS[target].id);
+	        if (isNarrow()) showView("notes");
+	      }
+
+	      function buildList() {
         var list = document.getElementById("exercise-list");
         list.innerHTML = "";
         var lastGroup = null;
@@ -631,10 +739,13 @@
         if (!current) return;
         try { localStorage.setItem(storeKey(current.id), getCode()); } catch (e) {}
       }
-      setInterval(save, 4000);
-      window.addEventListener("beforeunload", save);
+	      setInterval(save, 4000);
+	      window.addEventListener("beforeunload", save);
 
-      document.getElementById("reset-btn").addEventListener("click", function () {
+	      prevLessonBtn.addEventListener("click", function () { goLesson(-1); });
+	      nextLessonBtn.addEventListener("click", function () { goLesson(1); });
+
+	      document.getElementById("reset-btn").addEventListener("click", function () {
         if (!current) return;
         if (!confirm("Replace your code with the starter for this exercise?")) return;
         setCode(current.starter);
@@ -819,11 +930,11 @@
           e.preventDefault();
         });
 
-        // Double click restores the default for that divider.
-        g.addEventListener("dblclick", function () {
-          var d = { list: 260, side: 330, output: 260 };
-          setSize(g.dataset.resize, d[g.dataset.resize]);
-        });
+	        // Double click restores the default for that divider.
+	        g.addEventListener("dblclick", function () {
+	          var d = { list: 292, side: 390, output: 240 };
+	          setSize(g.dataset.resize, d[g.dataset.resize]);
+	        });
       });
 
       window.addEventListener("resize", function () { if (editor) editor.refresh(); });
@@ -832,9 +943,11 @@
         if (window.startAcademyTour) window.startAcademyTour();
       });
 
-      buildList();
-      select(ITEMS[0].id);
-      showView("notes");
+	      buildList();
+	      var firstAvailable = availableItems()[0];
+	      if (firstAvailable) select(firstAvailable.id);
+	      else updateProgress();
+	      showView("notes");
 
       CodeRunner.ready().then(function (info) {
         statusEl.textContent = info.label;

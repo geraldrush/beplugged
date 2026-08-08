@@ -475,12 +475,170 @@ a:focus-visible {
 	color: var(--ink-500);
 }
 
+.catalogue-card-action {
+	display: inline-flex;
+	align-items: center;
+	margin-top: 18px;
+	color: var(--brand);
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.catalogue-card-action:hover { color: var(--brand-dark); }
+
 /* Cards in a row should line up regardless of copy length. Scoped with :has()
    so it only touches rows that actually hold cards, leaving heading rows and
    the pricing grid alone. Browsers without :has() just get uneven heights. */
 .row:has(> [class*="col-"] > .single-service) { display: flex; flex-wrap: wrap; }
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] { display: flex; }
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] > .single-service { width: 100%; }
+
+/* --------------------------------------------------------------------------
+   Training listing page
+   -------------------------------------------------------------------------- */
+
+.training-hero {
+	padding: 96px 0 86px;
+	background-image: url('/img/slider2.jpg');
+	background-size: cover;
+	background-position: center;
+}
+
+.training-hero::before {
+	background:
+		linear-gradient(100deg, rgba(9, 17, 28, .96) 0%, rgba(9, 17, 28, .87) 46%, rgba(9, 17, 28, .64) 100%);
+}
+
+.training-hero .row {
+	align-items: center;
+	row-gap: 34px;
+}
+
+.training-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	margin-bottom: 12px;
+	color: var(--brand);
+	font-size: 12.5px;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+}
+
+.training-hero h2 {
+	max-width: 650px;
+	font-size: 50px;
+	line-height: 1.08;
+	margin-bottom: 18px;
+}
+
+.training-hero p {
+	max-width: 660px;
+	margin: 0;
+	color: rgba(255, 255, 255, .82);
+	font-size: 18px;
+	line-height: 1.65;
+}
+
+.training-hero-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+.training-hero-metrics {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	max-width: 680px;
+	margin: 30px 0 20px;
+}
+
+.training-hero-metrics div {
+	padding: 14px 15px;
+	background: rgba(255, 255, 255, .09);
+	border: 1px solid rgba(255, 255, 255, .16);
+	border-radius: 8px;
+}
+
+.training-hero-metrics strong,
+.training-hero-metrics span {
+	display: block;
+}
+
+.training-hero-metrics strong {
+	color: #fff;
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.training-hero-metrics span {
+	margin-top: 4px;
+	color: rgba(255, 255, 255, .68);
+	font-size: 13.5px;
+	line-height: 1.45;
+}
+
+.training-page {
+	background: var(--surface);
+}
+
+.training-section-head {
+	margin: 10px 0 24px;
+}
+
+.training-section-head h2 {
+	margin: 0 0 10px;
+	font-size: 31px;
+	font-weight: 700;
+	letter-spacing: -.022em;
+}
+
+.training-section-head p {
+	max-width: 760px;
+	margin: 0;
+	color: var(--ink-400);
+	font-size: 16px;
+	line-height: 1.68;
+}
+
+.training-page #catalogue-course-topics,
+.training-page #catalogue-course-featured,
+.training-module-grid {
+	margin-bottom: 54px;
+}
+
+.training-page .single-service {
+	border-radius: 8px;
+}
+
+.training-disclaimer {
+	max-width: 860px;
+	margin: -18px auto 54px;
+	text-align: center;
+	color: var(--ink-400);
+	font-size: 14px;
+	line-height: 1.65;
+}
+
+.training-final-cta {
+	margin-top: 4px;
+	text-align: left;
+}
+
+.training-final-cta h2 {
+	margin: 0 0 10px;
+	font-size: 30px;
+	font-weight: 700;
+	letter-spacing: -.02em;
+}
+
+.training-final-cta p {
+	max-width: 650px;
+	margin: 0 0 22px;
+}
 
 /* Vendor/platform cards on the services page. These hold real brand logos,
    which are all drawn for light backgrounds, so the tile stays neutral. */
@@ -1033,6 +1191,9 @@ a:focus-visible {
 	.section-title h2 { font-size: 29px; }
 	.catalogue-aside { position: static; margin-top: 34px; }
 	.header .get-quote { padding: 14px 0 20px; }
+	.training-hero { padding: 72px 0 66px; }
+	.training-hero h2 { font-size: 40px; }
+	.training-section-head h2 { font-size: 28px; }
 }
 
 @media (max-width: 767px) {
@@ -1057,6 +1218,32 @@ a:focus-visible {
 	.section-title h2 { font-size: 25px; }
 	.section-title p { font-size: 15.5px; }
 	.single-service { padding: 26px 22px 24px; }
+	.training-hero { padding: 40px 0 34px; }
+	.training-hero h2 { font-size: 30px; }
+	.training-hero p { font-size: 16px; }
+	.training-hero-actions .btn { flex: 1 1 140px; width: auto; }
+	.training-hero-metrics {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+		margin: 22px 0 0;
+	}
+	.training-hero-metrics div { padding: 10px 8px; }
+	.training-hero-metrics strong { font-size: 14px; }
+	.training-hero-metrics span { font-size: 11.5px; }
+	.training-hero .bread-list,
+	.training-hero .col-lg-5 { display: none; }
+	.training-page {
+		background: var(--surface);
+	}
+	.training-page #catalogue-course-topics,
+	.training-page #catalogue-course-featured,
+	.training-module-grid {
+		margin-bottom: 36px;
+	}
+	.training-section-head { margin-bottom: 18px; }
+	.training-section-head h2,
+	.training-final-cta h2 { font-size: 25px; }
+	.training-disclaimer { margin: -8px auto 38px; text-align: left; }
 	.fun-facts .single-fun .counter,
 	.fun-facts .single-fun h2 { font-size: 32px; }
 	.header .topbar .top-link,
