@@ -8636,7 +8636,7 @@ function slugify(value) {
 const DEFAULT_CATALOGUE_ITEMS = [
   {
     id: "default_category_coding_and_programming",
-    kind: "category",
+    kind: "course",
     slug: "coding-and-programming",
     title: "Coding and Programming",
     summary:
@@ -8658,7 +8658,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_web_development",
-    kind: "category",
+    kind: "course",
     slug: "web-development",
     title: "Web Development",
     summary:
@@ -8680,7 +8680,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_app_development",
-    kind: "category",
+    kind: "course",
     slug: "app-development",
     title: "App Development",
     summary:
@@ -8700,7 +8700,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_computer_literacy",
-    kind: "category",
+    kind: "course",
     slug: "computer-literacy",
     title: "Computer Literacy",
     summary:
@@ -8720,7 +8720,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_databases_and_sql",
-    kind: "category",
+    kind: "course",
     slug: "databases-and-sql",
     title: "Databases and SQL",
     summary:
@@ -8740,7 +8740,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_cyber_awareness",
-    kind: "category",
+    kind: "course",
     slug: "cyber-awareness",
     title: "Cyber Awareness",
     summary:
@@ -8760,7 +8760,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_cloud_and_platform_skills",
-    kind: "category",
+    kind: "course",
     slug: "cloud-and-platform-skills",
     title: "Cloud and Platform Skills",
     summary:
@@ -8780,7 +8780,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_digital_productivity",
-    kind: "category",
+    kind: "course",
     slug: "digital-productivity",
     title: "Digital Productivity",
     summary:
@@ -8800,7 +8800,7 @@ const DEFAULT_CATALOGUE_ITEMS = [
   },
   {
     id: "default_category_certification_preparation",
-    kind: "category",
+    kind: "course",
     slug: "certification-preparation",
     title: "Certification Preparation",
     summary:
@@ -9813,6 +9813,33 @@ async function handleCategoryPage(env, request, slug) {
 
   if (!category) {
     category = defaultCatalogueItem("category", slug);
+  }
+
+  // Nine course slugs used to be listed here as categories, so /training/
+  // categories/web-development answered with a hundred-word stand-in that
+  // competed with the real course page. The labels are corrected now, but the
+  // URLs may already be indexed or linked, so send them to the course rather
+  // than dropping them.
+  if (!category) {
+    let course = null;
+    try {
+      course = await env.DB.prepare(
+        "SELECT slug FROM catalogue_items WHERE slug = ? AND kind = 'course' AND status = 'published'",
+      )
+        .bind(slug)
+        .first();
+    } catch (err) {
+      console.error("category to course lookup failed", err);
+    }
+    if (!course && defaultCatalogueItem("course", slug)) course = { slug };
+    if (course) {
+      const target = new URL(`${TRAINING_COURSES_BASE}/${slug}`, request.url);
+      return Response.redirect(target.toString(), 301);
+    }
+    return new Response("Not found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
 
   if (category) {
