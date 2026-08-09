@@ -2551,7 +2551,6 @@ function normalizeContactPayload(raw) {
       required: true,
       maxLength: 4000,
     }),
-    newsletter: Boolean(raw.news),
     website: trimText(raw.website, "Website", { maxLength: 200 }),
   };
 }
@@ -2733,8 +2732,7 @@ async function handleContactMessage(request, env, method) {
       <tbody>
         <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;width:120px;">Name</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.name)}</td></tr>
         <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;">Email</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.email)}</td></tr>
-        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;">Phone</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(data.phone || "-")}</td></tr>
-        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;">Newsletter</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;">${data.newsletter ? "Yes" : "No"}</td></tr>
+        <tr><td style="padding:10px 14px;font-size:13px;color:#555555;">Phone</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;">${escapeHtml(data.phone || "-")}</td></tr>
       </tbody>
     </table>
     ${emailSectionLabel("Message")}
