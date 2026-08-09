@@ -178,7 +178,7 @@
 						<div class="col-lg-6">
 							<div class="contact-us-form">
 								<h2>Contact With Us</h2>
-								<p>If you have any questions please fell free to contact with us.</p>
+								<p>If you have any questions please feel free to contact us.</p>
 								<!-- Form -->
 									<form class="form" id="contact-form" method="post" action="/api/contact">
 										<div class="row">
@@ -194,7 +194,7 @@
 											</div>
 											<div class="col-lg-6">
 												<div class="form-group">
-													<input type="text" name="phone" placeholder="Phone" required="">
+													<input type="text" name="phone" placeholder="Phone (optional)">
 												</div>
 											</div>
 											<div class="col-lg-6">
@@ -217,7 +217,33 @@
 												<div class="checkbox">
 													<label class="checkbox-inline" for="2"><input name="news" id="2" type="checkbox">Do you want to subscribe our Newsletter ?</label>
 												</div>
-												<div id="contact-status" role="status" aria-live="polite" style="margin-top:12px;font-weight:600;"></div>
+												<div id="contact-status" role="status" aria-live="polite" tabindex="-1"></div>
+												<style>
+													/* Empty by default, so it takes no space until there is
+													   something to say. Once it has a message it becomes a
+													   block the eye lands on, because the previous plain
+													   sentence was easy to submit and never notice. */
+													#contact-status:empty { display: none; }
+													#contact-status {
+														margin-top: 16px;
+														padding: 14px 16px;
+														border-radius: 8px;
+														border: 1px solid;
+														font-weight: 600;
+														font-size: 15px;
+														line-height: 1.5;
+													}
+													#contact-status.is-ok {
+														color: #14663c;
+														background: #e9f7ef;
+														border-color: #9ad6b4;
+													}
+													#contact-status.is-error {
+														color: #8c2c12;
+														background: #fdece7;
+														border-color: #f3b39c;
+													}
+												</style>
 											</div>
 										</div>
 									</form>
@@ -379,9 +405,35 @@
 						return;
 					}
 
+					function show(kind, message, scroll) {
+						status.className = kind === "ok" ? "is-ok" : "is-error";
+						status.textContent = message;
+						// The message sits below the button, so on a short screen it
+						// could be written and never seen. Bring it into view and hand
+						// it focus, which also announces it to a screen reader. Skipped
+						// for validation errors, where the browser is already scrolling
+						// to the offending field and fighting it would be worse.
+						if (scroll !== false) {
+							if (status.scrollIntoView) {
+								status.scrollIntoView({ behavior: "smooth", block: "center" });
+							}
+							status.focus({ preventScroll: true });
+						}
+					}
+
+					// A browser does not fire submit at all when native validation
+					// fails, so a check inside the submit handler can never run and
+					// pressing Send looked like nothing happening. The invalid event
+					// does fire, on each offending field, and does not bubble, so it
+					// is caught here in the capture phase.
+					form.addEventListener("invalid", function () {
+						show("error", "Please complete the highlighted fields and press Send again.", false);
+					}, true);
+
 					form.addEventListener("submit", function (event) {
 						event.preventDefault();
 						status.textContent = "";
+						status.className = "";
 						submit.disabled = true;
 						submit.textContent = "Sending...";
 
@@ -390,21 +442,28 @@
 							body: new FormData(form),
 						})
 							.then(function (response) {
-								return response.json().then(function (body) {
-									if (!response.ok || !body.success) {
-										throw new Error(body.error || "Message could not be sent");
+								return response.json().then(
+									function (body) {
+										if (!response.ok || !body.success) {
+											throw new Error(body.error || "Message could not be sent");
+										}
+										return body;
+									},
+									function () {
+										// A response that is not JSON would otherwise surface
+										// as a parser error, which tells the visitor nothing.
+										throw new Error(
+											"Message could not be sent. Please email info@beplugged.co.za."
+										);
 									}
-									return body;
-								});
+								);
 							})
 							.then(function () {
 								form.reset();
-								status.style.color = "#1f8a52";
-								status.textContent = "Message sent. We will get back to you soon.";
+								show("ok", "Thank you. Your message has been sent and we will get back to you soon.");
 							})
 							.catch(function (error) {
-								status.style.color = "#F05023";
-								status.textContent = error.message;
+								show("error", error.message || "Message could not be sent. Please email info@beplugged.co.za.");
 							})
 							.finally(function () {
 								submit.disabled = false;

@@ -1308,3 +1308,25 @@ a:focus-visible {
 	}
 	.single-service:hover { transform: none; }
 }
+
+/* The theme capitalises every form input. That is defensible for a name and
+   wrong for an address: an email typed in lower case renders as
+   Thabo@Example.Co.Za, which reads as though the field altered it. The value
+   submitted was never affected, only its appearance, but the appearance is
+   what makes someone retype it or distrust the form. */
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="password"],
+/* The theme sets this at .contact-us .form .form-group input, which is three
+   classes deep, so the bare element selectors above never win. Matched here
+   rather than reached for with !important. */
+.contact-us .form .form-group input[type="email"],
+.contact-us .form .form-group input[type="tel"],
+.contact-us .form .form-group input[type="url"],
+.appointment .form input[type="email"],
+.appointment .form input[type="tel"],
+.login .form .form-group input[type="email"],
+.register .form .form-group input[type="email"] {
+	text-transform: none;
+}
