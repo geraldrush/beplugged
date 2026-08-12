@@ -744,7 +744,16 @@ a:focus-visible {
 
 /* Closing call to action on the about page, in place of a booking form that
    posted nowhere. */
+/* Built when there was one button in here. A second one landed beside it and
+   stacked flush against the first, so two calls to action read as one solid
+   orange slab with a seam. Laying the block out explicitly means any number of
+   buttons keeps a gap, sits centred, and wraps onto its own line on a phone. */
 .appointment-cta {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: center;
+	gap: 14px;
 	text-align: center;
 	padding: 40px 28px;
 	background: var(--surface-alt);
@@ -752,14 +761,90 @@ a:focus-visible {
 	border-radius: var(--radius-lg);
 }
 
-.appointment-cta .btn { height: 52px; padding: 0 32px; font-size: 16px; }
+.appointment-cta .btn {
+	height: 52px;
+	padding: 0 32px;
+	font-size: 16px;
+	margin: 0;
+	/* style.css sets `.pricing-table .btn { width: 100% }` for buttons that
+	   fill a pricing card. In this block that made every button its own
+	   full-width row, so two of them stacked into one orange slab. Here a
+	   button is as wide as its label; the phone rule below puts it back to
+	   full width, where stacking is what you want. */
+	width: auto;
+}
+
+/* The explanatory line always takes its own row under the buttons. */
+.appointment-cta > p { flex: 1 0 100%; }
 
 .pricing-table .appointment-cta { margin-top: 22px; }
 
 .appointment-cta > p {
-	margin: 18px 0 0;
+	margin: 4px 0 0;
 	font-size: 15px;
 	color: var(--ink-400);
+}
+
+/* --------------------------------------------------------------------------
+   Stacked sections
+   --------------------------------------------------------------------------
+   The service, studio and training pages put several headed blocks inside one
+   <section>, so the section's own padding only separates the first from what
+   came before. Every heading after that sat right on top of the cards above
+   it. This gives the later ones room, and evens up the cards so a row does not
+   end in a ragged edge.
+   -------------------------------------------------------------------------- */
+
+.services .row + .row .section-title,
+.pricing-table .row + .row .section-title {
+	margin-top: 40px;
+}
+
+/* Cards in a row match heights, so the next block starts on a straight line
+   instead of against the tallest card in the row. */
+.services .row,
+.pricing-table .row,
+.Feautes .row,
+.vendor-row {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+.services .row > [class*="col-"],
+.pricing-table .row > [class*="col-"],
+.Feautes .row > [class*="col-"],
+.vendor-row > [class*="col-"] {
+	display: flex;
+}
+
+.services .row > [class*="col-"] > .single-service,
+.services .row > [class*="col-"] > .single-features,
+.pricing-table .row > [class*="col-"] > .single-service,
+.Feautes .row > [class*="col-"] > .single-features,
+.vendor-row > [class*="col-"] > .single-service {
+	width: 100%;
+}
+
+/* A heading block is the full width of its row whether or not it is flexed. */
+.services .row > [class*="col-"] > .section-title,
+.pricing-table .row > [class*="col-"] > .section-title,
+.Feautes .row > [class*="col-"] > .section-title {
+	width: 100%;
+}
+
+@media (max-width: 767px) {
+	/* Phones stack everything, so the gap between a card and the next heading
+	   is the only thing separating two subjects. */
+	.services .row + .row .section-title,
+	.pricing-table .row + .row .section-title {
+		margin-top: 26px;
+	}
+
+	.section-title { margin-bottom: 34px; }
+	.section-title h2 { font-size: 26px; }
+
+	.appointment-cta { padding: 28px 18px; }
+	.appointment-cta .btn { width: 100%; }
 }
 
 .appointment-cta > p a { color: var(--ink-700); font-weight: 500; }

@@ -6267,6 +6267,11 @@
         cancelled: "#a0aec0",
       };
 
+      const STUDIO_FINISH_LABELS = {
+        cloth: "Canvas case",
+        "photo-wrap": "Photo wrap",
+      };
+
       const STUDIO_SIZE_LABELS = {
         "a4-portrait": { label: "A4 portrait", w: 210, h: 297 },
         "a4-landscape": { label: "A4 landscape", w: 297, h: 210 },
@@ -6384,7 +6389,7 @@
                 ${order.customer_phone ? " · " + escapeHtml(order.customer_phone) : ""}
               </div>
               <div style="color:var(--muted);font-size:0.88rem;margin-top:2px;">
-                ${escapeHtml(size.label)} · ${Number(order.page_count || 0)} pages ·
+                ${escapeHtml(size.label)} · ${escapeHtml(STUDIO_FINISH_LABELS[(design.product || {}).finish] || "Photo wrap")} case bound · ${Number(order.page_count || 0)} pages ·
                 ${Number(order.copies || 1)} cop${Number(order.copies || 1) === 1 ? "y" : "ies"}
                 ${order.needed_by ? " · needed by " + escapeHtml(order.needed_by) : ""}
                 ${order.occasion ? " · " + escapeHtml(order.occasion) : ""}

@@ -103,6 +103,7 @@
 		var missing = Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
 		var rows = [
 			["Book", order.size_label + " · " + order.page_count + " pages"],
+			["Cover", (order.cover_label || "Photo wrap") + " · case bound"],
 			["Copies", String(order.copies || 1)],
 			["Occasion", order.occasion || "not given"],
 			["Needed by", order.needed_by || "not given"],
@@ -146,10 +147,6 @@
 
 	// --- preview ----------------------------------------------------------
 
-	function previewIsNarrow() {
-		return window.innerWidth < 760;
-	}
-
 	function renderPreview() {
 		var stage = el("preview-spread");
 		var view = previewViews[previewIndex];
@@ -173,6 +170,8 @@
 		el("preview-count").textContent = previewIndex + 1 + " of " + previewViews.length;
 		el("preview-prev").disabled = previewIndex === 0;
 		el("preview-next").disabled = previewIndex >= previewViews.length - 1;
+
+		SB.fitSpread(document.querySelector(".ed-preview-stage"), stage, book, view);
 	}
 
 	function previewGo(delta) {
@@ -183,7 +182,7 @@
 	}
 
 	function openPreview() {
-		previewViews = SB.buildViews(book, previewIsNarrow());
+		previewViews = SB.buildViews(book);
 		previewIndex = 0;
 		el("preview").hidden = false;
 		document.body.style.overflow = "hidden";
@@ -252,18 +251,6 @@
 
 		window.addEventListener("resize", function () {
 			if (!previewIsOpen()) return;
-			var current = previewViews[previewIndex];
-			var anchor = current && current.pages ? current.pages[0] : null;
-			previewViews = SB.buildViews(book, previewIsNarrow());
-			previewIndex = 0;
-			if (anchor !== null) {
-				for (var i = 0; i < previewViews.length; i++) {
-					if (previewViews[i].pages && previewViews[i].pages.indexOf(anchor) !== -1) {
-						previewIndex = i;
-						break;
-					}
-				}
-			}
 			renderPreview();
 		});
 

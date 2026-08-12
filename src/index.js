@@ -9608,6 +9608,17 @@ const STUDIO_SIZES = {
   "square-210": { label: "Square 210mm", width_mm: 210, height_mm: 210 },
 };
 
+// Case binding is the method for every book; this is what the case is wrapped
+// in. Kept in step with COVER_FINISHES in public/studio/book-render.js.
+const STUDIO_COVER_FINISHES = {
+  "photo-wrap": "Photo wrap",
+  cloth: "Canvas case",
+};
+
+// What a book is when nobody said — which is every order placed before the
+// choice existed.
+const STUDIO_DEFAULT_FINISH = "photo-wrap";
+
 const STUDIO_MAX_PAGES = 120;
 const STUDIO_MAX_PHOTOS = 300;
 // Per file. Comfortably above a phone photo and above most DSLR JPEGs, and
@@ -9670,6 +9681,11 @@ function normalizeStudioDesign(raw) {
     throw new RequestError("Choose a book size");
   }
 
+  const finish = String(raw.product?.finish || STUDIO_DEFAULT_FINISH);
+  if (!STUDIO_COVER_FINISHES[finish]) {
+    throw new RequestError("Choose what the cover is made of");
+  }
+
   const pages = Array.isArray(raw.pages) ? raw.pages : [];
   if (!pages.length) {
     throw new RequestError("The book has no pages");
@@ -9730,6 +9746,7 @@ function normalizeStudioDesign(raw) {
   return {
     design: raw,
     sizeKey,
+    finish,
     pageCount: pages.length,
     photoIds: ids,
     photoCount: photos.length,
@@ -10161,6 +10178,7 @@ async function lookupStudioOrder(request, env) {
     occasion: order.occasion,
     product_size: order.product_size,
     size_label: studioSizeLabel(order.product_size),
+    cover_label: studioCoverLabel(order),
     page_count: order.page_count,
     copies: order.copies,
     needed_by: order.needed_by,
@@ -10214,6 +10232,17 @@ async function viewStudioPhoto(request, env, orderId, photoId) {
   });
 }
 
+// The finish lives in the design rather than its own column, so it is read
+// back out of there.
+function studioCoverLabel(order) {
+  try {
+    const design = JSON.parse(order.design_json || "{}");
+    return STUDIO_COVER_FINISHES[design?.product?.finish] || STUDIO_COVER_FINISHES[STUDIO_DEFAULT_FINISH];
+  } catch {
+    return STUDIO_COVER_FINISHES[STUDIO_DEFAULT_FINISH];
+  }
+}
+
 function studioSizeLabel(key) {
   return STUDIO_SIZES[key]?.label || key || "-";
 }
@@ -10253,6 +10282,7 @@ async function sendStudioOrderEmails(env, order) {
         ${row("Phone", order.customer_phone || "-")}
         ${row("Occasion", order.occasion || "-")}
         ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
+        ${row("Cover", `${studioCoverLabel(order)} · case bound`)}
         ${row("Copies", order.copies)}
         ${row("Needed by", order.needed_by || "not given")}
         ${row("Photos", `${order.uploaded_count} of ${order.photo_count} uploaded · ${formatStudioBytes(order.uploaded_bytes)}`)}

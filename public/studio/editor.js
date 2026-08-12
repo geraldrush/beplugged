@@ -131,7 +131,7 @@
 	function blankState() {
 		var s = {
 			version: 1,
-			product: { size: "a4-portrait", pages: 24 },
+			product: { size: "a4-portrait", pages: 24, finish: "photo-wrap" },
 			cover: { title: "", subtitle: "", slot: blankSlot() },
 			pages: [],
 			photos: []
@@ -398,6 +398,27 @@
 				scheduleSave();
 				renderSizeOptions();
 				renderPages();
+				renderSummary();
+			});
+			host.appendChild(button);
+		});
+	}
+
+	function renderFinishOptions() {
+		var host = document.getElementById("finish-options");
+		host.innerHTML = "";
+		SB.COVER_FINISHES.forEach(function (finish) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-choice";
+			button.setAttribute("aria-pressed", String(state.product.finish === finish.key));
+			button.innerHTML = "<span><strong></strong><small></small></span>";
+			button.querySelector("strong").textContent = finish.label;
+			button.querySelector("small").textContent = finish.note;
+			button.addEventListener("click", function () {
+				state.product.finish = finish.key;
+				scheduleSave();
+				renderFinishOptions();
 				renderSummary();
 			});
 			host.appendChild(button);
@@ -953,6 +974,7 @@
 		var rows = [
 			["Size", size.label + " — " + size.w + " × " + size.h + " mm"],
 			["Pages", String(state.product.pages)],
+			["Cover", SB.finishFor(state.product.finish).label + " — case bound"],
 			["Cover", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
 			["Cover photo", state.cover.slot.photoId ? "chosen" : "not chosen"],
 			["Photos in the book", state.photos.length + " (" + used.size + " placed, " + formatBytes(totalBytes()) + ")"],
@@ -1042,12 +1064,6 @@
 	var previewViews = [];
 	var previewIndex = 0;
 
-	// On a phone a spread is two postage stamps, so a narrow screen turns the
-	// pages one at a time instead.
-	function previewIsNarrow() {
-		return window.innerWidth < 760;
-	}
-
 	// How the shared renderer turns a photo id into a picture here: the small
 	// screen copy made when the photo was added, held as an object URL.
 	function previewResolve(photoId) {
@@ -1062,7 +1078,7 @@
 	}
 
 	function buildPreviewViews() {
-		return SB.buildViews(state, previewIsNarrow());
+		return SB.buildViews(state);
 	}
 
 	function renderPreview() {
@@ -1089,6 +1105,8 @@
 			previewIndex + 1 + " of " + previewViews.length;
 		document.getElementById("preview-prev").disabled = previewIndex === 0;
 		document.getElementById("preview-next").disabled = previewIndex >= previewViews.length - 1;
+
+		SB.fitSpread(document.querySelector(".ed-preview-stage"), stage, state, view);
 
 		// The review step lists every soft photo in the book, which is a list
 		// nobody maps back to a page. Here it can be said about the pages the
@@ -1397,7 +1415,10 @@
 
 			if (saved && saved.product && Array.isArray(saved.pages) && saved.pages.length) {
 				state = saved;
-				if (!state.cover) state.cover = { title: "", subtitle: "", slot: blankSlot() };
+				// A draft saved before the choice existed never picked either, so
+			// it gets the house default like a new book would.
+			if (!state.product.finish) state.product.finish = "photo-wrap";
+			if (!state.cover) state.cover = { title: "", subtitle: "", slot: blankSlot() };
 				if (!state.cover.slot) state.cover.slot = blankSlot();
 				if (!Array.isArray(state.photos)) state.photos = [];
 				// A photo whose blob did not survive (a cleared browser, a
@@ -1507,18 +1528,6 @@
 		// looking at rather than throwing them back to the cover.
 		window.addEventListener("resize", function () {
 			if (!previewIsOpen()) return;
-			var current = previewViews[previewIndex];
-			var anchor = current && current.pages ? current.pages[0] : null;
-			previewViews = buildPreviewViews();
-			previewIndex = 0;
-			if (anchor !== null) {
-				for (var i = 0; i < previewViews.length; i++) {
-					if (previewViews[i].pages && previewViews[i].pages.indexOf(anchor) !== -1) {
-						previewIndex = i;
-						break;
-					}
-				}
-			}
 			renderPreview();
 		});
 
@@ -1543,6 +1552,7 @@
 			document.getElementById("cover-title").value = state.cover.title || "";
 			document.getElementById("cover-subtitle").value = state.cover.subtitle || "";
 			renderSizeOptions();
+			renderFinishOptions();
 			renderPageOptions();
 			renderPhotos();
 			renderTray();

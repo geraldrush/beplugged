@@ -649,7 +649,16 @@ a { color: var(--brand); }
 	background:
 		linear-gradient(145deg, #d3cbba 0%, #c3baa7 45%, #b3a993 100%);
 	border-radius: 2px 7px 7px 2px;
+	/* The page block. A case-bound book is a case sitting on a stack of paper,
+	   and the paper shows at the fore-edge and the foot with the case
+	   overhanging it — that edge is what makes a picture of a book read as a
+	   book rather than a printed card. Three offset layers in paper colours,
+	   then the shadow it casts. */
 	box-shadow:
+		3px 3px 0 0 #f7f4ee,
+		5px 5px 0 0 #ebe5da,
+		7px 7px 0 0 #dcd5c7,
+		8px 8px 1px 0 rgba(60, 48, 30, 0.35),
 		0 28px 60px rgba(0, 0, 0, 0.62),
 		inset 0 0 0 1px rgba(255, 255, 255, 0.18),
 		inset -2px 0 6px rgba(0, 0, 0, 0.12);
@@ -685,22 +694,81 @@ a { color: var(--brand); }
 
 .ed-cover-print .ed-preview-sheet { padding: 0; gap: 0; }
 
-/* The spine: a fold, a shadow where the hinge sits, and a highlight along the
-   ridge. */
+/* Photo wrap: the picture is the covering. It runs to every edge, over the
+   boards and under the spine, so there is no cloth border and no weave —
+   just the laminate sheen you get off a printed case. */
+.ed-cover-case.is-wrap {
+	padding: 0;
+	background: #10141b;
+}
+
+.ed-cover-case.is-wrap::after { display: none; }
+
+.ed-cover-case.is-wrap .ed-cover-print { box-shadow: none; }
+
+.ed-cover-case.is-wrap::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+	background: linear-gradient(115deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0) 34%);
+}
+
+/* --- the gutter ---------------------------------------------------------
+   A case-bound book does not lie as two loose sheets: the pages curve into
+   the spine where they are held. Without this the cover is the only thing
+   that looks bound and everything after it looks like loose paper. */
+
+.ed-spread .ed-preview-leaf:first-child:not(:last-child) .ed-preview-page::after,
+.ed-spread .ed-preview-leaf:last-child:not(:first-child) .ed-preview-page::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 7%;
+	max-width: 30px;
+	z-index: 4;
+	pointer-events: none;
+}
+
+.ed-spread .ed-preview-leaf:first-child:not(:last-child) .ed-preview-page::after {
+	right: 0;
+	background: linear-gradient(90deg, rgba(13, 24, 38, 0) 0%, rgba(13, 24, 38, 0.14) 66%, rgba(13, 24, 38, 0.32) 100%);
+}
+
+.ed-spread .ed-preview-leaf:last-child:not(:first-child) .ed-preview-page::after {
+	left: 0;
+	background: linear-gradient(270deg, rgba(13, 24, 38, 0) 0%, rgba(13, 24, 38, 0.14) 66%, rgba(13, 24, 38, 0.32) 100%);
+}
+
+/* The joint — the groove a case-bound book has pressed in a few millimetres
+   from the spine, where the cover hinges. The first attempt was one soft wash
+   across a wide strip, which disappeared into any busy photograph. A joint is
+   a narrow, hard-edged channel with the board standing proud on either side,
+   so that is what this draws, in light and shade rather than colour, so it
+   holds over a dark photo and a pale canvas alike.
+
+   It sits above everything, because the groove is pressed into whatever the
+   case is covered in — cloth or photograph. */
 .ed-cover-spine {
 	position: absolute;
 	left: 0;
 	top: 0;
 	bottom: 0;
-	width: 8%;
-	z-index: 2;
+	width: 10%;
+	min-width: 22px;
+	z-index: 5;
 	background:
 		linear-gradient(90deg,
-			rgba(60, 48, 30, 0.42) 0%,
-			rgba(60, 48, 30, 0.10) 22%,
-			rgba(255, 255, 255, 0.22) 52%,
-			rgba(60, 48, 30, 0.16) 78%,
-			rgba(60, 48, 30, 0.34) 100%);
+			rgba(0, 0, 0, 0.38) 0%,       /* spine face, curving away */
+			rgba(0, 0, 0, 0.20) 40%,
+			rgba(255, 255, 255, 0.26) 54%, /* board edge catching the light */
+			rgba(0, 0, 0, 0.58) 63%,       /* the groove itself */
+			rgba(0, 0, 0, 0.58) 74%,
+			rgba(255, 255, 255, 0.24) 83%, /* board rising again */
+			rgba(0, 0, 0, 0.10) 94%,
+			rgba(0, 0, 0, 0) 100%);
 }
 
 /* The sheet keeps the page's real proportions; height drives width, so a
@@ -759,7 +827,9 @@ a { color: var(--brand); }
 	left: 0;
 	right: 0;
 	bottom: 0;
-	padding: 26px 24px 20px;
+	/* Clear of the joint. Nothing is set in type across the hinge of a book —
+	   it falls into the groove and creases. */
+	padding: 26px 24px 20px 13%;
 	background: linear-gradient(to top, rgba(9, 15, 24, 0.78), rgba(9, 15, 24, 0));
 	color: #fff;
 	z-index: 2;
@@ -806,8 +876,10 @@ a { color: var(--brand); }
 }
 
 @media (max-width: 760px) {
-	.ed-spread { height: min(62vh, 520px); }
-	.ed-preview-cover-text .t { font-size: 19px; }
+	/* The spread's height is set by fitSpread, which sizes it by whichever
+	   runs out first — here that is the width, since two facing pages are
+	   wider than a phone. */
+	.ed-preview-cover-text .t { font-size: 17px; }
 
 	/* A page is nearly the full width of a phone, so arrows sitting beside it
 	   get pushed off the screen entirely — leaving no way to turn a page

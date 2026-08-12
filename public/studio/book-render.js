@@ -31,6 +31,32 @@
 		{ key: "four-grid", cols: 2, rows: 2, label: "Four" }
 	];
 
+	// What the case is covered in. Case binding is the method either way — the
+	// pages are bound into a block and set into a rigid case — and this is what
+	// that case is wrapped in, which is the part the customer actually sees.
+	// Photo wrap leads because it is what the studio makes by default. The
+	// first entry is also the fallback, so the order here is the answer to
+	// "what is this book if nobody said".
+	var COVER_FINISHES = [
+		{
+			key: "photo-wrap",
+			label: "Photo wrap",
+			note: "Your picture printed across the whole case, over the boards and the spine, and laminated."
+		},
+		{
+			key: "cloth",
+			label: "Canvas case",
+			note: "Cloth-bound, with your picture mounted on the front. The canvas shows around it and down the spine."
+		}
+	];
+
+	function finishFor(key) {
+		for (var i = 0; i < COVER_FINISHES.length; i++) {
+			if (COVER_FINISHES[i].key === key) return COVER_FINISHES[i];
+		}
+		return COVER_FINISHES[0];
+	}
+
 	var MIN_PRINT_DPI = 150;
 
 	function layoutFor(key) {
@@ -66,19 +92,45 @@
 		return Math.min(photo.w / slotWin, photo.h / slotHin) / Math.max(1, zoom || 1);
 	}
 
-	// Which pages are shown together. A spread on a phone is two postage
-	// stamps, so a narrow screen turns them one at a time.
-	function buildViews(book, narrow) {
+	// Which pages are shown together. Always facing pages, on every screen: an
+	// opened book is what a book looks like, and turning one page at a time on
+	// a phone hid the thing the customer is trying to judge. A phone gets the
+	// spread scaled to fit instead — see fitSpread.
+	function buildViews(book) {
 		var pages = (book && book.pages) || [];
 		var views = [{ cover: true }];
-		if (narrow) {
-			pages.forEach(function (_, index) { views.push({ pages: [index] }); });
-			return views;
-		}
 		for (var i = 0; i < pages.length; i += 2) {
 			views.push({ pages: i + 1 < pages.length ? [i, i + 1] : [i] });
 		}
 		return views;
+	}
+
+	// Sizes the spread to whichever runs out first, the width or the height.
+	// Height alone was enough while a spread only ever appeared on a desktop;
+	// on a phone two pages side by side are wider than the screen, so the
+	// width has to be allowed to decide.
+	function fitSpread(stageEl, spreadEl, book, view) {
+		if (!stageEl || !spreadEl || !view) return;
+		var size = sizeFor(book.product && book.product.size);
+		var ratio = size.w / size.h;
+		var count = view.cover ? 1 : (view.pages || []).length || 1;
+		var labelHeight = 30;   // the page label, outside the page
+		var gaps = 3 * (count - 1);
+
+		// Arrows that sit beside the book take width from it; on a phone they
+		// are lifted out of the flow and ride over the page edges instead.
+		var arrows = 0;
+		Array.prototype.forEach.call(stageEl.querySelectorAll(".ed-preview-arrow"), function (arrow) {
+			if (getComputedStyle(arrow).position !== "absolute") {
+				arrows += arrow.offsetWidth + 10;
+			}
+		});
+
+		var availableWidth = Math.max(140, stageEl.clientWidth - arrows - 20);
+		var availableHeight = Math.max(180, stageEl.clientHeight - 10);
+		var heightThatFitsWidth = (availableWidth - gaps) / (count * ratio) + labelHeight;
+
+		spreadEl.style.height = Math.floor(Math.min(availableHeight, heightThatFitsWidth, 680)) + "px";
 	}
 
 	// Every page of the book in order, cover first. Used for printing, where
@@ -136,7 +188,9 @@
 		wrap.className = "ed-preview-leaf";
 
 		var pageEl = document.createElement("div");
-		pageEl.className = "ed-preview-page" + (isCover ? " ed-cover-case" : "");
+		var finish = finishFor(book.product && book.product.finish).key;
+		pageEl.className = "ed-preview-page" +
+			(isCover ? " ed-cover-case" + (finish === "photo-wrap" ? " is-wrap" : "") : "");
 		// The page is exactly the shape of the paper: definite height from the
 		// stylesheet, width from this ratio.
 		pageEl.style.aspectRatio = size.w + " / " + size.h;
@@ -227,12 +281,15 @@
 	global.StudioBook = {
 		SIZES: SIZES,
 		LAYOUTS: LAYOUTS,
+		COVER_FINISHES: COVER_FINISHES,
+		finishFor: finishFor,
 		MIN_PRINT_DPI: MIN_PRINT_DPI,
 		sizeFor: sizeFor,
 		layoutFor: layoutFor,
 		applySlotImage: applySlotImage,
 		slotDpi: slotDpi,
 		buildViews: buildViews,
+		fitSpread: fitSpread,
 		leaf: leaf,
 		allLeaves: allLeaves,
 		lowResSlots: lowResSlots
