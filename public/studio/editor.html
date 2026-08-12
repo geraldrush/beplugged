@@ -128,6 +128,14 @@
 		</div>
 
 		<div id="send-live">
+			<div class="ed-card ed-preview-prompt">
+				<div>
+					<h2 style="margin:0 0 4px;">Look through it first</h2>
+					<p style="margin:0;color:var(--ink-500);font-size:14px;">Page by page, the way it will be printed and bound. This is the last look before it comes to us.</p>
+				</div>
+				<button type="button" class="ed-btn" id="review-preview">Preview the book</button>
+			</div>
+
 			<div class="ed-card">
 				<h2>Your book</h2>
 				<table class="ed-summary" id="summary"></table>
@@ -208,8 +216,27 @@
 <div class="ed-dock">
 	<div class="ed-dock-inner">
 		<span class="ed-dock-status" id="dock-status">Your work is saved in this browser as you go.</span>
+		<button type="button" class="ed-btn secondary small" id="dock-preview" hidden>Preview the book</button>
 		<button type="button" class="ed-btn secondary small" id="dock-back">Back</button>
 		<button type="button" class="ed-btn small" id="dock-next">Next</button>
+	</div>
+</div>
+
+<!-- The book, as a book. Built empty and filled by the editor when opened, so
+     nothing here costs anything until someone asks to see it. -->
+<div class="ed-preview" id="preview" role="dialog" aria-modal="true" aria-label="Book preview" hidden>
+	<div class="ed-preview-head">
+		<strong id="preview-label">Cover</strong>
+		<span class="ed-preview-count" id="preview-count"></span>
+		<button type="button" class="ed-btn secondary small" id="preview-close">Close</button>
+	</div>
+	<div class="ed-preview-stage">
+		<button type="button" class="ed-preview-arrow" id="preview-prev" aria-label="Previous page">&#8249;</button>
+		<div class="ed-spread" id="preview-spread"></div>
+		<button type="button" class="ed-preview-arrow" id="preview-next" aria-label="Next page">&#8250;</button>
+	</div>
+	<div class="ed-preview-foot">
+		<span id="preview-hint">Use the arrows, or the &#8592; and &#8594; keys. Esc closes.</span>
 	</div>
 </div>
 

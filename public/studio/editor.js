@@ -1076,6 +1076,186 @@
 		});
 	}
 
+	// --- preview ----------------------------------------------------------
+	//
+	// The arrange grid shows twenty page cards with layout buttons and caption
+	// boxes all over them, which is the right tool for building a book and the
+	// wrong one for judging whether it is any good. This is the book: two
+	// facing pages at a time, at their real proportions, with nothing to click
+	// on them. It is the last thing between designing and sending.
+
+	var previewViews = [];
+	var previewIndex = 0;
+
+	// On a phone a spread is two postage stamps, so a narrow screen turns the
+	// pages one at a time instead.
+	function previewIsNarrow() {
+		return window.innerWidth < 760;
+	}
+
+	function buildPreviewViews() {
+		var views = [{ cover: true }];
+		if (previewIsNarrow()) {
+			state.pages.forEach(function (_, index) {
+				views.push({ pages: [index] });
+			});
+			return views;
+		}
+		for (var i = 0; i < state.pages.length; i += 2) {
+			views.push({ pages: i + 1 < state.pages.length ? [i, i + 1] : [i] });
+		}
+		return views;
+	}
+
+	function previewSlotElement(slot) {
+		var cell = document.createElement("div");
+		cell.className = "ed-preview-slot";
+		var photo = slot && slot.photoId ? photoById(slot.photoId) : null;
+		if (!photo) {
+			cell.innerHTML = '<span class="ed-preview-blank">blank</span>';
+			return cell;
+		}
+		var url = thumbUrls.get(photo.id);
+		if (!url) {
+			// HEIC and friends: we cannot draw it, and pretending the page is
+			// blank would be worse than saying so.
+			var name = document.createElement("span");
+			name.className = "ed-preview-blank";
+			name.textContent = photo.name;
+			cell.appendChild(name);
+			return cell;
+		}
+		var img = document.createElement("img");
+		img.src = url;
+		img.alt = "";
+		img.draggable = false;
+		applySlotImage(img, slot);
+		cell.appendChild(img);
+		return cell;
+	}
+
+	function previewPageElement(pageIndex) {
+		var size = sizeFor(state.product.size);
+		var isCover = pageIndex === null;
+		var page = isCover ? null : state.pages[pageIndex];
+		var layout = layoutFor(isCover ? "full" : page.layout);
+
+		var leaf = document.createElement("div");
+		leaf.className = "ed-preview-page";
+		// The page keeps its real proportions and the height of the spread
+		// decides the width, so any size fits the viewport without arithmetic.
+		leaf.style.aspectRatio = size.w + " / " + size.h;
+
+		var sheet = document.createElement("div");
+		sheet.className = "ed-preview-sheet";
+		sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+		sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+
+		if (isCover) {
+			sheet.appendChild(previewSlotElement(state.cover.slot));
+		} else {
+			page.slots.forEach(function (slot) {
+				sheet.appendChild(previewSlotElement(slot));
+			});
+		}
+		leaf.appendChild(sheet);
+
+		if (isCover) {
+			if (state.cover.title || state.cover.subtitle) {
+				var text = document.createElement("div");
+				text.className = "ed-preview-cover-text";
+				text.innerHTML = '<div class="t"></div><div class="s"></div>';
+				text.querySelector(".t").textContent = state.cover.title || "";
+				text.querySelector(".s").textContent = state.cover.subtitle || "";
+				leaf.appendChild(text);
+			}
+			return leaf;
+		}
+
+		// Captions print on the page, so this is where they have to be looked
+		// at — an input under a thumbnail tells you nothing about how a long
+		// one sits under a photo.
+		if (page.caption) {
+			var caption = document.createElement("div");
+			caption.className = "ed-preview-caption";
+			caption.textContent = page.caption;
+			leaf.appendChild(caption);
+		}
+
+		var number = document.createElement("div");
+		number.className = "ed-preview-number";
+		number.textContent = "Page " + (pageIndex + 1);
+		leaf.appendChild(number);
+
+		return leaf;
+	}
+
+	function renderPreview() {
+		var stage = document.getElementById("preview-spread");
+		var view = previewViews[previewIndex];
+		if (!stage || !view) return;
+
+		stage.innerHTML = "";
+		if (view.cover) {
+			stage.appendChild(previewPageElement(null));
+		} else {
+			view.pages.forEach(function (pageIndex) {
+				stage.appendChild(previewPageElement(pageIndex));
+			});
+		}
+
+		var label = view.cover
+			? "Cover"
+			: view.pages.length === 2
+				? "Pages " + (view.pages[0] + 1) + " and " + (view.pages[1] + 1)
+				: "Page " + (view.pages[0] + 1);
+		document.getElementById("preview-label").textContent = label;
+		document.getElementById("preview-count").textContent =
+			previewIndex + 1 + " of " + previewViews.length;
+		document.getElementById("preview-prev").disabled = previewIndex === 0;
+		document.getElementById("preview-next").disabled = previewIndex >= previewViews.length - 1;
+
+		// The review step lists every soft photo in the book, which is a list
+		// nobody maps back to a page. Here it can be said about the pages the
+		// reader is looking at, which is the moment it means something.
+		var soft = view.cover ? [] : lowResSlots().filter(function (item) {
+			return view.pages.indexOf(item.page - 1) !== -1;
+		});
+		var hint = document.getElementById("preview-hint");
+		hint.textContent = soft.length
+			? soft.length + (soft.length === 1 ? " photo here is" : " photos here are") +
+				" smaller than we would like at this size — it will print softer than it looks on screen."
+			: "Use the arrows, or the ← and → keys. Esc closes.";
+		hint.style.color = soft.length ? "#f0b27a" : "";
+	}
+
+	function previewGo(delta) {
+		var next = previewIndex + delta;
+		if (next < 0 || next >= previewViews.length) return;
+		previewIndex = next;
+		renderPreview();
+	}
+
+	function openPreview() {
+		previewViews = buildPreviewViews();
+		previewIndex = 0;
+		var overlay = document.getElementById("preview");
+		overlay.hidden = false;
+		document.body.style.overflow = "hidden";
+		renderPreview();
+		document.getElementById("preview-close").focus();
+	}
+
+	function closePreview() {
+		document.getElementById("preview").hidden = true;
+		document.body.style.overflow = "";
+		document.getElementById("preview-spread").innerHTML = "";
+	}
+
+	function previewIsOpen() {
+		return !document.getElementById("preview").hidden;
+	}
+
 	// --- steps ------------------------------------------------------------
 
 	var STEPS = ["size", "photos", "arrange", "send"];
@@ -1104,6 +1284,10 @@
 			button.disabled = !canReach(target);
 		});
 		var index = STEPS.indexOf(step);
+		// Worth offering only once there is something to look at, and only on
+		// the two steps where the book exists.
+		var preview = document.getElementById("dock-preview");
+		preview.hidden = !(state.photos.length && (step === "arrange" || step === "send"));
 		var back = document.getElementById("dock-back");
 		var next = document.getElementById("dock-next");
 		back.disabled = index <= 0;
@@ -1379,6 +1563,63 @@
 		document.getElementById("dock-next").addEventListener("click", function () {
 			var index = STEPS.indexOf(step);
 			if (index < STEPS.length - 1) goTo(STEPS[index + 1]);
+		});
+
+		document.getElementById("dock-preview").addEventListener("click", openPreview);
+		document.getElementById("review-preview").addEventListener("click", openPreview);
+		document.getElementById("preview-close").addEventListener("click", closePreview);
+		document.getElementById("preview-prev").addEventListener("click", function () { previewGo(-1); });
+		document.getElementById("preview-next").addEventListener("click", function () { previewGo(1); });
+
+		// Swipe, because that is what a phone expects of something shaped like
+		// a book. Only a decisively horizontal drag counts, so it cannot be
+		// mistaken for anything else.
+		var swipeX = null;
+		var swipeY = null;
+		var stage = document.querySelector(".ed-preview-stage");
+		stage.addEventListener("pointerdown", function (event) {
+			swipeX = event.clientX;
+			swipeY = event.clientY;
+		});
+		stage.addEventListener("pointerup", function (event) {
+			if (swipeX === null) return;
+			var dx = event.clientX - swipeX;
+			var dy = event.clientY - swipeY;
+			swipeX = null;
+			swipeY = null;
+			if (Math.abs(dx) < 45 || Math.abs(dx) <= Math.abs(dy)) return;
+			previewGo(dx < 0 ? 1 : -1);
+		});
+		stage.addEventListener("pointercancel", function () {
+			swipeX = null;
+			swipeY = null;
+		});
+
+		document.addEventListener("keydown", function (event) {
+			if (!previewIsOpen()) return;
+			if (event.key === "Escape") { closePreview(); return; }
+			if (event.key === "ArrowLeft") { event.preventDefault(); previewGo(-1); }
+			if (event.key === "ArrowRight") { event.preventDefault(); previewGo(1); }
+		});
+
+		// A phone turned sideways goes from one page at a time to a spread, so
+		// the views have to be rebuilt. Keep the reader on the page they were
+		// looking at rather than throwing them back to the cover.
+		window.addEventListener("resize", function () {
+			if (!previewIsOpen()) return;
+			var current = previewViews[previewIndex];
+			var anchor = current && current.pages ? current.pages[0] : null;
+			previewViews = buildPreviewViews();
+			previewIndex = 0;
+			if (anchor !== null) {
+				for (var i = 0; i < previewViews.length; i++) {
+					if (previewViews[i].pages && previewViews[i].pages.indexOf(anchor) !== -1) {
+						previewIndex = i;
+						break;
+					}
+				}
+			}
+			renderPreview();
 		});
 
 		document.getElementById("send-form").addEventListener("submit", send);
