@@ -24,7 +24,7 @@ binding = "ASSETS"
 # fire and www/about answered 200 instead of redirecting. Only the indexable
 # pages are listed. Stylesheets and images stay on the edge path, since nobody
 # navigates to a stylesheet and no search engine indexes one as a page.
-run_worker_first = ["/", "/about", "/contact", "/portfolio-details", "/service", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
+run_worker_first = ["/", "/about", "/contact", "/portfolio-details", "/service", "/studio", "/studio/editor", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
 
 [vars]
 ENVIRONMENT = "production"
@@ -47,6 +47,14 @@ JUDGE0_LANGUAGE_ID = "54"
 binding = "DB"
 database_name = "invoicing"
 database_id = "8863ff6e-e263-41e1-a3af-a229e776f81d"
+
+# Photos customers upload in the Studio editor. They are print originals, so
+# they stay at full resolution and cannot live in D1: a single wedding book is
+# routinely larger than the entire invoicing database. The design itself (which
+# photo sits where, at what crop) is small and stays in D1 next to the order.
+[[r2_buckets]]
+binding = "STUDIO_MEDIA"
+bucket_name = "beplugged-studio"
 
 # Throttles the public /api/contact endpoint. period must be 10 or 60.
 [[ratelimits]]

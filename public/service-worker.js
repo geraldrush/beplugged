@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v26";
+const CACHE_VERSION = "beplugged-v27";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -12,6 +12,13 @@ const CORE_ASSETS = [
   "/",
   "/about",
   "/service",
+  "/studio",
+  // The book designer keeps the whole book in IndexedDB and only needs the
+  // network to send it. Precaching the shell means a dropped connection
+  // costs the customer nothing until they press send.
+  "/studio/editor",
+  "/studio/editor.css",
+  "/studio/editor.js",
   "/portfolio-details",
   "/contact",
   "/training",

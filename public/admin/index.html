@@ -1802,6 +1802,9 @@
           <button class="nav-link" data-tour-group="administration" onclick="showTab('catalogue')">
             <i class="fas fa-store"></i> Services &amp; Courses
           </button>
+          <button class="nav-link" data-tour-group="administration" onclick="showTab('studio-orders')">
+            <i class="fas fa-book-open"></i> Studio Orders
+          </button>
           <button class="nav-link" data-tour-group="administration" onclick="showTab('team')">
             <i class="fas fa-user-shield"></i> Team
           </button>
@@ -2732,6 +2735,29 @@
                 </thead>
                 <tbody id="catalogue-list">
                   <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="studio-orders-tab" class="tab-content hidden">
+          <div class="header-actions">
+            <h2>Studio Orders</h2>
+          </div>
+          <p style="color:var(--muted);font-size:0.85rem;margin:-0.5rem 0 1.25rem;">
+            Photobooks customers built themselves at /studio/editor. An order at
+            &ldquo;Awaiting photos&rdquo; was started but never confirmed &mdash; the design is
+            here, the upload did not finish. Those are worth a phone call.
+          </p>
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr><th>Reference</th><th>Customer</th><th>Book</th><th>Needed by</th><th>Photos</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="studio-orders-list">
+                  <tr><td colspan="7" class="text-center">Loading...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -4370,6 +4396,33 @@
             { name: "seo_description", label: "Search description (optional)", type: "textarea", fullSpan: true },
           ],
           render: renderCatalogueRows,
+        },
+                studioOrders: {
+          endpoint: "/admin/studio-orders",
+          listId: "studio-orders-list",
+          singular: "Studio order",
+          fields: [
+            {
+              name: "status",
+              label: "Status",
+              type: "select",
+              defaultValue: "new",
+              options: [
+                "awaiting_photos",
+                "new",
+                "quoted",
+                "in_design",
+                "proof_sent",
+                "approved",
+                "printing",
+                "completed",
+                "cancelled",
+              ],
+            },
+            { name: "needed_by", label: "Date needed", type: "date" },
+            { name: "notes", label: "Notes", type: "textarea", fullSpan: true },
+          ],
+          render: renderStudioOrderRows,
         },
                 documents: {
           endpoint: "/admin/documents",
@@ -6160,6 +6213,324 @@
         return `<div style="font-size:0.78rem;color:${colour};margin-top:0.15rem;">${mark} ${escapeHtml(label)}</div>`;
       }
 
+      const STUDIO_STATUS_LABELS = {
+        awaiting_photos: "Awaiting photos",
+        new: "New",
+        quoted: "Quoted",
+        in_design: "In design",
+        proof_sent: "Proof sent",
+        approved: "Approved",
+        printing: "Printing",
+        completed: "Completed",
+        cancelled: "Cancelled",
+      };
+
+      const STUDIO_STATUS_COLOURS = {
+        awaiting_photos: "#b7791f",
+        new: "#f05023",
+        quoted: "#2b6cb0",
+        in_design: "#2b6cb0",
+        proof_sent: "#2b6cb0",
+        approved: "#2f855a",
+        printing: "#2f855a",
+        completed: "#4a5568",
+        cancelled: "#a0aec0",
+      };
+
+      const STUDIO_SIZE_LABELS = {
+        "a4-portrait": { label: "A4 portrait", w: 210, h: 297 },
+        "a4-landscape": { label: "A4 landscape", w: 297, h: 210 },
+        "a5-portrait": { label: "A5 portrait", w: 148, h: 210 },
+        "square-210": { label: "Square 210mm", w: 210, h: 210 },
+      };
+
+      const STUDIO_LAYOUTS = {
+        full: { cols: 1, rows: 1 },
+        "two-across": { cols: 2, rows: 1 },
+        "two-stacked": { cols: 1, rows: 2 },
+        "three-strip": { cols: 3, rows: 1 },
+        "four-grid": { cols: 2, rows: 2 },
+      };
+
+      function studioBytes(n) {
+        const value = Number(n) || 0;
+        if (value >= 1024 * 1024 * 1024) return (value / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+        if (value >= 1024 * 1024) return (value / (1024 * 1024)).toFixed(1) + " MB";
+        if (value >= 1024) return Math.round(value / 1024) + " KB";
+        return value + " B";
+      }
+
+      function studioStatusPill(status) {
+        const key = String(status || "new");
+        const colour = STUDIO_STATUS_COLOURS[key] || "#4a5568";
+        return `<span style="display:inline-block;padding:0.15rem 0.55rem;border-radius:999px;background:${colour};color:#fff;font-size:0.72rem;font-weight:600;white-space:nowrap;">${escapeHtml(STUDIO_STATUS_LABELS[key] || key)}</span>`;
+      }
+
+      function renderStudioOrderRows(rows) {
+        if (!rows.length) {
+          return `<tr><td colspan="7" class="text-center" style="padding:1.5rem;color:var(--muted);">No studio orders yet. They arrive when someone finishes a book at <span class="ref">/studio/editor</span>.</td></tr>`;
+        }
+        return rows
+          .map((r) => {
+            const size = STUDIO_SIZE_LABELS[r.product_size];
+            const expected = Number(r.photo_count || 0);
+            const got = Number(r.uploaded_count || 0);
+            // A gap here is the thing to act on: the design arrived, some of
+            // the photos did not, and only a person can sort that out.
+            const shortfall = expected - got;
+            return `
+          <tr>
+            <td>
+              <span class="ref">${escapeHtml(r.reference || "")}</span>
+              <div style="font-size:0.75rem;color:var(--muted);">${escapeHtml(String(r.created_at || "").slice(0, 16).replace("T", " "))}</div>
+            </td>
+            <td>
+              ${displayPlain(r.customer_name)}
+              <div style="font-size:0.78rem;color:var(--muted);">
+                <a href="mailto:${escapeAttr(r.customer_email || "")}">${escapeHtml(r.customer_email || "")}</a>
+                ${r.customer_phone ? " · " + escapeHtml(r.customer_phone) : ""}
+              </div>
+              ${r.occasion ? `<div style="font-size:0.78rem;color:var(--muted);">${escapeHtml(r.occasion)}</div>` : ""}
+            </td>
+            <td>
+              ${escapeHtml(size ? size.label : r.product_size || "")}
+              <div style="font-size:0.78rem;color:var(--muted);">${Number(r.page_count || 0)} pages · ${Number(r.copies || 1)} cop${Number(r.copies || 1) === 1 ? "y" : "ies"}</div>
+            </td>
+            <td>${r.needed_by ? escapeHtml(r.needed_by) : `<span style="color:var(--muted);">not given</span>`}</td>
+            <td>
+              ${got} of ${expected}
+              <div style="font-size:0.78rem;color:${shortfall > 0 ? "#b7791f" : "var(--muted)"};">
+                ${shortfall > 0 ? shortfall + " missing" : studioBytes(r.uploaded_bytes)}
+              </div>
+            </td>
+            <td>${studioStatusPill(r.status)}</td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn btn-sm btn-secondary" data-studio-view="${escapeAttr(r.id)}">View book</button>
+              </div>${actionButtons("studioOrders", r.id)}
+            </td>
+          </tr>`;
+          })
+          .join("");
+      }
+
+      // Opening the book is the whole point of this screen: the design says
+      // which photo goes where, and without seeing it laid out the studio is
+      // reading co-ordinates off a JSON blob.
+      async function viewStudioOrder(orderId) {
+        const order = await apiCall("/admin/studio-orders/" + encodeURIComponent(orderId));
+        if (!order) return;
+
+        let design = {};
+        try {
+          design = JSON.parse(order.design_json || "{}");
+        } catch (error) {
+          showAlert("The saved design could not be read.", "danger");
+          return;
+        }
+
+        const size = STUDIO_SIZE_LABELS[order.product_size] || { label: order.product_size, w: 210, h: 297 };
+        const photos = Array.isArray(order.photos) ? order.photos : [];
+        const uploaded = new Set(photos.map((p) => p.photo_id));
+        const byId = new Map((Array.isArray(design.photos) ? design.photos : []).map((p) => [p.id, p]));
+
+        const overlay = document.createElement("div");
+        overlay.style.cssText =
+          "position:fixed;inset:0;background:rgba(13,24,38,0.72);z-index:9000;overflow:auto;padding:24px 12px;";
+
+        const panel = document.createElement("div");
+        panel.style.cssText =
+          "max-width:1080px;margin:0 auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,0.3);";
+
+        const missing = Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
+
+        panel.innerHTML = `
+          <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px;">
+            <div>
+              <h2 style="margin:0 0 4px;">${escapeHtml(order.reference || "")}</h2>
+              <div style="color:var(--muted);font-size:0.88rem;">
+                ${escapeHtml(order.customer_name || "")} ·
+                <a href="mailto:${escapeAttr(order.customer_email || "")}">${escapeHtml(order.customer_email || "")}</a>
+                ${order.customer_phone ? " · " + escapeHtml(order.customer_phone) : ""}
+              </div>
+              <div style="color:var(--muted);font-size:0.88rem;margin-top:2px;">
+                ${escapeHtml(size.label)} · ${Number(order.page_count || 0)} pages ·
+                ${Number(order.copies || 1)} cop${Number(order.copies || 1) === 1 ? "y" : "ies"}
+                ${order.needed_by ? " · needed by " + escapeHtml(order.needed_by) : ""}
+                ${order.occasion ? " · " + escapeHtml(order.occasion) : ""}
+              </div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+              ${studioStatusPill(order.status)}
+              <button class="btn btn-sm btn-secondary" data-studio-close="1">Close</button>
+            </div>
+          </div>
+          ${
+            missing > 0
+              ? `<div style="background:#fffaf0;border:1px solid #f0e0c0;color:#8a5f12;border-radius:6px;padding:10px 14px;font-size:0.85rem;margin-bottom:16px;">
+                   ${missing} photo${missing === 1 ? "" : "s"} never finished uploading. The frames below still show where they belong — ask the customer to resend those files.
+                 </div>`
+              : ""
+          }
+          ${
+            order.notes
+              ? `<div style="background:var(--surface-alt,#f7f9fc);border:1px solid #e3e8ef;border-radius:6px;padding:12px 14px;font-size:0.88rem;margin-bottom:18px;white-space:pre-wrap;">${escapeHtml(order.notes)}</div>`
+              : ""
+          }
+          <div id="studio-book" style="display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));"></div>
+          <h3 style="margin:24px 0 10px;">Files</h3>
+          <div id="studio-files" style="font-size:0.85rem;"></div>
+        `;
+
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+
+        function close() {
+          urls.forEach((url) => URL.revokeObjectURL(url));
+          overlay.remove();
+          document.removeEventListener("keydown", onKey);
+        }
+        function onKey(event) {
+          if (event.key === "Escape") close();
+        }
+        document.addEventListener("keydown", onKey);
+        overlay.addEventListener("click", (event) => {
+          if (event.target === overlay || event.target.dataset.studioClose) close();
+        });
+
+        const urls = [];
+        const loading = new Map();
+
+        // Each photo is fetched once with the admin token and reused wherever
+        // the design places it, so a photo on four pages is one download.
+        function photoUrl(photoId) {
+          if (!uploaded.has(photoId)) return Promise.resolve(null);
+          if (loading.has(photoId)) return loading.get(photoId);
+          const promise = fetch(
+            API_BASE + "/admin/studio-orders/" + encodeURIComponent(order.id) + "/photos/" + encodeURIComponent(photoId),
+            { headers: { Authorization: authToken } },
+          )
+            .then((response) => (response.ok ? response.blob() : null))
+            .then((blob) => {
+              if (!blob) return null;
+              const url = URL.createObjectURL(blob);
+              urls.push(url);
+              return url;
+            })
+            .catch(() => null);
+          loading.set(photoId, promise);
+          return promise;
+        }
+
+        function slotElement(slot, cols, rows) {
+          const cell = document.createElement("div");
+          cell.style.cssText =
+            "position:relative;overflow:hidden;background:#fff;border:1px solid #e3e8ef;border-radius:2px;min-height:30px;";
+          const meta = slot && slot.photoId ? byId.get(slot.photoId) : null;
+          if (!slot || !slot.photoId) {
+            cell.innerHTML = `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#99a2b3;">empty</span>`;
+            return cell;
+          }
+          if (!uploaded.has(slot.photoId)) {
+            cell.innerHTML = `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:0.68rem;color:#b7791f;">not uploaded${meta && meta.name ? "<br>" + escapeHtml(meta.name) : ""}</span>`;
+            return cell;
+          }
+          const img = document.createElement("img");
+          img.alt = meta && meta.name ? meta.name : "";
+          img.title = img.alt;
+          img.style.cssText =
+            "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;";
+          img.style.objectPosition = (slot.x ?? 50) + "% " + (slot.y ?? 50) + "%";
+          img.style.transformOrigin = (slot.x ?? 50) + "% " + (slot.y ?? 50) + "%";
+          img.style.transform = "scale(" + (slot.zoom || 1) + ")";
+          cell.appendChild(img);
+          photoUrl(slot.photoId).then((url) => {
+            if (url) img.src = url;
+          });
+          return cell;
+        }
+
+        function sheet(layoutKey) {
+          const layout = STUDIO_LAYOUTS[layoutKey] || STUDIO_LAYOUTS.full;
+          const div = document.createElement("div");
+          div.style.cssText =
+            "display:grid;gap:4px;padding:4px;background:#f7f9fc;border:1px solid #eef2f7;";
+          div.style.aspectRatio = size.w + " / " + size.h;
+          div.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+          div.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+          return { div, layout };
+        }
+
+        const book = panel.querySelector("#studio-book");
+
+        function pageBlock(title, sheetEl, caption) {
+          const wrap = document.createElement("div");
+          const heading = document.createElement("div");
+          heading.style.cssText =
+            "font-size:0.72rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#0d1826;margin-bottom:6px;";
+          heading.textContent = title;
+          wrap.appendChild(heading);
+          wrap.appendChild(sheetEl);
+          if (caption) {
+            const cap = document.createElement("div");
+            cap.style.cssText = "font-size:0.78rem;color:var(--muted);margin-top:6px;";
+            cap.textContent = caption;
+            wrap.appendChild(cap);
+          }
+          return wrap;
+        }
+
+        const cover = design.cover || {};
+        const coverSheet = sheet("full");
+        coverSheet.div.appendChild(slotElement(cover.slot, 1, 1));
+        book.appendChild(
+          pageBlock(
+            "Cover",
+            coverSheet.div,
+            [cover.title, cover.subtitle].filter(Boolean).join(" — ") || "",
+          ),
+        );
+
+        (Array.isArray(design.pages) ? design.pages : []).forEach((page, index) => {
+          const built = sheet(page.layout);
+          (page.slots || []).forEach((slot) => {
+            built.div.appendChild(slotElement(slot, built.layout.cols, built.layout.rows));
+          });
+          book.appendChild(pageBlock("Page " + (index + 1), built.div, page.caption || ""));
+        });
+
+        const files = panel.querySelector("#studio-files");
+        if (!photos.length) {
+          files.innerHTML = `<p style="color:var(--muted);">No files were uploaded for this order.</p>`;
+        } else {
+          files.innerHTML =
+            `<p style="color:var(--muted);margin:0 0 8px;">${photos.length} file${photos.length === 1 ? "" : "s"}, ${studioBytes(order.uploaded_bytes)} in total. Click one to open the full-resolution original.</p>` +
+            `<ul style="margin:0;padding-left:18px;line-height:1.9;">` +
+            photos
+              .map(
+                (p) =>
+                  `<li><a href="#" data-studio-file="${escapeAttr(p.photo_id)}">${escapeHtml(p.file_name || p.photo_id)}</a>` +
+                  `<span style="color:var(--muted);"> — ${studioBytes(p.bytes)}${p.width && p.height ? ", " + p.width + "×" + p.height : ""}</span></li>`,
+              )
+              .join("") +
+            `</ul>`;
+          files.addEventListener("click", (event) => {
+            const link = event.target.closest("[data-studio-file]");
+            if (!link) return;
+            event.preventDefault();
+            photoUrl(link.dataset.studioFile).then((url) => {
+              if (url) window.open(url, "_blank", "noopener");
+            });
+          });
+        }
+      }
+
+      document.addEventListener("click", (event) => {
+        const trigger = event.target.closest("[data-studio-view]");
+        if (!trigger) return;
+        viewStudioOrder(trigger.dataset.studioView);
+      });
+
       function renderCatalogueRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="5" class="text-center" style="padding:1.5rem;color:var(--muted);">No services or courses yet</td></tr>`;
@@ -6650,6 +7021,8 @@
           loadModule("agreements");
         } else if (tabName === "catalogue") {
           loadModule("catalogue");
+        } else if (tabName === "studio-orders") {
+          loadModule("studioOrders");
         } else if (tabName === "policies") {
           loadModule("policies");
         } else if (tabName === "sops") {

@@ -274,6 +274,10 @@ export default {
         return await handleContactMessage(request, env, method);
       }
 
+      if (path.startsWith("/api/studio/")) {
+        return await handleStudio(request, env, path, method);
+      }
+
       if (path.startsWith("/api/admin/")) {
         const token = request.headers.get("Authorization");
         if (!(await isValidToken(token, env))) {
@@ -376,6 +380,10 @@ export default {
 
       if (path.startsWith("/api/admin/catalogue")) {
         return await handleCatalogue(request, env, path, method);
+      }
+
+      if (path.startsWith("/api/admin/studio-orders")) {
+        return await handleStudioOrdersAdmin(request, env, path, method);
       }
 
       if (path === "/api/admin/document-pack/send") {
@@ -1889,6 +1897,57 @@ async function runSchemaSetup(env) {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_catalogue_kind ON catalogue_items (kind, status, position)",
+  ).run();
+  // A book someone built in the Studio editor. The row is written before the
+  // photos arrive, so an order that dies halfway through an upload still
+  // leaves a name and a number to call back rather than nothing at all.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS studio_orders (
+      id TEXT PRIMARY KEY,
+      reference TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'awaiting_photos',
+      customer_name TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      customer_phone TEXT,
+      occasion TEXT,
+      product_size TEXT NOT NULL,
+      page_count INTEGER NOT NULL DEFAULT 0,
+      copies INTEGER NOT NULL DEFAULT 1,
+      needed_by TEXT,
+      notes TEXT,
+      design_json TEXT NOT NULL,
+      photo_count INTEGER NOT NULL DEFAULT 0,
+      photo_bytes INTEGER NOT NULL DEFAULT 0,
+      uploaded_count INTEGER NOT NULL DEFAULT 0,
+      uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+      media_prefix TEXT NOT NULL,
+      upload_token_hash TEXT NOT NULL,
+      submitted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_studio_orders_status ON studio_orders (status, created_at)",
+  ).run();
+  // One row per uploaded file. The design references photos by id; this is
+  // what turns an id back into an object in R2 that the studio can open.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS studio_order_photos (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      photo_id TEXT NOT NULL,
+      file_name TEXT,
+      content_type TEXT,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      width INTEGER,
+      height INTEGER,
+      r2_key TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_studio_photos_order ON studio_order_photos (order_id)",
   ).run();
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS project_milestones (
@@ -8884,6 +8943,7 @@ function categoryPageHtml(category, courses, origin) {
     ["/", "Home"],
     ["/about", "About"],
     ["/service", "Services"],
+    ["/studio", "Studio"],
     ["/training", "Training"],
     ["/portfolio-details", "Projects"],
     ["/contact", "Contact Us"],
@@ -9038,6 +9098,7 @@ function cataloguePageHtml(item, related, origin) {
     ["/", "Home"],
     ["/about", "About"],
     ["/service", "Services"],
+    ["/studio", "Studio"],
     ["/training", "Training"],
     ["/portfolio-details", "Projects"],
     ["/contact", "Contact Us"],
@@ -9508,6 +9569,781 @@ async function handleLocationPage(env, request, slug) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// BePlugged Studio — books the customer designs themselves
+// ---------------------------------------------------------------------------
+//
+// The editor at /studio/editor builds a book in the browser and sends it here
+// in three steps: create the order, upload the photos one at a time, confirm.
+// It is three steps rather than one because a book is not one payload. Forty
+// print-resolution photos off a phone is a few hundred megabytes and twenty
+// minutes on a bad connection, and a single request that has to carry all of
+// it fails as a unit — the customer loses the layout they spent an hour on
+// along with the upload.
+//
+// So the design lands first, on its own, in D1. From that moment the order
+// exists and is visible in the admin whether or not another byte arrives.
+
+const STUDIO_STATUSES = new Set([
+  // Created, photos still coming up the wire. Not yet a real order.
+  "awaiting_photos",
+  "new",
+  "quoted",
+  "in_design",
+  "proof_sent",
+  "approved",
+  "printing",
+  "completed",
+  "cancelled",
+]);
+
+// The sizes the editor offers. Millimetres live here as well as in the
+// browser because the printed size is what decides whether a photo has enough
+// pixels to use, and a warning the customer can edit out of the request is
+// not a warning worth showing.
+const STUDIO_SIZES = {
+  "a4-portrait": { label: "A4 portrait", width_mm: 210, height_mm: 297 },
+  "a4-landscape": { label: "A4 landscape", width_mm: 297, height_mm: 210 },
+  "a5-portrait": { label: "A5 portrait", width_mm: 148, height_mm: 210 },
+  "square-210": { label: "Square 210mm", width_mm: 210, height_mm: 210 },
+};
+
+const STUDIO_MAX_PAGES = 120;
+const STUDIO_MAX_PHOTOS = 300;
+// Per file. Comfortably above a phone photo and above most DSLR JPEGs, and
+// low enough that the Worker can hold one in memory to check it before it is
+// written anywhere.
+const STUDIO_MAX_PHOTO_BYTES = 30 * 1024 * 1024;
+const STUDIO_MAX_TOTAL_BYTES = 600 * 1024 * 1024;
+const STUDIO_MAX_DESIGN_BYTES = 400 * 1024;
+const STUDIO_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  // Straight off an iPhone unless the owner changed the default.
+  "image/heic",
+  "image/heif",
+]);
+
+async function hashStudioToken(token) {
+  return toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
+}
+
+// R2 keys are built from ids we generated, never from the customer's file
+// name, which is theirs to choose and can contain anything at all. The
+// original name is kept as metadata so the studio still sees what they called
+// it, but it never reaches the key.
+function studioMediaKey(prefix, photoId, contentType) {
+  const ext =
+    contentType === "image/png"
+      ? "png"
+      : contentType === "image/webp"
+        ? "webp"
+        : contentType === "image/heic" || contentType === "image/heif"
+          ? "heic"
+          : "jpg";
+  return `${prefix}${photoId}.${ext}`;
+}
+
+function studioSafeName(value) {
+  return String(value || "")
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/[^\w .()\-]/g, "")
+    .trim()
+    .slice(0, 120);
+}
+
+// Validates the book the browser sent. Everything here is attacker-controlled:
+// the editor is public and nothing stops someone posting their own JSON.
+function normalizeStudioDesign(raw) {
+  if (!raw || typeof raw !== "object") {
+    throw new RequestError("The book design is missing");
+  }
+
+  const serialized = JSON.stringify(raw);
+  if (serialized.length > STUDIO_MAX_DESIGN_BYTES) {
+    throw new RequestError("The book design is too large to send");
+  }
+
+  const sizeKey = String(raw.product?.size || "");
+  if (!STUDIO_SIZES[sizeKey]) {
+    throw new RequestError("Choose a book size");
+  }
+
+  const pages = Array.isArray(raw.pages) ? raw.pages : [];
+  if (!pages.length) {
+    throw new RequestError("The book has no pages");
+  }
+  if (pages.length > STUDIO_MAX_PAGES) {
+    throw new RequestError("That is more pages than we can bind into one book");
+  }
+
+  const photos = Array.isArray(raw.photos) ? raw.photos : [];
+  if (!photos.length) {
+    throw new RequestError("Add at least one photo before sending the book");
+  }
+  if (photos.length > STUDIO_MAX_PHOTOS) {
+    throw new RequestError(`A book can carry at most ${STUDIO_MAX_PHOTOS} photos`);
+  }
+
+  const ids = new Set();
+  let photoBytes = 0;
+  for (const photo of photos) {
+    const id = String(photo?.id || "");
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+      throw new RequestError("A photo is missing its reference");
+    }
+    if (ids.has(id)) {
+      throw new RequestError("Two photos in the book share a reference");
+    }
+    ids.add(id);
+
+    const bytes = Number(photo?.bytes) || 0;
+    if (bytes > STUDIO_MAX_PHOTO_BYTES) {
+      throw new RequestError(
+        `${studioSafeName(photo?.name) || "One photo"} is larger than 30 MB. Send a smaller copy of it.`,
+      );
+    }
+    photoBytes += bytes;
+  }
+
+  if (photoBytes > STUDIO_MAX_TOTAL_BYTES) {
+    throw new RequestError(
+      "These photos come to more than we can accept in one order. Send fewer, or talk to us and we will find another way to get them.",
+    );
+  }
+
+  // A page pointing at a photo that was never declared would leave a hole on
+  // the printed page that nobody notices until it is bound.
+  let filledSlots = 0;
+  for (const page of pages) {
+    const slots = Array.isArray(page?.slots) ? page.slots : [];
+    for (const slot of slots) {
+      if (!slot?.photoId) continue;
+      if (!ids.has(String(slot.photoId))) {
+        throw new RequestError("A page refers to a photo that is not in the order");
+      }
+      filledSlots += 1;
+    }
+  }
+
+  return {
+    design: raw,
+    sizeKey,
+    pageCount: pages.length,
+    photoIds: ids,
+    photoCount: photos.length,
+    photoBytes,
+    filledSlots,
+  };
+}
+
+function normalizeStudioCustomer(raw) {
+  const copies = Math.trunc(Number(raw?.copies) || 1);
+  if (copies < 1 || copies > 500) {
+    throw new RequestError("Copies must be between 1 and 500");
+  }
+
+  const neededBy = trimText(raw?.needed_by, "Date needed", { maxLength: 40 });
+  if (neededBy && !/^\d{4}-\d{2}-\d{2}$/.test(neededBy)) {
+    throw new RequestError("Date needed must be a date");
+  }
+
+  return {
+    name: trimText(raw?.name, "Name", { required: true, maxLength: 200 }),
+    email: validateEmail(raw?.email, "Email"),
+    phone: trimText(raw?.phone, "Phone", { maxLength: 100 }),
+    occasion: trimText(raw?.occasion, "Occasion", { maxLength: 120 }),
+    copies,
+    needed_by: neededBy,
+    notes: trimText(raw?.notes, "Notes", { maxLength: 4000 }),
+    website: trimText(raw?.website, "Website", { maxLength: 200 }),
+  };
+}
+
+async function handleStudio(request, env, path, method) {
+  if (!env.DB) {
+    return json({ error: "The studio is not available right now." }, { status: 503 });
+  }
+
+  const seg = path.split("/").filter(Boolean); // api / studio / orders / ...
+  if (seg[2] !== "orders") {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (seg.length === 3 && method === "POST") {
+    return await createStudioOrder(request, env);
+  }
+  if (seg.length === 6 && seg[4] === "photos" && method === "PUT") {
+    return await uploadStudioPhoto(request, env, seg[3], seg[5]);
+  }
+  if (seg.length === 5 && seg[4] === "submit" && method === "POST") {
+    return await submitStudioOrder(request, env, seg[3]);
+  }
+
+  return json({ error: "Not found" }, { status: 404 });
+}
+
+async function createStudioOrder(request, env) {
+  // Unauthenticated and it writes a row plus opens an upload window, so it is
+  // throttled the same way the contact form is.
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `studio:${clientIp}` });
+    if (!success) {
+      return json(
+        { error: "Too many books sent from here just now. Try again in a minute." },
+        { status: 429 },
+      );
+    }
+  }
+
+  const raw = await parseRequestJson(request);
+  const customer = normalizeStudioCustomer(raw?.customer);
+  if (customer.website) {
+    // Honeypot. Answer as though it worked and write nothing.
+    return json({ success: true, reference: generateDocumentNumber("STU") });
+  }
+
+  const book = normalizeStudioDesign(raw?.design);
+
+  await ensureSchema(env);
+
+  const id = createEntityId("studio");
+  const reference = generateDocumentNumber("STU");
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
+  const mediaPrefix = `orders/${id}/`;
+
+  await env.DB.prepare(
+    `INSERT INTO studio_orders (id, reference, status, customer_name, customer_email,
+       customer_phone, occasion, product_size, page_count, copies, needed_by, notes,
+       design_json, photo_count, photo_bytes, media_prefix, upload_token_hash)
+     VALUES (?, ?, 'awaiting_photos', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      reference,
+      customer.name,
+      customer.email,
+      customer.phone,
+      customer.occasion,
+      book.sizeKey,
+      book.pageCount,
+      customer.copies,
+      customer.needed_by,
+      customer.notes,
+      JSON.stringify(book.design),
+      book.photoCount,
+      book.photoBytes,
+      mediaPrefix,
+      await hashStudioToken(token),
+    )
+    .run();
+
+  return json(
+    {
+      id,
+      reference,
+      upload_token: token,
+      photo_count: book.photoCount,
+      // Told rather than assumed, so the editor stops asking for uploads the
+      // moment the bucket is missing instead of failing photo by photo.
+      uploads_enabled: Boolean(env.STUDIO_MEDIA),
+    },
+    { status: 201 },
+  );
+}
+
+// The order row carries the hash; the browser carries the token. Anything
+// without it gets a 404 rather than a 403, so the endpoint cannot be used to
+// find out which order ids exist.
+async function loadStudioOrderForToken(env, orderId, request) {
+  const token = request.headers.get("X-Studio-Token") || "";
+  if (!token || !orderId) {
+    return null;
+  }
+  const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+    .bind(orderId)
+    .first();
+  if (!order) {
+    return null;
+  }
+  const ok = await safeCompareText(await hashStudioToken(token), order.upload_token_hash);
+  return ok ? order : null;
+}
+
+async function uploadStudioPhoto(request, env, orderId, photoId) {
+  if (!env.STUDIO_MEDIA) {
+    return json({ error: "Photo storage is not configured." }, { status: 503 });
+  }
+
+  await ensureSchema(env);
+
+  const order = await loadStudioOrderForToken(env, orderId, request);
+  if (!order) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  // Once submitted the book is being worked on. Letting a stale tab keep
+  // writing into it would change the order under the studio's feet.
+  if (order.status !== "awaiting_photos") {
+    return json({ error: "This book has already been sent." }, { status: 409 });
+  }
+
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(photoId || ""))) {
+    return json({ error: "Bad photo reference" }, { status: 400 });
+  }
+
+  let design = {};
+  try {
+    design = JSON.parse(order.design_json);
+  } catch {
+    return json({ error: "The saved design could not be read." }, { status: 500 });
+  }
+  const declared = (Array.isArray(design.photos) ? design.photos : []).find(
+    (p) => String(p?.id) === String(photoId),
+  );
+  if (!declared) {
+    return json({ error: "That photo is not part of this book." }, { status: 400 });
+  }
+
+  const contentType = String(request.headers.get("Content-Type") || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (!STUDIO_IMAGE_TYPES.has(contentType)) {
+    return json({ error: "Photos must be JPEG, PNG, WebP or HEIC." }, { status: 415 });
+  }
+
+  const declaredLength = Number(request.headers.get("Content-Length") || 0);
+  if (declaredLength > STUDIO_MAX_PHOTO_BYTES) {
+    return json({ error: "That photo is larger than 30 MB." }, { status: 413 });
+  }
+
+  const body = await request.arrayBuffer();
+  const bytes = body.byteLength;
+  if (!bytes) {
+    return json({ error: "That photo came through empty." }, { status: 400 });
+  }
+  // Checked against the body actually received, not the header, which the
+  // client controls and can lie about.
+  if (bytes > STUDIO_MAX_PHOTO_BYTES) {
+    return json({ error: "That photo is larger than 30 MB." }, { status: 413 });
+  }
+
+  const existing = await env.DB.prepare(
+    "SELECT id, bytes FROM studio_order_photos WHERE order_id = ? AND photo_id = ?",
+  )
+    .bind(order.id, photoId)
+    .first();
+
+  // A retried upload replaces its own object rather than adding to the total,
+  // which is what stops a flaky connection from spending the order's budget
+  // several times over on the same photo.
+  const totalAfter = Number(order.uploaded_bytes || 0) - Number(existing?.bytes || 0) + bytes;
+  if (totalAfter > STUDIO_MAX_TOTAL_BYTES) {
+    return json({ error: "This order has reached its upload limit." }, { status: 413 });
+  }
+
+  const key = studioMediaKey(order.media_prefix, photoId, contentType);
+  await env.STUDIO_MEDIA.put(key, body, {
+    httpMetadata: { contentType },
+    customMetadata: {
+      order: order.reference,
+      original_name: studioSafeName(declared.name),
+    },
+  });
+
+  const width = Math.trunc(Number(declared.w) || 0) || null;
+  const height = Math.trunc(Number(declared.h) || 0) || null;
+
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE studio_order_photos SET file_name = ?, content_type = ?, bytes = ?,
+         width = ?, height = ?, r2_key = ? WHERE id = ?`,
+    )
+      .bind(studioSafeName(declared.name), contentType, bytes, width, height, key, existing.id)
+      .run();
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO studio_order_photos (id, order_id, photo_id, file_name, content_type,
+         bytes, width, height, r2_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        createEntityId("studiophoto"),
+        order.id,
+        photoId,
+        studioSafeName(declared.name),
+        contentType,
+        bytes,
+        width,
+        height,
+        key,
+      )
+      .run();
+  }
+
+  const counts = await env.DB.prepare(
+    "SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM studio_order_photos WHERE order_id = ?",
+  )
+    .bind(order.id)
+    .first();
+
+  await env.DB.prepare(
+    "UPDATE studio_orders SET uploaded_count = ?, uploaded_bytes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  )
+    .bind(Number(counts?.n || 0), Number(counts?.b || 0), order.id)
+    .run();
+
+  return json({
+    success: true,
+    uploaded_count: Number(counts?.n || 0),
+    expected_count: Number(order.photo_count || 0),
+  });
+}
+
+async function submitStudioOrder(request, env, orderId) {
+  await ensureSchema(env);
+
+  const order = await loadStudioOrderForToken(env, orderId, request);
+  if (!order) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  if (order.status !== "awaiting_photos") {
+    // Already sent. Say so plainly rather than making a second order.
+    return json({ success: true, reference: order.reference, already_sent: true });
+  }
+
+  await env.DB.prepare(
+    `UPDATE studio_orders SET status = 'new', submitted_at = CURRENT_TIMESTAMP,
+       updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+  )
+    .bind(order.id)
+    .run();
+
+  const fresh = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+    .bind(order.id)
+    .first();
+
+  // The book is in the database and the photos are in the bucket. From here
+  // nothing may throw: a failed notification must not tell the customer their
+  // order did not arrive, because it did.
+  try {
+    await sendStudioOrderEmails(env, fresh || order);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "studio_order_email_failed",
+        reference: order.reference,
+        error: String(error?.message || error),
+      }),
+    );
+  }
+
+  try {
+    await recordAudit(env, {
+      actor: "public",
+      action: "created",
+      entity_type: "studio_order",
+      entity_id: order.id,
+      entity_number: order.reference,
+      details: {
+        size: order.product_size,
+        pages: order.page_count,
+        copies: order.copies,
+        photos: Number(fresh?.uploaded_count || 0),
+      },
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "studio_order_audit_failed",
+        error: String(error?.message || error),
+      }),
+    );
+  }
+
+  return json({ success: true, reference: order.reference });
+}
+
+function studioSizeLabel(key) {
+  return STUDIO_SIZES[key]?.label || key || "-";
+}
+
+function formatStudioBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} bytes`;
+}
+
+async function sendStudioOrderEmails(env, order) {
+  if (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) {
+    console.error(JSON.stringify({ message: "studio_email_not_configured" }));
+    return;
+  }
+
+  const sender = {
+    name: env.BREVO_SENDER_NAME || "Beplugged Tech",
+    email: env.BREVO_SENDER_EMAIL,
+  };
+  const studioInbox = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
+
+  const missing =
+    Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
+  const row = (label, value) =>
+    `<tr><td style="padding:10px 14px;font-size:13px;color:#555555;border-bottom:1px solid #eeeeee;width:150px;">${escapeHtml(label)}</td><td style="padding:10px 14px;font-size:13px;color:#2C2D3F;border-bottom:1px solid #eeeeee;">${escapeHtml(String(value ?? "-"))}</td></tr>`;
+
+  const studioBody = `
+    ${emailSectionLabel("New Studio Order")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
+      <tbody>
+        ${row("Reference", order.reference)}
+        ${row("Name", order.customer_name)}
+        ${row("Email", order.customer_email)}
+        ${row("Phone", order.customer_phone || "-")}
+        ${row("Occasion", order.occasion || "-")}
+        ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
+        ${row("Copies", order.copies)}
+        ${row("Needed by", order.needed_by || "not given")}
+        ${row("Photos", `${order.uploaded_count} of ${order.photo_count} uploaded · ${formatStudioBytes(order.uploaded_bytes)}`)}
+      </tbody>
+    </table>
+    ${
+      missing > 0
+        ? `<table role="presentation" width="100%" style="background:#fff6f2;border:1px solid #f7d4c5;border-radius:8px;margin:0 0 22px;"><tr><td style="padding:14px 18px;font-size:13px;color:#8a3a13;line-height:1.7;">${missing} photo${missing === 1 ? "" : "s"} did not finish uploading. The layout still shows where they belong — ask the customer to send those files before starting the design.</td></tr></table>`
+        : ""
+    }
+    ${
+      order.notes
+        ? `${emailSectionLabel("Notes from the customer")}
+    <table role="presentation" width="100%" style="background:#fafafb;border:1px solid #eeeeee;border-radius:8px;margin:0 0 22px;">
+      <tr><td style="padding:16px 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">${escapeHtmlWithBreaks(order.notes)}</td></tr>
+    </table>`
+        : ""
+    }
+    <p style="margin:0;font-size:13px;color:#555555;line-height:1.8;">
+      The layout and the photos are in the admin under Studio Orders.
+    </p>
+  `;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: studioInbox, name: sender.name }],
+      replyTo: { email: order.customer_email, name: order.customer_name },
+      subject: `Studio order ${order.reference} — ${order.customer_name}`,
+      htmlContent: emailShell({
+        label: "BePlugged Studio",
+        accent: "#F05023",
+        bodyHtml: studioBody,
+      }),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`brevo ${response.status}: ${await response.text()}`);
+  }
+
+  // The customer's copy. Best effort — if it fails, the order is still ours.
+  try {
+    const customerBody = `
+      ${emailSectionLabel("Your book is with us")}
+      <p style="margin:0 0 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">
+        Thank you ${escapeHtml(order.customer_name.split(" ")[0] || order.customer_name)}. Your book has reached BePlugged Studio and carries the reference <strong>${escapeHtml(order.reference)}</strong>.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
+        <tbody>
+          ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
+          ${row("Copies", order.copies)}
+          ${row("Photos received", order.uploaded_count)}
+          ${row("Needed by", order.needed_by || "not given")}
+        </tbody>
+      </table>
+      <p style="margin:0 0 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">
+        We will come back to you with a price and a timeline. Nothing is printed until you have seen a proof of every page and told us to go ahead.
+      </p>
+      <p style="margin:0;font-size:13px;color:#555555;line-height:1.8;">
+        Reply to this email, or reach us on +27 65 966 9657.
+      </p>
+    `;
+    await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "api-key": env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: order.customer_email, name: order.customer_name }],
+        replyTo: { email: studioInbox, name: sender.name },
+        subject: `We have your book — ${order.reference}`,
+        htmlContent: emailShell({
+          label: "BePlugged Studio",
+          accent: "#F05023",
+          bodyHtml: customerBody,
+        }),
+      }),
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: "studio_customer_email_failed",
+        error: String(error?.message || error),
+      }),
+    );
+  }
+}
+
+// --- Admin -----------------------------------------------------------------
+
+async function handleStudioOrdersAdmin(request, env, path, method) {
+  await ensureSchema(env);
+  const seg = path.split("/").filter(Boolean); // api / admin / studio-orders / id / photos / photoId
+  const id = seg[3] || "";
+
+  if (method === "GET" && !id) {
+    const rows = await env.DB.prepare(
+      `SELECT id, reference, status, customer_name, customer_email, customer_phone,
+              occasion, product_size, page_count, copies, needed_by, notes,
+              photo_count, photo_bytes, uploaded_count, uploaded_bytes,
+              submitted_at, created_at, updated_at
+       FROM studio_orders ORDER BY created_at DESC LIMIT 300`,
+    ).all();
+    return json(rows.results || []);
+  }
+
+  if (method === "GET" && id && seg[4] === "photos" && seg[5]) {
+    return await streamStudioPhoto(env, id, seg[5]);
+  }
+
+  if (method === "GET" && id) {
+    const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+      .bind(id)
+      .first();
+    if (!order) {
+      return json({ error: "Not found" }, { status: 404 });
+    }
+    const photos = await env.DB.prepare(
+      `SELECT id, photo_id, file_name, content_type, bytes, width, height
+       FROM studio_order_photos WHERE order_id = ? ORDER BY created_at ASC`,
+    )
+      .bind(id)
+      .all();
+    // The token hash is not the admin's business and never leaves the row.
+    const { upload_token_hash, ...safe } = order;
+    return json({ ...safe, photos: photos.results || [] });
+  }
+
+  if ((method === "PUT" || method === "PATCH") && id) {
+    const raw = await parseRequestJson(request);
+    const existing = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+      .bind(id)
+      .first();
+    if (!existing) {
+      return json({ error: "Not found" }, { status: 404 });
+    }
+    const status = normalizeKey(raw?.status, "Status", STUDIO_STATUSES, existing.status);
+    const notes = trimText(raw?.notes ?? existing.notes, "Notes", { maxLength: 4000 });
+    const neededBy = trimText(raw?.needed_by ?? existing.needed_by, "Date needed", {
+      maxLength: 40,
+    });
+    await env.DB.prepare(
+      "UPDATE studio_orders SET status = ?, notes = ?, needed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    )
+      .bind(status, notes, neededBy, id)
+      .run();
+    await recordAudit(env, {
+      action: "updated",
+      entity_type: "studio_order",
+      entity_id: id,
+      entity_number: existing.reference,
+      details: { status },
+    });
+    return json({ success: true });
+  }
+
+  if (method === "DELETE" && id) {
+    const existing = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+      .bind(id)
+      .first();
+    if (!existing) {
+      return json({ error: "Not found" }, { status: 404 });
+    }
+    // The customer's photos go with the order. Leaving them in the bucket
+    // would keep someone's wedding on our disk after the record of why we had
+    // it was deleted.
+    if (env.STUDIO_MEDIA) {
+      const keys = await env.DB.prepare(
+        "SELECT r2_key FROM studio_order_photos WHERE order_id = ?",
+      )
+        .bind(id)
+        .all();
+      for (const row of keys.results || []) {
+        try {
+          await env.STUDIO_MEDIA.delete(row.r2_key);
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              message: "studio_media_delete_failed",
+              key: row.r2_key,
+              error: String(error?.message || error),
+            }),
+          );
+        }
+      }
+    }
+    await env.DB.prepare("DELETE FROM studio_order_photos WHERE order_id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM studio_orders WHERE id = ?").bind(id).run();
+    await recordAudit(env, {
+      action: "deleted",
+      entity_type: "studio_order",
+      entity_id: id,
+      entity_number: existing.reference,
+      details: { photos: Number(existing.uploaded_count || 0) },
+    });
+    return json({ success: true });
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function streamStudioPhoto(env, orderId, photoId) {
+  if (!env.STUDIO_MEDIA) {
+    return json({ error: "Photo storage is not configured." }, { status: 503 });
+  }
+  // The key is read from the database rather than built from the request, so
+  // a crafted photo id cannot address an object belonging to another order.
+  const row = await env.DB.prepare(
+    "SELECT r2_key, content_type, file_name FROM studio_order_photos WHERE order_id = ? AND photo_id = ?",
+  )
+    .bind(orderId, photoId)
+    .first();
+  if (!row) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const object = await env.STUDIO_MEDIA.get(row.r2_key);
+  if (!object) {
+    return json({ error: "The file is no longer in storage." }, { status: 404 });
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": row.content_type || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${studioSafeName(row.file_name) || photoId}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 async function handleSitemap(env, request) {
   // Same reasoning as the catalogue pages: this is a crawler-facing read, so
   // it must not sit behind the schema setup. A failed query still yields a
@@ -9524,7 +10360,7 @@ async function handleSitemap(env, request) {
   }
 
   const statics = [
-    "/", "/about", "/service", "/training", "/portfolio-details", "/contact",
+    "/", "/about", "/service", "/studio", "/training", "/portfolio-details", "/contact",
     ...LOCATION_PAGES.map((p) => `/${p.slug}`),
   ];
   const today = new Date().toISOString().slice(0, 10);

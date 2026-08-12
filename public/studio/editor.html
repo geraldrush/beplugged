@@ -1,0 +1,218 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#f05023">
+	<meta name="author" content="BePlugged">
+	<!-- Not an indexable page: it is a tool, and an empty editor in search
+	     results helps nobody. /studio is the page that should rank. -->
+	<meta name="robots" content="noindex, follow">
+
+	<title>Design Your Photobook | BePlugged Studio</title>
+	<meta name="description" content="Build your own hardcover photobook: choose a size, add your photos, arrange the pages and send it to BePlugged Studio.">
+
+	<link rel="canonical" href="https://beplugged.co.za/studio/editor">
+	<link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32x32.png">
+	<link rel="manifest" href="/site.webmanifest">
+
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/studio/editor.css">
+</head>
+<body>
+
+<header class="ed-header">
+	<div class="ed-header-inner">
+		<a class="ed-brand" href="/studio">
+			<img src="/img/logo.png" alt="Beplugged Tech">
+			<span>Studio&nbsp;&middot;&nbsp;Book Designer</span>
+		</a>
+		<nav class="ed-steps" aria-label="Steps">
+			<button type="button" class="ed-step" data-step="size"><span class="ed-step-num">1</span>Size</button>
+			<button type="button" class="ed-step" data-step="photos"><span class="ed-step-num">2</span>Photos</button>
+			<button type="button" class="ed-step" data-step="arrange"><span class="ed-step-num">3</span>Arrange</button>
+			<button type="button" class="ed-step" data-step="send"><span class="ed-step-num">4</span>Review &amp; send</button>
+		</nav>
+	</div>
+</header>
+
+<main class="ed-main">
+
+	<!-- Step 1 ------------------------------------------------------------ -->
+	<section class="ed-panel" data-panel="size" aria-labelledby="size-heading">
+		<div class="ed-intro">
+			<h1 id="size-heading">What shape is your book?</h1>
+			<p>Pick a size and a page count. Both can be changed later &mdash; nothing is priced or printed until you have seen a proof.</p>
+		</div>
+
+		<div class="ed-card">
+			<h2>Size</h2>
+			<div class="ed-grid" id="size-options"></div>
+		</div>
+
+		<div class="ed-card">
+			<h2>Pages</h2>
+			<p style="margin:0 0 14px;color:var(--ink-500);font-size:14px;">Pages come in fours, which is how the paper folds. Most people start at 24 and add more once they see how many photos they have.</p>
+			<div class="ed-grid" id="page-options"></div>
+			<div class="ed-note" style="margin:16px 0 0;">Changing to fewer pages later removes pages from the end, and anything on them comes off. We will warn you first.</div>
+		</div>
+	</section>
+
+	<!-- Step 2 ------------------------------------------------------------ -->
+	<section class="ed-panel" data-panel="photos" aria-labelledby="photos-heading">
+		<div class="ed-intro">
+			<h1 id="photos-heading">Add your photos</h1>
+			<p>Send the originals rather than screenshots or WhatsApp copies &mdash; a photo that looks fine on a screen can be too small to print well, and we will tell you here if one is.</p>
+		</div>
+
+		<div class="ed-card">
+			<label class="ed-btn" for="photo-input" style="display:inline-block;">Choose photos</label>
+			<input id="photo-input" type="file" accept="image/*" multiple class="ed-visually-hidden">
+			<button type="button" class="ed-btn secondary" id="clear-photos">Remove all</button>
+			<p style="margin:14px 0 0;color:var(--ink-400);font-size:13px;">
+				Your photos stay in this browser until you send the book. Nothing is uploaded while you are designing.
+			</p>
+			<div id="photo-status" class="ed-note" style="margin:16px 0 0;display:none;"></div>
+		</div>
+
+		<div class="ed-card">
+			<h2>In this book <span id="photo-count" style="color:var(--ink-400);font-weight:400;"></span></h2>
+			<div class="ed-thumbs" id="photo-list"></div>
+			<p id="photo-empty" style="color:var(--ink-400);font-size:14px;margin:6px 0 0;">No photos yet.</p>
+		</div>
+	</section>
+
+	<!-- Step 3 ------------------------------------------------------------ -->
+	<section class="ed-panel" data-panel="arrange" aria-labelledby="arrange-heading">
+		<div class="ed-intro">
+			<h1 id="arrange-heading">Arrange the pages</h1>
+			<p>Drag a photo onto a frame, or tap a photo and then tap a frame. Each page can hold one to four photos &mdash; use the little layout buttons under each page to change that.</p>
+		</div>
+
+		<div class="ed-workspace">
+			<aside class="ed-tray" aria-label="Your photos">
+				<h3>Your photos</h3>
+				<p class="ed-hint">Tap to pick one up, then tap a frame. A dot means it is already used somewhere.</p>
+				<div class="ed-thumbs" id="tray-list"></div>
+				<p id="tray-empty" style="color:var(--ink-400);font-size:12.5px;">Add photos in step 2 first.</p>
+				<div style="margin-top:14px;display:grid;gap:8px;">
+					<button type="button" class="ed-btn secondary small" id="autofill">Fill pages for me</button>
+					<button type="button" class="ed-btn secondary small" id="clear-pages">Empty every page</button>
+				</div>
+			</aside>
+
+			<div>
+				<div class="ed-card" style="padding:16px 18px;">
+					<div class="ed-two" style="gap:0 16px;">
+						<div class="ed-field" style="margin-bottom:8px;">
+							<label for="cover-title">Cover title</label>
+							<input id="cover-title" type="text" maxlength="80" placeholder="Thabo &amp; Naledi">
+						</div>
+						<div class="ed-field" style="margin-bottom:8px;">
+							<label for="cover-subtitle">Cover line underneath</label>
+							<input id="cover-subtitle" type="text" maxlength="80" placeholder="14 February 2026">
+						</div>
+					</div>
+				</div>
+				<div class="ed-pages" id="pages"></div>
+			</div>
+		</div>
+	</section>
+
+	<!-- Step 4 ------------------------------------------------------------ -->
+	<section class="ed-panel" data-panel="send" aria-labelledby="send-heading">
+		<div class="ed-intro">
+			<h1 id="send-heading">Review and send</h1>
+			<p>Check the book over, tell us who you are and when you need it, and we will come back with a price. Nothing prints until you approve a proof.</p>
+		</div>
+
+		<div id="send-live">
+			<div class="ed-card">
+				<h2>Your book</h2>
+				<table class="ed-summary" id="summary"></table>
+				<div id="review-notes" style="margin-top:16px;"></div>
+			</div>
+
+			<form class="ed-card" id="send-form" novalidate>
+				<h2>Your details</h2>
+				<div class="ed-two">
+					<div class="ed-field">
+						<label for="cust-name">Name</label>
+						<input id="cust-name" name="name" type="text" required maxlength="200" autocomplete="name">
+					</div>
+					<div class="ed-field">
+						<label for="cust-email">Email</label>
+						<input id="cust-email" name="email" type="email" required maxlength="200" autocomplete="email">
+					</div>
+					<div class="ed-field">
+						<label for="cust-phone">Phone</label>
+						<input id="cust-phone" name="phone" type="tel" maxlength="100" autocomplete="tel">
+					</div>
+					<div class="ed-field">
+						<label for="cust-occasion">Occasion</label>
+						<select id="cust-occasion" name="occasion">
+							<option value="">Choose one</option>
+							<option>Birthday</option>
+							<option>Wedding</option>
+							<option>Funeral or memorial</option>
+							<option>Party or celebration</option>
+							<option>Graduation</option>
+							<option>Diary or journal</option>
+							<option>Something else</option>
+						</select>
+					</div>
+					<div class="ed-field">
+						<label for="cust-copies">How many copies</label>
+						<input id="cust-copies" name="copies" type="number" min="1" max="500" value="1">
+						<small>Extra copies are far cheaper ordered now than reprinted later.</small>
+					</div>
+					<div class="ed-field">
+						<label for="cust-needed">Date you need it</label>
+						<input id="cust-needed" name="needed_by" type="date">
+						<small>For a funeral, put the service date. We will say honestly if it is too tight.</small>
+					</div>
+				</div>
+				<div class="ed-field">
+					<label for="cust-notes">Anything we should know</label>
+					<textarea id="cust-notes" name="notes" maxlength="4000" placeholder="Names and spellings, the order of the story, a photo that must go on the cover."></textarea>
+				</div>
+				<div class="ed-honey" aria-hidden="true">
+					<label for="cust-website">Leave this empty</label>
+					<input id="cust-website" name="website" type="text" tabindex="-1" autocomplete="off">
+				</div>
+
+				<div id="send-status" class="ed-note" style="display:none;"></div>
+				<div class="ed-progress" id="send-progress" style="display:none;"><div class="ed-progress-bar" id="send-progress-bar"></div></div>
+
+				<button type="submit" class="ed-btn" id="send-button">Send my book to the studio</button>
+				<p style="margin:12px 0 0;color:var(--ink-400);font-size:12.5px;">
+					Your photos are uploaded when you press this, and used only to make your book.
+				</p>
+			</form>
+		</div>
+
+		<div class="ed-card ed-done" id="send-done" style="display:none;">
+			<h2>Your book is with us</h2>
+			<p style="margin:0;color:var(--ink-500);">Order reference</p>
+			<div class="ed-ref" id="done-reference"></div>
+			<p style="max-width:520px;margin:12px auto 20px;color:var(--ink-500);">
+				A confirmation is on its way to your email. We will come back with a price and a timeline, and you will see a proof of every page before anything is printed.
+			</p>
+			<button type="button" class="ed-btn secondary" id="start-new">Start another book</button>
+		</div>
+	</section>
+
+</main>
+
+<div class="ed-dock">
+	<div class="ed-dock-inner">
+		<span class="ed-dock-status" id="dock-status">Your work is saved in this browser as you go.</span>
+		<button type="button" class="ed-btn secondary small" id="dock-back">Back</button>
+		<button type="button" class="ed-btn small" id="dock-next">Next</button>
+	</div>
+</div>
+
+<script src="/studio/editor.js"></script>
+</body>
+</html>
