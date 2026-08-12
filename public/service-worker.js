@@ -1,4 +1,4 @@
-const CACHE_VERSION = "beplugged-v27";
+const CACHE_VERSION = "beplugged-v28";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -19,6 +19,7 @@ const CORE_ASSETS = [
   "/studio/editor",
   "/studio/editor.css",
   "/studio/editor.js",
+  "/studio/book-render.js",
   "/portfolio-details",
   "/contact",
   "/training",

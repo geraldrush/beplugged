@@ -9767,8 +9767,19 @@ async function handleStudio(request, env, path, method) {
   }
 
   const seg = path.split("/").filter(Boolean); // api / studio / orders / ...
+
+  // Looking a sent book up again with its reference. Read-only by
+  // construction: this branch has no route that writes anything.
+  if (seg.length === 3 && seg[2] === "lookup" && method === "POST") {
+    return await lookupStudioOrder(request, env);
+  }
+
   if (seg[2] !== "orders") {
     return json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (seg.length === 6 && seg[4] === "view" && method === "GET") {
+    return await viewStudioPhoto(request, env, seg[3], seg[5]);
   }
 
   if (seg.length === 3 && method === "POST") {
@@ -10066,6 +10077,143 @@ async function submitStudioOrder(request, env, orderId) {
   return json({ success: true, reference: order.reference });
 }
 
+// Reading a book back needs a key that is not the one that authorises writing
+// into it, and must not depend on a secret that may not be set. The order's
+// own stored token hash is random per order and already on the row, so it
+// signs the view token: knowing it lets you read the order it belongs to and
+// nothing else.
+async function studioViewToken(order) {
+  const issued = Math.floor(Date.now() / 1000);
+  const signature = await hmacSha256(`${order.id}.${issued}`, order.upload_token_hash);
+  return `${issued}.${signature}`;
+}
+
+async function verifyStudioViewToken(order, token) {
+  const [issued, signature] = String(token || "").split(".");
+  if (!issued || !signature) return false;
+  const age = Math.floor(Date.now() / 1000) - Number(issued);
+  // Long enough to read a sixty-page book and print it, short enough that a
+  // link pasted somewhere public stops working.
+  if (!(age >= -60 && age < 6 * 60 * 60)) return false;
+  const expected = await hmacSha256(`${order.id}.${issued}`, order.upload_token_hash);
+  return await safeCompareText(signature, expected);
+}
+
+async function lookupStudioOrder(request, env) {
+  if (env.CONTACT_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || "unknown";
+    const { success } = await env.CONTACT_LIMITER.limit({ key: `studiolook:${clientIp}` });
+    if (!success) {
+      return json(
+        { error: "Too many attempts from here just now. Try again in a minute." },
+        { status: 429 },
+      );
+    }
+  }
+
+  await ensureSchema(env);
+
+  const raw = await parseRequestJson(request);
+  const reference = trimText(raw?.reference, "Reference", { required: true, maxLength: 40 });
+  const email = trimText(raw?.email, "Email", { required: true, maxLength: 200 });
+
+  const order = await env.DB.prepare(
+    "SELECT * FROM studio_orders WHERE UPPER(reference) = UPPER(?)",
+  )
+    .bind(reference)
+    .first();
+
+  // One message for every kind of miss. Telling someone the reference exists
+  // but the email is wrong turns this into a way to confirm which references
+  // are real.
+  const notFound = () =>
+    json(
+      { error: "We could not find a book with that reference and email address." },
+      { status: 404 },
+    );
+
+  if (!order) return notFound();
+  if (order.status === "awaiting_photos") return notFound();
+  const emailMatches = await safeCompareText(
+    String(email).trim().toLowerCase(),
+    String(order.customer_email || "").trim().toLowerCase(),
+  );
+  if (!emailMatches) return notFound();
+
+  let design = {};
+  try {
+    design = JSON.parse(order.design_json);
+  } catch {
+    return json({ error: "The saved design could not be read." }, { status: 500 });
+  }
+
+  const photos = await env.DB.prepare(
+    "SELECT photo_id FROM studio_order_photos WHERE order_id = ?",
+  )
+    .bind(order.id)
+    .all();
+
+  return json({
+    id: order.id,
+    reference: order.reference,
+    status: order.status,
+    customer_name: order.customer_name,
+    occasion: order.occasion,
+    product_size: order.product_size,
+    size_label: studioSizeLabel(order.product_size),
+    page_count: order.page_count,
+    copies: order.copies,
+    needed_by: order.needed_by,
+    submitted_at: order.submitted_at,
+    photo_count: order.photo_count,
+    uploaded_count: order.uploaded_count,
+    design,
+    uploaded_photo_ids: (photos.results || []).map((r) => r.photo_id),
+    view_token: await studioViewToken(order),
+  });
+}
+
+// The customer's own photos, for the read-only view. Same key-from-the-database
+// rule as the admin route: a crafted photo id cannot reach another order.
+async function viewStudioPhoto(request, env, orderId, photoId) {
+  if (!env.STUDIO_MEDIA) {
+    return json({ error: "Photo storage is not configured." }, { status: 503 });
+  }
+  await ensureSchema(env);
+
+  const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+    .bind(orderId)
+    .first();
+  if (!order) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const token = new URL(request.url).searchParams.get("t") || "";
+  if (!(await verifyStudioViewToken(order, token))) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT r2_key, content_type, file_name FROM studio_order_photos WHERE order_id = ? AND photo_id = ?",
+  )
+    .bind(orderId, photoId)
+    .first();
+  if (!row) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  const object = await env.STUDIO_MEDIA.get(row.r2_key);
+  if (!object) {
+    return json({ error: "The file is no longer in storage." }, { status: 404 });
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": row.content_type || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${studioSafeName(row.file_name) || photoId}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 function studioSizeLabel(key) {
   return STUDIO_SIZES[key]?.label || key || "-";
 }
@@ -10167,6 +10315,11 @@ async function sendStudioOrderEmails(env, order) {
           ${row("Needed by", order.needed_by || "not given")}
         </tbody>
       </table>
+      <p style="margin:0 0 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">
+        You can look through the book again at any time, page by page, exactly as it reached us:
+        <a href="https://beplugged.co.za/studio/order?ref=${escapeHtml(order.reference)}" style="color:#F05023;">beplugged.co.za/studio/order</a>.
+        You will need this reference and the email address this was sent to.
+      </p>
       <p style="margin:0 0 18px;font-size:14px;color:#2C2D3F;line-height:1.8;">
         We will come back to you with a price and a timeline. Nothing is printed until you have seen a proof of every page and told us to go ahead.
       </p>

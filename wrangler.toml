@@ -24,7 +24,7 @@ binding = "ASSETS"
 # fire and www/about answered 200 instead of redirecting. Only the indexable
 # pages are listed. Stylesheets and images stay on the edge path, since nobody
 # navigates to a stylesheet and no search engine indexes one as a page.
-run_worker_first = ["/", "/about", "/contact", "/portfolio-details", "/service", "/studio", "/studio/editor", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
+run_worker_first = ["/", "/about", "/contact", "/portfolio-details", "/service", "/studio", "/studio/editor", "/studio/order", "/training", "/training/courses", "/training/categories", "/training/unisa_modules", "/training/unisa_module", "/training/cos1511", "/training/cos11", "/academy"]
 
 [vars]
 ENVIRONMENT = "production"

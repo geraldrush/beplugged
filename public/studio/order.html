@@ -1,0 +1,103 @@
+<!doctype html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#f05023">
+	<meta name="author" content="BePlugged">
+	<!-- Someone else's book is behind this form. Nothing here belongs in a
+	     search result. -->
+	<meta name="robots" content="noindex, nofollow">
+
+	<title>Find Your Book | BePlugged Studio</title>
+	<meta name="description" content="Open the photobook you sent to BePlugged Studio using your order reference.">
+
+	<link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32x32.png">
+	<link rel="manifest" href="/site.webmanifest">
+
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/studio/editor.css">
+</head>
+<body>
+
+<header class="ed-header">
+	<div class="ed-header-inner">
+		<a class="ed-brand" href="/studio">
+			<img src="/img/logo.png" alt="Beplugged Tech">
+			<span>Studio&nbsp;&middot;&nbsp;Your Book</span>
+		</a>
+	</div>
+</header>
+
+<main class="ed-main">
+
+	<section id="lookup-panel">
+		<div class="ed-intro">
+			<h1>Open the book you sent us</h1>
+			<p>Your reference is on the confirmation email, and looks like STU-2026-1A2B3C4D. This shows the book exactly as it reached us. It is a view only &mdash; nothing here can change the book.</p>
+		</div>
+
+		<form class="ed-card" id="lookup-form" novalidate style="max-width:520px;">
+			<div class="ed-field">
+				<label for="lookup-reference">Order reference</label>
+				<input id="lookup-reference" type="text" maxlength="40" placeholder="STU-2026-1A2B3C4D" autocomplete="off" spellcheck="false" required>
+			</div>
+			<div class="ed-field">
+				<label for="lookup-email">The email address you gave us</label>
+				<input id="lookup-email" type="email" maxlength="200" autocomplete="email" required>
+				<small>Asked for so that a reference on its own &mdash; forwarded, or read over someone's shoulder &mdash; is not enough to open your photos.</small>
+			</div>
+			<div id="lookup-status" class="ed-note" style="display:none;"></div>
+			<button type="submit" class="ed-btn" id="lookup-button">Find my book</button>
+		</form>
+	</section>
+
+	<section id="book-panel" hidden>
+		<div class="ed-intro">
+			<h1 id="book-heading">Your book</h1>
+			<p id="book-line"></p>
+		</div>
+
+		<div class="ed-card ed-preview-prompt">
+			<div>
+				<h2 style="margin:0 0 4px;">This is what we are working from</h2>
+				<p style="margin:0;color:var(--ink-500);font-size:14px;">Page by page, as you sent it. If something is wrong, reply to your confirmation email and tell us &mdash; nothing is printed until you approve a proof.</p>
+			</div>
+			<div style="display:flex;gap:10px;flex-wrap:wrap;">
+				<button type="button" class="ed-btn" id="book-open">Look through it</button>
+				<button type="button" class="ed-btn secondary" id="book-print">Print</button>
+			</div>
+		</div>
+
+		<div class="ed-card">
+			<h2>Order</h2>
+			<table class="ed-summary" id="book-summary"></table>
+		</div>
+	</section>
+
+</main>
+
+<div class="ed-preview" id="preview" role="dialog" aria-modal="true" aria-label="Book preview" hidden>
+	<div class="ed-preview-head">
+		<strong id="preview-label">Cover</strong>
+		<span class="ed-preview-count" id="preview-count"></span>
+		<button type="button" class="ed-btn secondary small" id="preview-print">Print</button>
+		<button type="button" class="ed-btn secondary small" id="preview-close">Close</button>
+	</div>
+	<div class="ed-preview-stage">
+		<button type="button" class="ed-preview-arrow" id="preview-prev" aria-label="Previous page">&#8249;</button>
+		<div class="ed-spread" id="preview-spread"></div>
+		<button type="button" class="ed-preview-arrow" id="preview-next" aria-label="Next page">&#8250;</button>
+	</div>
+	<div class="ed-preview-foot">
+		<span id="preview-hint">Use the arrows, or the &#8592; and &#8594; keys. Esc closes.</span>
+	</div>
+</div>
+
+<div class="ed-print-book" id="print-book" aria-hidden="true"></div>
+
+<script src="/studio/book-render.js"></script>
+<script src="/studio/order.js"></script>
+</body>
+</html>

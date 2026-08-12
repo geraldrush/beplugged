@@ -204,10 +204,14 @@
 			<h2>Your book is with us</h2>
 			<p style="margin:0;color:var(--ink-500);">Order reference</p>
 			<div class="ed-ref" id="done-reference"></div>
-			<p style="max-width:520px;margin:12px auto 20px;color:var(--ink-500);">
+			<p style="max-width:560px;margin:12px auto 20px;color:var(--ink-500);">
 				A confirmation is on its way to your email. We will come back with a price and a timeline, and you will see a proof of every page before anything is printed.
+				You can open this book again any time with that reference and your email address &mdash; keep the reference somewhere safe.
 			</p>
-			<button type="button" class="ed-btn secondary" id="start-new">Start another book</button>
+			<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+				<a class="ed-btn" id="done-open" href="/studio/order">Open my book again</a>
+				<button type="button" class="ed-btn secondary" id="start-new">Start another book</button>
+			</div>
 		</div>
 	</section>
 
@@ -228,6 +232,7 @@
 	<div class="ed-preview-head">
 		<strong id="preview-label">Cover</strong>
 		<span class="ed-preview-count" id="preview-count"></span>
+		<button type="button" class="ed-btn secondary small" id="preview-print">Print</button>
 		<button type="button" class="ed-btn secondary small" id="preview-close">Close</button>
 	</div>
 	<div class="ed-preview-stage">
@@ -240,6 +245,13 @@
 	</div>
 </div>
 
+<!-- Printing is not the spread view with a print stylesheet over it: a spread
+     is two pages and a sheet of paper is one. This is filled with every page
+     of the book, one per sheet, only when Print is pressed. -->
+<div class="ed-print-book" id="print-book" aria-hidden="true"></div>
+
+<!-- How a book is drawn, shared with the read-only view at /studio/order. -->
+<script src="/studio/book-render.js"></script>
 <script src="/studio/editor.js"></script>
 </body>
 </html>

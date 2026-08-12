@@ -613,18 +613,94 @@ a { color: var(--brand); }
 
 .ed-spread {
 	display: flex;
-	align-items: flex-start;
+	align-items: stretch;
 	gap: 3px;
 	height: min(70vh, 660px);
 }
 
+.ed-preview-leaf {
+	height: 100%;
+	/* Not a flex column. A flex-derived height leaves the page's width — which
+	   comes from its aspect ratio — indeterminate at the moment the browser
+	   measures this box, so the leaf shrink-wrapped to the width of the label
+	   underneath and the page overflowed it across both arrows. A definite
+	   height resolves the width, and the leaf measures correctly. */
+	display: block;
+}
+
+/* The page is exactly the shape of the paper: definite height, width from the
+   aspect ratio. The label below it is a fixed strip, outside the page edge. */
 .ed-preview-page {
 	position: relative;
-	height: 100%;
+	height: calc(100% - 30px);
 	display: flex;
 	flex-direction: column;
 	background: #fff;
 	box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+
+/* --- the cover, as a bound book ----------------------------------------- */
+
+/* A hardcover book is a case with the print mounted on it, not a rectangle of
+   photo. The case is canvas, the print is inset so the material shows around
+   it, and the spine takes the left edge. */
+.ed-cover-case {
+	padding: 3.4% 3.4% 3.4% 8%;
+	background:
+		linear-gradient(145deg, #d3cbba 0%, #c3baa7 45%, #b3a993 100%);
+	border-radius: 2px 7px 7px 2px;
+	box-shadow:
+		0 28px 60px rgba(0, 0, 0, 0.62),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+		inset -2px 0 6px rgba(0, 0, 0, 0.12);
+	overflow: hidden;
+}
+
+/* The weave. Two fine repeating gradients crossing each other read as woven
+   cloth at any size, and cost no image. */
+.ed-cover-case::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image:
+		repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 3px),
+		repeating-linear-gradient(0deg, rgba(90, 76, 52, 0.16) 0 1px, transparent 1px 3px);
+	opacity: 0.7;
+	z-index: 3;
+}
+
+.ed-cover-print {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	/* Sits proud of the case, the way a mounted print does. */
+	box-shadow:
+		0 1px 4px rgba(0, 0, 0, 0.4),
+		0 0 0 1px rgba(60, 48, 30, 0.28);
+	z-index: 2;
+}
+
+.ed-cover-print .ed-preview-sheet { padding: 0; gap: 0; }
+
+/* The spine: a fold, a shadow where the hinge sits, and a highlight along the
+   ridge. */
+.ed-cover-spine {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 8%;
+	z-index: 2;
+	background:
+		linear-gradient(90deg,
+			rgba(60, 48, 30, 0.42) 0%,
+			rgba(60, 48, 30, 0.10) 22%,
+			rgba(255, 255, 255, 0.22) 52%,
+			rgba(60, 48, 30, 0.16) 78%,
+			rgba(60, 48, 30, 0.34) 100%);
 }
 
 /* The sheet keeps the page's real proportions; height drives width, so a
@@ -692,15 +768,16 @@ a { color: var(--brand); }
 .ed-preview-cover-text .t { font-size: 24px; font-weight: 650; line-height: 1.2; }
 .ed-preview-cover-text .s { font-size: 13px; opacity: 0.85; margin-top: 4px; }
 
+/* Outside the page, on the dark ground — it labels the page, it is not
+   printed on it. */
 .ed-preview-number {
-	flex: 0 0 auto;
-	padding: 6px 0 8px;
+	height: 30px;
+	line-height: 34px;
 	text-align: center;
 	font-size: 10.5px;
-	letter-spacing: 1.2px;
+	letter-spacing: 1.4px;
 	text-transform: uppercase;
-	color: var(--ink-300);
-	background: #fff;
+	color: rgba(255, 255, 255, 0.45);
 }
 
 .ed-preview-arrow {
@@ -762,6 +839,66 @@ a { color: var(--brand); }
 	white-space: nowrap;
 }
 
+/* --- printing ------------------------------------------------------------
+   A sheet of paper is one page, not a spread, so printing does not reuse the
+   preview stage. #print-book is filled with every leaf in order and is the
+   only thing on the paper. */
+
+.ed-print-book { display: none; }
+
 @media print {
-	.ed-header, .ed-dock, .ed-tray { display: none !important; }
+	.ed-header,
+	.ed-dock,
+	.ed-tray,
+	.ed-main,
+	.ed-preview { display: none !important; }
+
+	html, body {
+		background: #fff !important;
+		margin: 0;
+		padding: 0;
+	}
+
+	.ed-print-book { display: block; }
+
+	.ed-print-book .ed-preview-leaf {
+		height: auto;
+		/* One leaf per sheet. break-inside stops a page being split across
+		   two sheets, which is the whole point of printing it. */
+		break-after: page;
+		page-break-after: always;
+		break-inside: avoid;
+		page-break-inside: avoid;
+		padding: 6mm 0;
+	}
+
+	.ed-print-book .ed-preview-leaf:last-child {
+		break-after: auto;
+		page-break-after: auto;
+	}
+
+	.ed-print-book .ed-preview-page {
+		height: auto;
+		width: 165mm;
+		margin: 0 auto;
+		box-shadow: none;
+		border: 1px solid #d8dde5;
+	}
+
+	.ed-print-book .ed-cover-case { border: 0; }
+
+	.ed-print-book .ed-preview-number {
+		color: #6b7688;
+		height: auto;
+		line-height: 1.6;
+		padding-top: 4mm;
+	}
+
+	/* Backgrounds and photos are the entire content — without this most
+	   browsers drop them and print empty outlines. */
+	.ed-print-book,
+	.ed-print-book * {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
 }

@@ -1326,6 +1326,36 @@
         box-shadow: 0 0 0 0.15rem rgba(240, 80, 35, 0.15);
       }
 
+      /* Printing a studio order. The overlay already holds every page with the
+         customer's photos in place, so print puts that on the paper and hides
+         the application around it. */
+      @media print {
+        body > *:not(.studio-printable) { display: none !important; }
+        .studio-printable {
+          position: static !important;
+          background: #fff !important;
+          overflow: visible !important;
+          padding: 0 !important;
+        }
+        .studio-printable > div {
+          box-shadow: none !important;
+          max-width: none !important;
+          padding: 0 !important;
+        }
+        .studio-printable [data-studio-print],
+        .studio-printable [data-studio-close] { display: none !important; }
+        #studio-book {
+          display: block !important;
+        }
+        #studio-book > div {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          margin: 0 auto 8mm;
+          max-width: 150mm;
+        }
+        #studio-book img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+
       /* Row actions collapse into a ⋮ menu. The group itself becomes the
          dropdown panel, so renderers keep emitting the same buttons and the
          enhancement is applied generically at runtime. */
@@ -6362,6 +6392,7 @@
             </div>
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
               ${studioStatusPill(order.status)}
+              <button class="btn btn-sm btn-secondary" data-studio-print="1">Print</button>
               <button class="btn btn-sm btn-secondary" data-studio-close="1">Close</button>
             </div>
           </div>
@@ -6395,8 +6426,15 @@
         }
         document.addEventListener("keydown", onKey);
         overlay.addEventListener("click", (event) => {
+          if (event.target.dataset.studioPrint) {
+            // The images are already loaded into this overlay, so printing is
+            // just a matter of putting it, and nothing else, on the paper.
+            window.print();
+            return;
+          }
           if (event.target === overlay || event.target.dataset.studioClose) close();
         });
+        overlay.classList.add("studio-printable");
 
         const urls = [];
         const loading = new Map();

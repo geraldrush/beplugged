@@ -14,14 +14,16 @@
 
 	// --- what we can print ------------------------------------------------
 
-	// Kept in step with STUDIO_SIZES in src/index.js. The millimetres matter:
-	// they are what turns "is this photo big enough" into a real answer.
-	var SIZES = [
-		{ key: "a4-portrait", label: "A4 portrait", w: 210, h: 297, note: "The usual choice. Room for one big photo a page." },
-		{ key: "a4-landscape", label: "A4 landscape", w: 297, h: 210, note: "Wide. Good for group photos and scenery." },
-		{ key: "a5-portrait", label: "A5 portrait", w: 148, h: 210, note: "Smaller and lighter. Popular for giveaways." },
-		{ key: "square-210", label: "Square", w: 210, h: 210, note: "Square pages. Suits mixed portrait and landscape." }
-	];
+	// Sizes, layouts and page drawing live in book-render.js, shared with the
+	// read-only view a customer opens with their reference. Aliased here so the
+	// call sites below read the same as they always did.
+	var SB = window.StudioBook;
+	var SIZES = SB.SIZES;
+	var LAYOUTS = SB.LAYOUTS;
+	var MIN_PRINT_DPI = SB.MIN_PRINT_DPI;
+	var sizeFor = SB.sizeFor;
+	var layoutFor = SB.layoutFor;
+	var applySlotImage = SB.applySlotImage;
 
 	var PAGE_COUNTS = [20, 24, 28, 32, 36, 40, 48, 60];
 
@@ -39,36 +41,10 @@
 		60: "The biggest we bind in one volume"
 	};
 
-	// Every layout is a plain grid, so a slot's printed size is just the page
-	// divided by the columns and rows. Anything cleverer would make the
-	// resolution warning a guess.
-	var LAYOUTS = [
-		{ key: "full", cols: 1, rows: 1, label: "One photo" },
-		{ key: "two-across", cols: 2, rows: 1, label: "Two side by side" },
-		{ key: "two-stacked", cols: 1, rows: 2, label: "Two stacked" },
-		{ key: "three-strip", cols: 3, rows: 1, label: "Three in a row" },
-		{ key: "four-grid", cols: 2, rows: 2, label: "Four" }
-	];
-
-	var MIN_PRINT_DPI = 150;
 	var MAX_PHOTO_BYTES = 30 * 1024 * 1024;
 	var MAX_PHOTOS = 300;
 	var MAX_TOTAL_BYTES = 600 * 1024 * 1024;
 	var THUMB_EDGE = 700;
-
-	function layoutFor(key) {
-		for (var i = 0; i < LAYOUTS.length; i++) {
-			if (LAYOUTS[i].key === key) return LAYOUTS[i];
-		}
-		return LAYOUTS[0];
-	}
-
-	function sizeFor(key) {
-		for (var i = 0; i < SIZES.length; i++) {
-			if (SIZES[i].key === key) return SIZES[i];
-		}
-		return SIZES[0];
-	}
 
 	// --- storage ----------------------------------------------------------
 
@@ -366,29 +342,14 @@
 	// Effective print resolution of one slot: the frame is a physical size, the
 	// photo is a pixel count, and "cover" scales the photo until the smaller
 	// side fits. Zooming in throws pixels away, so it divides.
+	// The arrange grid's own badge. Same arithmetic as everywhere else, because
+	// it is the module's.
 	function slotDpi(photo, layout, zoom) {
-		if (!photo || !photo.w || !photo.h) return null;
-		var size = sizeFor(state.product.size);
-		var slotWin = (size.w / layout.cols) / 25.4;
-		var slotHin = (size.h / layout.rows) / 25.4;
-		var dpi = Math.min(photo.w / slotWin, photo.h / slotHin);
-		return dpi / Math.max(1, zoom || 1);
+		return SB.slotDpi(photo, state.product.size, layout, zoom);
 	}
 
 	function lowResSlots() {
-		var out = [];
-		state.pages.forEach(function (page, pageIndex) {
-			var layout = layoutFor(page.layout);
-			page.slots.forEach(function (slot, slotIndex) {
-				if (!slot.photoId) return;
-				var photo = photoById(slot.photoId);
-				var dpi = slotDpi(photo, layout, slot.zoom);
-				if (dpi !== null && dpi < MIN_PRINT_DPI) {
-					out.push({ page: pageIndex + 1, slot: slotIndex + 1, name: photo ? photo.name : "", dpi: Math.round(dpi) });
-				}
-			});
-		});
-		return out;
+		return SB.lowResSlots(state, previewResolve);
 	}
 
 	function unreadablePhotos() {
@@ -560,12 +521,6 @@
 			}
 		}
 		return '<svg width="24" height="18" viewBox="0 0 24 18" aria-hidden="true">' + cells + "</svg>";
-	}
-
-	function applySlotImage(img, slot) {
-		img.style.objectPosition = slot.x + "% " + slot.y + "%";
-		img.style.transformOrigin = slot.x + "% " + slot.y + "%";
-		img.style.transform = "scale(" + (slot.zoom || 1) + ")";
 	}
 
 	function buildSlot(slot, pageIndex, slotIndex, layout) {
@@ -1093,101 +1048,21 @@
 		return window.innerWidth < 760;
 	}
 
+	// How the shared renderer turns a photo id into a picture here: the small
+	// screen copy made when the photo was added, held as an object URL.
+	function previewResolve(photoId) {
+		var photo = photoById(photoId);
+		if (!photo) return null;
+		return {
+			url: thumbUrls.get(photo.id) || null,
+			name: photo.name,
+			w: photo.w,
+			h: photo.h
+		};
+	}
+
 	function buildPreviewViews() {
-		var views = [{ cover: true }];
-		if (previewIsNarrow()) {
-			state.pages.forEach(function (_, index) {
-				views.push({ pages: [index] });
-			});
-			return views;
-		}
-		for (var i = 0; i < state.pages.length; i += 2) {
-			views.push({ pages: i + 1 < state.pages.length ? [i, i + 1] : [i] });
-		}
-		return views;
-	}
-
-	function previewSlotElement(slot) {
-		var cell = document.createElement("div");
-		cell.className = "ed-preview-slot";
-		var photo = slot && slot.photoId ? photoById(slot.photoId) : null;
-		if (!photo) {
-			cell.innerHTML = '<span class="ed-preview-blank">blank</span>';
-			return cell;
-		}
-		var url = thumbUrls.get(photo.id);
-		if (!url) {
-			// HEIC and friends: we cannot draw it, and pretending the page is
-			// blank would be worse than saying so.
-			var name = document.createElement("span");
-			name.className = "ed-preview-blank";
-			name.textContent = photo.name;
-			cell.appendChild(name);
-			return cell;
-		}
-		var img = document.createElement("img");
-		img.src = url;
-		img.alt = "";
-		img.draggable = false;
-		applySlotImage(img, slot);
-		cell.appendChild(img);
-		return cell;
-	}
-
-	function previewPageElement(pageIndex) {
-		var size = sizeFor(state.product.size);
-		var isCover = pageIndex === null;
-		var page = isCover ? null : state.pages[pageIndex];
-		var layout = layoutFor(isCover ? "full" : page.layout);
-
-		var leaf = document.createElement("div");
-		leaf.className = "ed-preview-page";
-		// The page keeps its real proportions and the height of the spread
-		// decides the width, so any size fits the viewport without arithmetic.
-		leaf.style.aspectRatio = size.w + " / " + size.h;
-
-		var sheet = document.createElement("div");
-		sheet.className = "ed-preview-sheet";
-		sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
-		sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
-
-		if (isCover) {
-			sheet.appendChild(previewSlotElement(state.cover.slot));
-		} else {
-			page.slots.forEach(function (slot) {
-				sheet.appendChild(previewSlotElement(slot));
-			});
-		}
-		leaf.appendChild(sheet);
-
-		if (isCover) {
-			if (state.cover.title || state.cover.subtitle) {
-				var text = document.createElement("div");
-				text.className = "ed-preview-cover-text";
-				text.innerHTML = '<div class="t"></div><div class="s"></div>';
-				text.querySelector(".t").textContent = state.cover.title || "";
-				text.querySelector(".s").textContent = state.cover.subtitle || "";
-				leaf.appendChild(text);
-			}
-			return leaf;
-		}
-
-		// Captions print on the page, so this is where they have to be looked
-		// at — an input under a thumbnail tells you nothing about how a long
-		// one sits under a photo.
-		if (page.caption) {
-			var caption = document.createElement("div");
-			caption.className = "ed-preview-caption";
-			caption.textContent = page.caption;
-			leaf.appendChild(caption);
-		}
-
-		var number = document.createElement("div");
-		number.className = "ed-preview-number";
-		number.textContent = "Page " + (pageIndex + 1);
-		leaf.appendChild(number);
-
-		return leaf;
+		return SB.buildViews(state, previewIsNarrow());
 	}
 
 	function renderPreview() {
@@ -1197,10 +1072,10 @@
 
 		stage.innerHTML = "";
 		if (view.cover) {
-			stage.appendChild(previewPageElement(null));
+			stage.appendChild(SB.leaf(state, null, previewResolve));
 		} else {
 			view.pages.forEach(function (pageIndex) {
-				stage.appendChild(previewPageElement(pageIndex));
+				stage.appendChild(SB.leaf(state, pageIndex, previewResolve));
 			});
 		}
 
@@ -1254,6 +1129,24 @@
 
 	function previewIsOpen() {
 		return !document.getElementById("preview").hidden;
+	}
+
+	// Every page, one per sheet. Built on demand rather than kept in the DOM,
+	// because a sixty-page book is sixty more images than the editor needs to
+	// be carrying around while someone is still working.
+	function printBook() {
+		var host = document.getElementById("print-book");
+		host.innerHTML = "";
+		SB.allLeaves(state, previewResolve).forEach(function (leaf) {
+			host.appendChild(leaf);
+		});
+		// Give the browser a frame to lay it out before the print dialog
+		// freezes everything.
+		window.requestAnimationFrame(function () {
+			window.requestAnimationFrame(function () {
+				window.print();
+			});
+		});
 	}
 
 	// --- steps ------------------------------------------------------------
@@ -1482,6 +1375,9 @@
 		setProgress(0, 0);
 		document.getElementById("send-live").style.display = "none";
 		document.getElementById("done-reference").textContent = reference || "";
+		// Carry the reference through, so they only have to type the email.
+		document.getElementById("done-open").href =
+			"/studio/order" + (reference ? "?ref=" + encodeURIComponent(reference) : "");
 		document.getElementById("send-done").style.display = "block";
 		setDockStatus("Sent. Reference " + (reference || "") + ".");
 		window.scrollTo({ top: 0, behavior: "auto" });
@@ -1567,7 +1463,11 @@
 
 		document.getElementById("dock-preview").addEventListener("click", openPreview);
 		document.getElementById("review-preview").addEventListener("click", openPreview);
+		document.getElementById("preview-print").addEventListener("click", printBook);
 		document.getElementById("preview-close").addEventListener("click", closePreview);
+		window.addEventListener("afterprint", function () {
+			document.getElementById("print-book").innerHTML = "";
+		});
 		document.getElementById("preview-prev").addEventListener("click", function () { previewGo(-1); });
 		document.getElementById("preview-next").addEventListener("click", function () { previewGo(1); });
 
