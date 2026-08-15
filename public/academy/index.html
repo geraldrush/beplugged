@@ -300,9 +300,14 @@
       #current-chip{white-space:normal;}
       .academy-progress-actions .btn{flex:1 1 0;}
     }
-  </style>
+  
+    /* Off-screen page heading: these pages build their content in JS, so the
+       document still needs one h1 for assistive tech and crawlers. */
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;}
+</style>
 </head>
 <body>
+  <h1 class="sr-only">COS1511 Practice &mdash; Beplugged Academy</h1>
   <div class="bar">
     <a class="brand-lockup" href="/training/courses/unisa-cos1511-tutorial-class">
       <img src="/img/logo.png" alt="Beplugged Academy">

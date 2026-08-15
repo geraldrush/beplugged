@@ -9157,7 +9157,7 @@ function cataloguePageHtml(item, related, origin) {
 
   const relatedHtml = related.length
     ? `<div class="row">
-         <div class="col-lg-12"><div class="section-title"><h2>${isCourse ? "Other Courses" : "Related Services"}</h2><img src="/img/section-img.png" alt=""></div></div>
+         <div class="col-lg-12"><div class="section-title"><h2>${isCourse ? "Other Courses" : "Related Services"}</h2></div></div>
          ${related
            .map((r) => catalogueCardHtml(r))
            .join("")}

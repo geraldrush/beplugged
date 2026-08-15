@@ -258,7 +258,7 @@ a:focus-visible {
 
 .hero-slider .single-slider .text { padding: 0; }
 
-.hero-slider .single-slider .text h1 {
+.hero-slider .single-slider .text :is(h1, h2) {
 	color: #fff;
 	font-size: 52px;
 	font-weight: 700;
@@ -1256,7 +1256,7 @@ a:focus-visible {
    -------------------------------------------------------------------------- */
 
 @media (max-width: 1199px) {
-	.hero-slider .single-slider .text h1 { font-size: 44px; }
+	.hero-slider .single-slider .text :is(h1, h2) { font-size: 44px; }
 }
 
 @media (max-width: 991px) {
@@ -1268,7 +1268,7 @@ a:focus-visible {
 	.hero-slider .owl-prev,
 	.hero-slider .owl-next { display: none !important; }
 	.hero-slider .single-slider { height: 540px; }
-	.hero-slider .single-slider .text h1 { font-size: 38px; }
+	.hero-slider .single-slider .text :is(h1, h2) { font-size: 38px; }
 	.hero-slider .single-slider .text p { font-size: 17px; }
 	.breadcrumbs { padding: 62px 0; }
 	.breadcrumbs h2 { font-size: 32px; }
@@ -1295,7 +1295,7 @@ a:focus-visible {
 	}
 	.appointment-cta .btn { height: auto; min-height: 52px; padding: 15px 26px; }
 	.hero-slider .single-slider { height: auto; padding: 96px 0 84px; }
-	.hero-slider .single-slider .text h1 { font-size: 31px; }
+	.hero-slider .single-slider .text :is(h1, h2) { font-size: 31px; }
 	.hero-slider .single-slider .text p { font-size: 16px; margin-bottom: 26px; }
 	.hero-slider .single-slider .text .button .btn { width: 100%; }
 	.breadcrumbs { padding: 48px 0; }

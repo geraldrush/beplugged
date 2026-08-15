@@ -278,9 +278,14 @@
         width: 100%;
       }
     }
-  </style>
+  
+    /* Off-screen page heading: these pages build their content in JS, so the
+       document still needs one h1 for assistive tech and crawlers. */
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;}
+</style>
 </head>
 <body>
+  <h1 class="sr-only">Receipt</h1>
   <div class="invoice-container" id="receipt-container">
     <div style="text-align:center; padding:2rem;">
       <p>Loading receipt...</p>

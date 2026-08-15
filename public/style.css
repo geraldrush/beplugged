@@ -601,7 +601,7 @@ body{
 .slider.index2 .single-slider .text{
 	margin-top:150px;
 }
-.slider .single-slider h1 {
+.slider .single-slider :is(h1, h2) {
 	color: #2C2D3F;
 	font-size: 38px;
 	font-weight: 700;
@@ -609,7 +609,7 @@ body{
 	padding: 0;
 	line-height: 42px;
 }
-.slider .single-slider h1 span{
+.slider .single-slider :is(h1, h2) span{
 	color:#F05023;
 }
 .slider .single-slider p {
@@ -673,7 +673,7 @@ body{
 }
 
 /* Slider Animation */
-.owl-item.active .single-slider h1{
+.owl-item.active .single-slider :is(h1, h2){
     animation: fadeInUp 1s both 0.6s;
 }
 .owl-item.active .single-slider p{
