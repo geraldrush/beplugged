@@ -526,6 +526,15 @@ export default {
           target.search = url.search;
           return Response.redirect(target.toString(), 301);
         }
+        // The detail pages sit under /services/<slug>, so the bare plural gets
+        // guessed and linked from outside even though the listing is at the
+        // singular /service. Send it there rather than 404, the same way the
+        // bare /training/courses does.
+        if (seg.length === 1 && seg[0] === "services") {
+          const target = new URL("/service", request.url);
+          target.search = url.search;
+          return Response.redirect(target.toString(), 301);
+        }
         if (seg.length === 2) {
           if (seg[0] === "services") {
             return await handleCataloguePage(env, request, "service", seg[1]);
@@ -9084,7 +9093,11 @@ function categoryPageHtml(category, courses, origin) {
 function cataloguePageHtml(item, related, origin) {
   const base = catalogueBase(item.kind);
   const isCourse = item.kind === "course";
-  const listingBase = isCourse ? "/training" : base;
+  // The listing pages are singular (/service, /training) while the detail
+  // pages sit under the plural /services/<slug>. Deriving the breadcrumb from
+  // the detail base pointed every service page at /services, which is not a
+  // page, so both the breadcrumb and the footer link 404ed.
+  const listingBase = isCourse ? "/training" : "/service";
   // Location pages live at the root rather than under /services, so they pass
   // their own canonical rather than having one derived from the kind.
   const url = item.canonicalUrl || `${origin}${base}/${item.slug}`;
