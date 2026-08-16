@@ -847,6 +847,15 @@ a:focus-visible {
 	width: 100%;
 }
 
+/* The training page writes its headings as a bare eyebrow, h2 and paragraph
+   rather than wrapping them in .section-title, so the exception above never
+   caught it: flexing the column laid the three out as three columns side by
+   side. Obvious on a phone, where the heading gets about 100px, but it was
+   wrong at every width. It is a stacked heading, not a row of cards. */
+.services .row.training-section-head > [class*="col-"] {
+	display: block;
+}
+
 @media (max-width: 767px) {
 	/* Phones stack everything, so the gap between a card and the next heading
 	   is the only thing separating two subjects. */
@@ -1317,6 +1326,10 @@ a:focus-visible {
 	.breadcrumbs h2 { font-size: 26px; }
 	.section-title h2 { font-size: 22px; }
 	.section-title p { font-size: 13.6px; }
+	/* Both selectors, because the base rule is a list whose .services variant
+	   outranks a bare .single-service here no matter the source order. Written
+	   as one selector, this smaller phone padding never applied. */
+	.services .single-service,
 	.single-service { padding: 23px 19px 21px; }
 	.training-hero { padding: 40px 0 34px; }
 	.training-hero h2 { font-size: 30px; }
