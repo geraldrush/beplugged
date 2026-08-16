@@ -1,5 +1,18 @@
 import QRCode from "qrcode";
 
+// The public pages that ship as .html assets and also answer on a clean URL.
+// offline.html is deliberately absent: it is the service worker's fallback and
+// is never a destination anyone should be sent to.
+const HTML_ALIAS_PATHS = new Set([
+  "/index.html",
+  "/about.html",
+  "/contact.html",
+  "/service.html",
+  "/studio.html",
+  "/training.html",
+  "/portfolio-details.html",
+]);
+
 const TRAINING_COURSES_BASE = "/training/courses";
 const UNISA_MODULES_BASE = "/training/unisa_modules";
 const COS1511_PRACTICE_PATH = `${UNISA_MODULES_BASE}/cos1511/`;
@@ -491,6 +504,15 @@ export default {
           const target = new URL("/training", request.url);
           target.search = url.search;
           target.hash = "unisa-modules";
+          return Response.redirect(target.toString(), 301);
+        }
+        // The asset layer answers /about.html with a 307, which tells a crawler
+        // the .html URL is still the one to keep. Search Console has four of
+        // them indexed alongside their clean twins, splitting the signals for
+        // the same page. A 301 collapses them.
+        if (HTML_ALIAS_PATHS.has(path)) {
+          const target = new URL(path === "/index.html" ? "/" : path.slice(0, -5), request.url);
+          target.search = url.search;
           return Response.redirect(target.toString(), 301);
         }
         if (COS1511_REDIRECT_PATHS.has(path)) {
