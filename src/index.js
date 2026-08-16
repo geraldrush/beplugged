@@ -545,7 +545,7 @@ export default {
             return Response.redirect(target.toString(), 301);
           }
         }
-        if (path === "/service" || path === "/training") {
+        if (path === "/" || path === "/service" || path === "/training") {
           return await handleCatalogueListing(env, request, path);
         }
         if (path === "/sitemap.xml") {
@@ -8684,6 +8684,26 @@ const CATALOGUE_KINDS = new Set(["service", "course", "category"]);
 // collide with a course slug on /training/<slug>.
 const CATEGORY_BASE = "/training/categories";
 
+// The pages show a Home > Section > Page trail but never marked it up, so a
+// search result printed the bare URL instead of the path. Emitted as its own
+// script rather than folded into the page's main object, which keeps each one
+// a single valid top-level type.
+//
+// trail is [[path, label], ...] ending at the current page; the last entry is
+// the page itself and carries no link, per Google's guidance.
+function breadcrumbSchemaHtml(origin, trail) {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map(([path, label], i) => {
+      const entry = { "@type": "ListItem", position: i + 1, name: label };
+      if (i < trail.length - 1) entry.item = `${origin}${path}`;
+      return entry;
+    }),
+  };
+  return `<script type="application/ld+json">${JSON.stringify(schema)}</script>`;
+}
+
 function catalogueBase(kind) {
   if (kind === "course") return TRAINING_COURSES_BASE;
   if (kind === "category") return CATEGORY_BASE;
@@ -8980,6 +9000,12 @@ function categoryPageHtml(category, courses, origin) {
     },
   };
 
+  const breadcrumbs = breadcrumbSchemaHtml(origin, [
+    ["/", "Home"],
+    ["/training", "Training"],
+    [`${CATEGORY_BASE}/${category.slug}`, category.title],
+  ]);
+
   const cards = courses.length
     ? courses.map(catalogueCardHtml).join("\n")
     : `<div class="col-12"><p style="color:#6b7688;">No courses are published in this category yet.</p></div>`;
@@ -9008,6 +9034,7 @@ function categoryPageHtml(category, courses, origin) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/theme.css">
 <script type="application/ld+json">${JSON.stringify(schema)}</script>
+${breadcrumbs}
 </head>
 <body>
 <header class="header">
@@ -9101,6 +9128,12 @@ function cataloguePageHtml(item, related, origin) {
   // Location pages live at the root rather than under /services, so they pass
   // their own canonical rather than having one derived from the kind.
   const url = item.canonicalUrl || `${origin}${base}/${item.slug}`;
+
+  const breadcrumbs = breadcrumbSchemaHtml(origin, [
+    ["/", "Home"],
+    [listingBase, isCourse ? "Training" : "Services"],
+    [url.replace(origin, ""), item.title],
+  ]);
   const title = item.seo_title || `${item.title} | Beplugged Tech`;
   const description =
     item.seo_description ||
@@ -9202,6 +9235,7 @@ function cataloguePageHtml(item, related, origin) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/theme.css">
 <script type="application/ld+json">${JSON.stringify(schema)}</script>
+${breadcrumbs}
 <style>
   /* Only what the shared theme does not already cover: tables coming out of
      the markdown renderer, and the closing call to action. */
@@ -10595,6 +10629,13 @@ async function handleSitemap(env, request) {
 // into it. Training leads with the categories and lists every course under
 // them, so the page reads as categories first and courses second.
 const CATALOGUE_GRIDS = {
+  // The homepage carried nine internal links and pointed at none of the twelve
+  // service pages, which are the longest and strongest content on the site.
+  // The grid is fed from the same catalogue as /service, so a service added in
+  // the admin appears here too.
+  "/": {
+    grids: [{ id: "catalogue-home-services", kind: "service", categories: null }],
+  },
   "/service": {
     grids: [
       { id: "catalogue-service-build", kind: "service", categories: ["What We Build"] },

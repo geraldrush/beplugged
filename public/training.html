@@ -43,7 +43,12 @@
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="css/theme.css">
 		
-    </head>
+    		<!-- The page shows this trail; marking it up lets a search result
+		     print the path instead of the bare URL. -->
+		<script type="application/ld+json">
+		{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://beplugged.co.za/"}, {"@type": "ListItem", "position": 2, "name": "Training"}]}
+		</script>
+</head>
     <body>
 	
 		<!-- Preloader -->
