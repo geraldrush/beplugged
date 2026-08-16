@@ -11,6 +11,7 @@ const HTML_ALIAS_PATHS = new Set([
   "/studio.html",
   "/training.html",
   "/portfolio-details.html",
+  "/work.html",
 ]);
 
 const TRAINING_COURSES_BASE = "/training/courses";
@@ -9508,6 +9509,18 @@ We work with businesses throughout Pretoria and the wider Tshwane area, includin
 
 We also work with clients across Gauteng and the rest of South Africa, and with organisations that have no interest in ever meeting us in person. Both are fine.
 
+## Recent work
+
+Every site below is live, and you are welcome to open it rather than take our word for it.
+
+**[Matria Plumbing and Electrical](https://matria.co.za)** — a Pretoria and Johannesburg trades business with 24/7 emergency callouts. The job of the site is narrow and measurable: be found by someone with a burst pipe, answer the obvious questions, and make the phone ring.
+
+**[Murek](https://murek.co.za)** — an online store selling electronics, fashion and homeware with delivery across Africa. Catalogue, categories, checkout, and stock that has to stay honest.
+
+**[Afroscaff](https://afroscaff.co.za)** — scaffolding for construction projects, where the audience is contractors and site managers who want the range and the credentials without wading through marketing copy.
+
+There are nine of these in total, across retail, healthcare, property, training and education, plus an Android application on the Play Store. They are all on our [work page](/work).
+
 ## How we work
 
 We scope the work in writing before building, so you know what you are paying for and what is deliberately out of scope. Software projects rarely fail because of code. They fail because nobody agreed what was being built.
@@ -10612,7 +10625,7 @@ async function handleSitemap(env, request) {
   }
 
   const statics = [
-    "/", "/about", "/service", "/studio", "/training", "/portfolio-details", "/contact",
+    "/", "/about", "/service", "/studio", "/work", "/training", "/portfolio-details", "/contact",
     ...LOCATION_PAGES.map((p) => `/${p.slug}`),
   ];
   const today = new Date().toISOString().slice(0, 10);
