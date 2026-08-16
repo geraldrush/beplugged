@@ -260,7 +260,7 @@ a:focus-visible {
 
 .hero-slider .single-slider .text :is(h1, h2) {
 	color: #fff;
-	font-size: 52px;
+	font-size: 44px;
 	font-weight: 700;
 	line-height: 1.14;
 	letter-spacing: -.025em;
@@ -325,9 +325,14 @@ a:focus-visible {
 
 .breadcrumbs .bread-inner { position: relative; z-index: 2; }
 
+ /* normalize.css sets .breadcrumbs h1 to a flat 38px and this file only ever
+   overrode the h2, so the page title was 38px on a desktop and still 38px on a
+   phone -- the largest text on the page, on the smallest screen. Both tags are
+   covered now, and the whole ladder comes down a step. */
+.breadcrumbs h1,
 .breadcrumbs h2 {
 	color: #fff;
-	font-size: 40px;
+	font-size: 34px;
 	font-weight: 700;
 	letter-spacing: -.022em;
 	margin-bottom: 12px;
@@ -1280,7 +1285,7 @@ a:focus-visible {
    -------------------------------------------------------------------------- */
 
 @media (max-width: 1199px) {
-	.hero-slider .single-slider .text :is(h1, h2) { font-size: 44px; }
+	.hero-slider .single-slider .text :is(h1, h2) { font-size: 40px; }
 }
 
 @media (max-width: 991px) {
@@ -1292,10 +1297,11 @@ a:focus-visible {
 	.hero-slider .owl-prev,
 	.hero-slider .owl-next { display: none !important; }
 	.hero-slider .single-slider { height: 540px; }
-	.hero-slider .single-slider .text :is(h1, h2) { font-size: 38px; }
+	.hero-slider .single-slider .text :is(h1, h2) { font-size: 35px; }
 	.hero-slider .single-slider .text p { font-size: 17px; }
 	.breadcrumbs { padding: 62px 0; }
-	.breadcrumbs h2 { font-size: 32px; }
+	.breadcrumbs h1,
+	.breadcrumbs h2 { font-size: 29px; }
 	.section-title { margin-bottom: 40px; }
 	.section-title h2 { font-size: 25.5px; }
 	.catalogue-aside { position: static; margin-top: 34px; }
@@ -1323,7 +1329,8 @@ a:focus-visible {
 	.hero-slider .single-slider .text p { font-size: 16px; margin-bottom: 26px; }
 	.hero-slider .single-slider .text .button .btn { width: 100%; }
 	.breadcrumbs { padding: 48px 0; }
-	.breadcrumbs h2 { font-size: 26px; }
+	.breadcrumbs h1,
+	.breadcrumbs h2 { font-size: 24px; }
 	.section-title h2 { font-size: 22px; }
 	.section-title p { font-size: 13.6px; }
 	/* Both selectors, because the base rule is a list whose .services variant
