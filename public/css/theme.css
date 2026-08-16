@@ -493,6 +493,16 @@ a:focus-visible {
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] { display: flex; }
 .row:has(> [class*="col-"] > .single-service) > [class*="col-"] > .single-service { width: 100%; }
 
+/* The equal-height rule above sets the card to height:100% of its column, so
+   the card's own margin-bottom falls outside the column box and buys nothing:
+   the rows sat flush against each other, reading as one block rather than a
+   grid. Space the rows on the flex container instead, and drop the margin that
+   was never landing. 44px against the grid's 30px side gutter, because a
+   vertical gap between wide cards has to be larger than the horizontal one to
+   read as the same distance. */
+.row:has(> [class*="col-"] > .single-service) { row-gap: 44px; }
+.row:has(> [class*="col-"] > .single-service) > [class*="col-"] > .single-service { margin-bottom: 0; }
+
 /* --------------------------------------------------------------------------
    Training listing page
    -------------------------------------------------------------------------- */
