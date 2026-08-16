@@ -496,6 +496,73 @@ a:focus-visible {
 
 .catalogue-card-action:hover { color: var(--brand-dark); }
 
+/* --------------------------------------------------------------------------
+   Work cards
+   --------------------------------------------------------------------------
+   Portfolio cards lead with a screenshot of the live site. The negative
+   margins bleed it to the card edges, so they have to track .single-service's
+   padding at each breakpoint. aspect-ratio holds the space before the image
+   arrives, so a lazy-loaded shot cannot shift the grid under someone's thumb.
+   -------------------------------------------------------------------------- */
+
+.work-shot {
+	margin: -30px -26px 18px;
+	aspect-ratio: 16 / 10;
+	overflow: hidden;
+	background: var(--surface-alt);
+	border-bottom: 1px solid var(--line);
+}
+
+.work-shot img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: top center;
+	transition: transform .4s var(--ease);
+}
+
+.single-service:hover .work-shot img { transform: scale(1.035); }
+
+/* The app has no website to photograph, so it gets an honest placeholder
+   rather than a screenshot of something it is not. */
+.work-shot.is-placeholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--brand-tint);
+}
+
+.work-shot.is-placeholder i {
+	font-size: 54px;
+	color: var(--brand);
+	opacity: .85;
+}
+
+/* Images inside a catalogue body, e.g. the screenshots on the location
+   pages. Bounded so a wide asset cannot push the column sideways. */
+.catalogue-figure {
+	display: block;
+	width: 100%;
+	height: auto;
+	margin: 6px 0 22px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+}
+
+.work-sector {
+	margin: 0 0 8px;
+	color: var(--brand);
+	font-size: 12px;
+	font-weight: 650;
+	letter-spacing: .05em;
+	text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+	.work-shot { margin: -23px -19px 15px; }
+}
+
 /* Cards in a row should line up regardless of copy length. Scoped with :has()
    so it only touches rows that actually hold cards, leaving heading rows and
    the pricing grid alone. Browsers without :has() just get uneven heights. */

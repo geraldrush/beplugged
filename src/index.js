@@ -9513,9 +9513,15 @@ We also work with clients across Gauteng and the rest of South Africa, and with 
 
 Every site below is live, and you are welcome to open it rather than take our word for it.
 
+![The Matria Plumbing and Electrical website](/img/work/matria.webp)
+
 **[Matria Plumbing and Electrical](https://matria.co.za)** — a Pretoria and Johannesburg trades business with 24/7 emergency callouts. The job of the site is narrow and measurable: be found by someone with a burst pipe, answer the obvious questions, and make the phone ring.
 
+![The Murek online store](/img/work/murek.webp)
+
 **[Murek](https://murek.co.za)** — an online store selling electronics, fashion and homeware with delivery across Africa. Catalogue, categories, checkout, and stock that has to stay honest.
+
+![The Afroscaff website](/img/work/afroscaff.webp)
 
 **[Afroscaff](https://afroscaff.co.za)** — scaffolding for construction projects, where the audience is contractors and site managers who want the range and the credentials without wading through marketing copy.
 
@@ -10694,6 +10700,11 @@ function catalogueMarkdown(md) {
   const inline = (s) =>
     escapeHtml(s)
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      // Images before links, since ![alt](src) would otherwise match the link
+      // rule and leave a stray "!" in front of an anchor. Site-relative only:
+      // an admin has no reason to hotlink, and it keeps remote URLs out.
+      .replace(/!\[([^\]]*)\]\((\/[^)\s]+)\)/g, (match, alt, src) =>
+        `<img src="${src}" alt="${alt}" loading="lazy" decoding="async" class="catalogue-figure">`)
       .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       // Only http(s), mailto, tel and site-relative targets become links, so a
