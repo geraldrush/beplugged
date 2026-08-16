@@ -550,6 +550,20 @@ a:focus-visible {
 	border-radius: var(--radius-lg);
 }
 
+/* What changed for the client, where there is something real to say. Set
+   apart from the description so it is not read as more of the same copy.
+   Cards without a stated outcome simply omit it rather than pad. */
+.work-outcome {
+	margin: 14px 0 0;
+	padding: 11px 13px;
+	border-left: 2px solid var(--brand);
+	background: var(--surface-alt);
+	border-radius: 0 var(--radius) var(--radius) 0;
+	color: var(--ink-700);
+	font-size: 13.2px;
+	line-height: 1.6;
+}
+
 .work-sector {
 	margin: 0 0 8px;
 	color: var(--brand);

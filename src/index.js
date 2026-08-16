@@ -9515,7 +9515,7 @@ Every site below is live, and you are welcome to open it rather than take our wo
 
 ![The Matria Plumbing and Electrical website](/img/work/matria.webp)
 
-**[Matria Plumbing and Electrical](https://matria.co.za)** — a Pretoria and Johannesburg trades business with 24/7 emergency callouts. The job of the site is narrow and measurable: be found by someone with a burst pipe, answer the obvious questions, and make the phone ring.
+**[Matria Plumbing and Electrical](https://matria.co.za)** — a Pretoria and Johannesburg trades business with 24/7 emergency callouts, built from scratch for a company that had nothing online. The job of the site is narrow and measurable: be found by someone with a burst pipe, answer the obvious questions, and make the phone ring. It now reaches people who were never going to hear about them by word of mouth.
 
 ![The Murek online store](/img/work/murek.webp)
 
@@ -9523,9 +9523,9 @@ Every site below is live, and you are welcome to open it rather than take our wo
 
 ![The Afroscaff website](/img/work/afroscaff.webp)
 
-**[Afroscaff](https://afroscaff.co.za)** — scaffolding for construction projects, where the audience is contractors and site managers who want the range and the credentials without wading through marketing copy.
+**[Afroscaff](https://afroscaff.co.za)** — scaffolding for construction projects, also built from scratch. The audience is contractors and site managers who want the range and the credentials without wading through marketing copy, and enquiries no longer depend on who already knows the company.
 
-There are nine of these in total, across retail, healthcare, property, training and education, plus an Android application on the Play Store. They are all on our [work page](/work).
+There are nine of these in total, across retail, healthcare, property, training and education, plus an Android application on the Play Store and a health service centre in Canada. They are all on our [work page](/work).
 
 ## How we work
 
