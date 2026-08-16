@@ -1364,6 +1364,71 @@ a:focus-visible {
 	.footer .footer-top { padding: 54px 0 34px; }
 }
 
+/* --------------------------------------------------------------------------
+   Phone tap targets
+   --------------------------------------------------------------------------
+   Every link below was between 16 and 26px tall, against the 48px a fingertip
+   needs. Height comes from a min-height rather than padding arithmetic, since
+   each of these links inherits a different line-height and padding alone kept
+   landing a few pixels short. Surrounding margin comes off so the blocks stay
+   about the size they were.
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+	.header .topbar .top-contact li a,
+	.breadcrumbs .bread-list li a,
+	.footer .f-link ul li a,
+	.footer .footer-contact ul li a,
+	.single-service h4 a,
+	.catalogue-card-action,
+	.schedule .single-schedule .single-content a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 48px;
+	}
+
+	/* About / Services / Contact / Projects are all in the hamburger menu
+	   already, alongside Home, Studio and Training. Sized for a fingertip they
+	   would have taken a third row of dark bar above the logo to say nothing
+	   new, so the duplicate goes and the two contact links get the room. */
+	.header .topbar .top-link { display: none; }
+	.header .topbar .top-contact { padding: 0; }
+	.header .topbar .top-contact li a { padding: 0 9px; }
+
+	.breadcrumbs .bread-list li { line-height: 1; }
+
+	.footer .f-link ul li,
+	.footer .footer-contact ul li { margin-bottom: 0; }
+
+	.single-service h4 { margin: -11px 0 0; }
+
+	.catalogue-card-action { margin-top: 0; }
+
+	/* Three stat tiles across a phone left the descriptions at 11.5px and
+	   wrapping mid-phrase. One per line, label and description on the same
+	   row, so they read at a normal size without taking three times the room. */
+	.training-hero-metrics {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 8px;
+	}
+
+	.training-hero-metrics div {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 14px;
+		padding: 11px 14px;
+	}
+
+	.training-hero-metrics strong { font-size: 15px; }
+
+	.training-hero-metrics span {
+		margin-top: 0;
+		font-size: 13px;
+		text-align: right;
+	}
+}
+
 /* The template hides the desktop nav on small screens and swaps in slicknav.
    The panel sits inside the white header and the logo is a black-on-transparent
    PNG, so this stays light: a dark panel left dark links and a black logo on a

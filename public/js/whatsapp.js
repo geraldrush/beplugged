@@ -39,7 +39,7 @@
     'font:600 14px/1 inherit;cursor:pointer;}' +
     '.wa-send:hover:not(:disabled){background:#1da851;}' +
     '.wa-send:disabled{opacity:.6;cursor:default;}' +
-    '.wa-note{font-size:11px;color:#888;margin:9px 0 0;line-height:1.55;}' +
+    '.wa-note{font-size:12.5px;color:#7a7a7a;margin:9px 0 0;line-height:1.55;}' +
     '.wa-status{font-size:13px;font-weight:600;margin:9px 0 0;}' +
     '.wa-hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;}' +
     '@media (max-width:420px){.wa-launch span{display:none;}.wa-launch{padding:14px;}}';
