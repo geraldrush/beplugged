@@ -89,7 +89,7 @@ export async function loadWorkerValidation() {
 		slice(src, "const STUDIO_SIZES = {", "async function hashStudioToken", "the STUDIO_* tables"),
 		slice(src, "function studioSafeName(value) {", "// Validates the book", "studioSafeName"),
 		slice(src, "function normalizeStudioDesign(raw) {", "function normalizeStudioCustomer", "normalizeStudioDesign"),
-		"export { normalizeStudioDesign, RequestError, STUDIO_COVER_DESIGNS, STUDIO_TEXT_FONTS, STUDIO_TEXT_SHAPES };",
+		"export { normalizeStudioDesign, RequestError, STUDIO_COVER_DESIGNS, STUDIO_TEXT_FONTS, STUDIO_TEXT_SHAPES, STUDIO_UV_PATTERNS, STUDIO_UV_FILE_TYPES };",
 	].join("\n");
 	return importSource(code, "worker-validation.mjs");
 }

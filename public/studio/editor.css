@@ -1430,3 +1430,116 @@ a { color: var(--brand); }
 	height: 30px;
 	padding: 0;
 }
+
+/* --- spot UV varnish ----------------------------------------------------- */
+
+/* What the studio is handed is a vector mask filled solid black. What the
+   customer needs to see is varnish, and drawing varnish as black would be a
+   lie about what they are buying — it is clear, it sits on top of the print,
+   and the only reason you know it is there is that it catches the light.
+
+   So the same geometry is repainted here in light rather than ink. The shapes
+   keep their black fill and stroke attributes, which is what gets exported;
+   these attribute selectors override the paint for the screen only, and leave
+   fill="none" alone so an outlined shape stays outlined. */
+.ed-uv-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 6;
+	pointer-events: none;
+	mix-blend-mode: soft-light;
+}
+
+.ed-uv-layer svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.ed-uv-layer [fill="#000"] { fill: rgba(255, 255, 255, 0.78); }
+.ed-uv-layer [stroke="#000"] { stroke: rgba(255, 255, 255, 0.9); }
+
+/* A second, offset copy of the sheen reads as the thickness of the varnish
+   sitting proud of the print. Raised spot UV genuinely does cast a small
+   shadow, which is most of why it looks expensive. */
+.ed-uv-layer::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(118deg,
+		rgba(255, 255, 255, 0.10) 0%,
+		rgba(255, 255, 255, 0) 38%,
+		rgba(255, 255, 255, 0) 62%,
+		rgba(255, 255, 255, 0.07) 100%);
+}
+
+/* Gloss over the picture is a flood rather than an accent, so it reads as an
+   even sheet of shine rather than as individual marks. */
+.ed-uv-layer.is-photo-gloss { mix-blend-mode: screen; }
+.ed-uv-layer.is-photo-gloss [fill="#000"] { fill: rgba(255, 255, 255, 0.13); }
+
+/* Their own artwork is a PDF or an AI as often as not, and nothing in a
+   browser can draw those. Say what is attached rather than draw a guess. */
+.ed-uv-layer.is-supplied {
+	mix-blend-mode: normal;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 6%;
+}
+
+.ed-uv-supplied {
+	max-width: 76%;
+	padding: 5px 11px;
+	border-radius: 999px;
+	background: rgba(12, 18, 28, 0.72);
+	color: #fff;
+	font-size: 11px;
+	line-height: 1.35;
+	text-align: center;
+	overflow-wrap: anywhere;
+}
+
+/* --- the varnish picker -------------------------------------------------- */
+
+.ed-uv-thumb {
+	position: relative;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 44px;
+	border-radius: 2px;
+	border: 1px solid var(--line);
+	/* Dark, because varnish is invisible on white and the whole point of the
+	   thumbnail is to show where the light catches. */
+	background: linear-gradient(150deg, #2b3442, #171d27);
+	overflow: hidden;
+}
+
+.ed-uv-thumb svg { display: block; width: 100%; height: 100%; }
+.ed-uv-thumb [fill="#000"] { fill: rgba(255, 255, 255, 0.85); }
+.ed-uv-thumb [stroke="#000"] { stroke: rgba(255, 255, 255, 0.9); }
+
+.ed-uv-thumb.is-none::after,
+.ed-uv-thumb.is-custom::after {
+	content: "";
+	position: absolute;
+	inset: 34% 28%;
+	border: 1px dashed rgba(255, 255, 255, 0.45);
+	border-radius: 3px;
+}
+
+.ed-uv-coverage {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: var(--line-soft, #eceef2);
+	color: var(--ink-500, #6b7688);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.ed-uv-coverage.is-high {
+	background: #fff1e8;
+	color: #8a3a13;
+}

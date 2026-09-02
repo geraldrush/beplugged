@@ -80,6 +80,29 @@ export default async function runUnit() {
 	check("cover designs and their frame counts", clientDesigns === serverDesigns, clientDesigns === serverDesigns ? undefined : `\n    client ${clientDesigns}\n    server ${serverDesigns}`);
 	check("typefaces", JSON.stringify(SB.TEXT_FONTS.map((f) => f.key)) === JSON.stringify([...worker.STUDIO_TEXT_FONTS]));
 	check("text shapes", JSON.stringify(SB.TEXT_SHAPES.map((s) => s.key)) === JSON.stringify([...worker.STUDIO_TEXT_SHAPES]));
+	check("varnish patterns",
+		JSON.stringify(SB.UV_PATTERNS.map((p) => p.key)) === JSON.stringify(Object.keys(worker.STUDIO_UV_PATTERNS)));
+
+	suite("Spot UV: the masks");
+	const size = { w: 210, h: 297 };
+	for (const pattern of SB.UV_PATTERNS) {
+		if (pattern.key === "none" || pattern.key === "custom") continue;
+		const svg = SB.uvMaskShapes(pattern.key, size, "TN");
+		// The plate is made from this, so it has to be solid black and it has
+		// to hold no stroke finer than half a point, which is the thinnest a
+		// varnish will hold.
+		const strokes = [...svg.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => Number(m[1]));
+		const paints = /fill="#000"|stroke="#000"/.test(svg);
+		const tooFine = strokes.filter((w) => w < 0.18);
+		check(`${pattern.key.padEnd(12)} draws, in solid black, nothing finer than 0.5pt`,
+			svg.length > 0 && paints && tooFine.length === 0,
+			`${strokes.length} stroked shape(s)${tooFine.length ? `, ${tooFine.length} TOO FINE` : ""}`);
+	}
+	check("only one pattern goes past the accent coverage, and it says so",
+		SB.UV_PATTERNS.filter((p) => p.coverage > SB.UV_ACCENT_COVERAGE).map((p) => p.key).join() === "photo-gloss");
+	check("the same book always makes the same plate",
+		SB.uvMaskShapes("dots", size, "") === SB.uvMaskShapes("dots", size, ""));
+	check("an unknown pattern falls back to no varnish", SB.uvPatternFor("holographic").key === "none");
 
 	/* --- what the server accepts ----------------------------------------- */
 
@@ -138,4 +161,34 @@ export default async function runUnit() {
 	check("the message names the page", /page 1/.test(reason(book({}, [{ ...good, y: 900 }])) || ""));
 	check("and says 'the cover' for cover text",
 		/the cover/.test(reason({ ...book({ design: "full-bleed", slots: [], texts: [{ ...good, y: 900 }] }) }) || ""));
+
+	suite("Server: the varnish");
+	const uvBook = (uv) => ({
+		product: { size: A4, finish: "photo-wrap" },
+		cover: { design: "full-bleed", slots: [{ photoId: "p1" }], uv },
+		pages: [{ layout: "full", slots: [{ photoId: "p1" }] }],
+		photos,
+	});
+	const uvReason = (uv) => {
+		try { normalizeStudioDesign(uvBook(uv)); return null; } catch (e) { return e.message; }
+	};
+	check("no varnish at all is accepted", uvReason(undefined) === null);
+	check("a built-in pattern is accepted", uvReason({ pattern: "botanical" }) === null);
+	check("a monogram is accepted", uvReason({ pattern: "monogram", monogram: "TN" }) === null);
+	check("their own artwork with a file is accepted",
+		uvReason({ pattern: "custom", file: { id: "uv", name: "mask.pdf", bytes: 40000, type: "application/pdf" } }) === null,
+		uvReason({ pattern: "custom", file: { id: "uv", name: "mask.pdf", bytes: 40000, type: "application/pdf" } }) || "");
+	check("an unknown pattern is refused", /Choose a varnish/.test(uvReason({ pattern: "holographic" }) || ""));
+	check("a monogram over four letters is refused", /at most four/.test(uvReason({ pattern: "monogram", monogram: "ABCDE" }) || ""));
+	// A raster cannot become a varnish plate: there is no halftone varnish, so
+	// a soft edge has nowhere to go.
+	check("a raster mask is refused",
+		/PDF, SVG, AI or EPS/.test(uvReason({ pattern: "custom", file: { id: "uv", name: "m.png", bytes: 100, type: "image/png" } }) || ""));
+	check("a file on a pattern that does not take one is refused",
+		/Only your own varnish artwork/.test(uvReason({ pattern: "botanical", file: { id: "uv", name: "m.pdf", bytes: 100, type: "application/pdf" } }) || ""));
+	check("a file under the wrong reference is refused",
+		/missing its reference/.test(uvReason({ pattern: "custom", file: { id: "p1", name: "m.pdf", bytes: 100, type: "application/pdf" } }) || ""));
+	check("an oversized mask is refused",
+		/larger than 30 MB/.test(uvReason({ pattern: "custom", file: { id: "uv", name: "m.pdf", bytes: 40 * 1024 * 1024, type: "application/pdf" } }) || ""));
+
 }

@@ -9789,6 +9789,33 @@ const STUDIO_TEXT_MIN_SIZE = 2;
 const STUDIO_TEXT_MAX_SIZE = 14;
 const STUDIO_COLOUR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
+// Spot UV: a clear gloss laid over parts of a cover that is otherwise printed
+// normally. Kept in step with UV_PATTERNS in public/studio/book-render.js.
+const STUDIO_UV_PATTERNS = {
+  none: "No varnish",
+  title: "Title only",
+  "photo-gloss": "Gloss the picture",
+  diagonals: "Fine diagonals",
+  botanical: "Botanical",
+  deco: "Deco fans",
+  dots: "Scattered light",
+  monogram: "Monogram",
+  border: "Inset border",
+  custom: "Their own artwork",
+};
+
+// A varnish mask has to be vector to become a plate at all: there is no such
+// thing as a halftone varnish, so a soft edge has nowhere to go. This is why
+// the mask types are their own set rather than an addition to the photo types.
+const STUDIO_UV_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/svg+xml",
+  "application/postscript",
+  "application/illustrator",
+]);
+
+const STUDIO_UV_FILE_ID = "uv";
+
 function validateStudioTexts(raw, where) {
   if (raw === undefined || raw === null) return 0;
   if (!Array.isArray(raw)) {
@@ -9867,16 +9894,22 @@ async function hashStudioToken(token) {
 // name, which is theirs to choose and can contain anything at all. The
 // original name is kept as metadata so the studio still sees what they called
 // it, but it never reaches the key.
+const STUDIO_EXTENSIONS = {
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heic",
+  "image/jpeg": "jpg",
+  // The varnish mask. Landing one of these as a .jpg is the same mistake the
+  // HEICs made, and just as unopenable at the other end.
+  "application/pdf": "pdf",
+  "image/svg+xml": "svg",
+  "application/illustrator": "ai",
+  "application/postscript": "eps",
+};
+
 function studioMediaKey(prefix, photoId, contentType) {
-  const ext =
-    contentType === "image/png"
-      ? "png"
-      : contentType === "image/webp"
-        ? "webp"
-        : contentType === "image/heic" || contentType === "image/heif"
-          ? "heic"
-          : "jpg";
-  return `${prefix}${photoId}.${ext}`;
+  return `${prefix}${photoId}.${STUDIO_EXTENSIONS[contentType] || "jpg"}`;
 }
 
 function studioSafeName(value) {
@@ -9968,6 +10001,38 @@ function normalizeStudioDesign(raw) {
   }
 
   validateStudioTexts(raw.cover?.texts, "the cover");
+
+  // The varnish is a second pass over the cover rather than part of it, so it
+  // is validated on its own and cannot disturb the design or the finish.
+  const uv = raw.cover?.uv;
+  if (uv !== undefined && uv !== null) {
+    if (typeof uv !== "object") {
+      throw new RequestError("The varnish choice could not be read");
+    }
+    const pattern = String(uv.pattern || "none");
+    if (!STUDIO_UV_PATTERNS[pattern]) {
+      throw new RequestError("Choose a varnish, or none");
+    }
+    if (String(uv.monogram || "").length > 4) {
+      throw new RequestError("A monogram is at most four letters");
+    }
+    if (uv.file) {
+      if (String(uv.file.id || "") !== STUDIO_UV_FILE_ID) {
+        throw new RequestError("The varnish file is missing its reference");
+      }
+      if (!STUDIO_UV_FILE_TYPES.has(String(uv.file.type || ""))) {
+        throw new RequestError("A varnish mask must be a PDF, SVG, AI or EPS");
+      }
+      if (Number(uv.file.bytes) > STUDIO_MAX_PHOTO_BYTES) {
+        throw new RequestError("That varnish file is larger than 30 MB");
+      }
+      // Only the pattern that asks for a file may carry one, so an order
+      // cannot arrive with an attachment nobody is going to look at.
+      if (pattern !== "custom") {
+        throw new RequestError("Only your own varnish artwork needs a file");
+      }
+    }
+  }
 
   const coverDesign = String(raw.cover?.design || STUDIO_DEFAULT_COVER_DESIGN);
   if (!STUDIO_COVER_DESIGNS[coverDesign]) {
@@ -10182,19 +10247,34 @@ async function uploadStudioPhoto(request, env, orderId, photoId) {
   } catch {
     return json({ error: "The saved design could not be read." }, { status: 500 });
   }
-  const declared = (Array.isArray(design.photos) ? design.photos : []).find(
-    (p) => String(p?.id) === String(photoId),
-  );
+  // The varnish mask is not a photograph and is not in the photo list, but it
+  // is a file this order needs. It rides the same route so it inherits the
+  // token, the retries and the size accounting rather than growing a second
+  // delivery path that would have to be secured all over again.
+  const isVarnish = String(photoId) === STUDIO_UV_FILE_ID;
+  const declared = isVarnish
+    ? design.cover?.uv?.file
+    : (Array.isArray(design.photos) ? design.photos : []).find(
+        (p) => String(p?.id) === String(photoId),
+      );
   if (!declared) {
-    return json({ error: "That photo is not part of this book." }, { status: 400 });
+    return json({ error: "That file is not part of this book." }, { status: 400 });
   }
 
   const contentType = String(request.headers.get("Content-Type") || "")
     .split(";")[0]
     .trim()
     .toLowerCase();
-  if (!STUDIO_IMAGE_TYPES.has(contentType)) {
-    return json({ error: "Photos must be JPEG, PNG, WebP or HEIC." }, { status: 415 });
+  const allowed = isVarnish ? STUDIO_UV_FILE_TYPES : STUDIO_IMAGE_TYPES;
+  if (!allowed.has(contentType)) {
+    return json(
+      {
+        error: isVarnish
+          ? "A varnish mask must be a PDF, SVG, AI or EPS."
+          : "Photos must be JPEG, PNG, WebP or HEIC.",
+      },
+      { status: 415 },
+    );
   }
 
   const declaredLength = Number(request.headers.get("Content-Length") || 0);
@@ -10504,6 +10584,25 @@ function studioCoverLabel(order) {
   }
 }
 
+// What the second pass is, in the words the studio uses to order it.
+function studioVarnishLabel(order) {
+  try {
+    const design = JSON.parse(order.design_json || "{}");
+    const uv = design?.cover?.uv || {};
+    const pattern = String(uv.pattern || "none");
+    if (pattern === "none" || !STUDIO_UV_PATTERNS[pattern]) return "None";
+    if (pattern === "custom") {
+      return uv.file?.name
+        ? `Their own artwork — ${studioSafeName(uv.file.name)}`
+        : "Their own artwork — no file arrived";
+    }
+    const letters = pattern === "monogram" && uv.monogram ? ` (${studioSafeName(uv.monogram)})` : "";
+    return `Spot UV — ${STUDIO_UV_PATTERNS[pattern]}${letters}`;
+  } catch {
+    return "None";
+  }
+}
+
 function studioSizeLabel(key) {
   return STUDIO_SIZES[key]?.label || key || "-";
 }
@@ -10544,6 +10643,7 @@ async function sendStudioOrderEmails(env, order) {
         ${row("Occasion", order.occasion || "-")}
         ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
         ${row("Cover", `${studioCoverLabel(order)} · case bound`)}
+        ${row("Varnish", studioVarnishLabel(order))}
         ${row("Copies", order.copies)}
         ${row("Needed by", order.needed_by || "not given")}
         ${row("Photos", `${order.uploaded_count} of ${order.photo_count} uploaded · ${formatStudioBytes(order.uploaded_bytes)}`)}

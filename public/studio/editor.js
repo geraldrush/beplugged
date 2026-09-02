@@ -26,6 +26,14 @@
 	var applySlotImage = SB.applySlotImage;
 	var COVER_DESIGNS = SB.COVER_DESIGNS;
 	var coverDesignFor = SB.coverDesignFor;
+	var UV_PATTERNS = SB.UV_PATTERNS;
+
+	// A varnish mask has to be vector to be made into a plate at all. A raster
+	// file cannot be one: there is no such thing as a halftone varnish, so a
+	// soft edge has nowhere to go.
+	var UV_FILE_TYPES = ["application/pdf", "image/svg+xml", "application/postscript", "application/illustrator"];
+	var UV_FILE_EXTENSIONS = { pdf: "application/pdf", svg: "image/svg+xml", ai: "application/illustrator", eps: "application/postscript" };
+	var MAX_UV_BYTES = 30 * 1024 * 1024;
 
 	// How far a photo can be pushed into its frame before it is throwing away
 	// more than it is worth. Past this the resolution warning is shouting at
@@ -172,7 +180,11 @@
 		var s = {
 			version: 1,
 			product: { size: "a4-portrait", pages: 24, finish: "photo-wrap" },
-			cover: { design: "full-bleed", title: "", subtitle: "", slots: [blankSlot()], texts: [] },
+			cover: {
+				design: "full-bleed", title: "", subtitle: "",
+				slots: [blankSlot()], texts: [],
+				uv: { pattern: "none", monogram: "", file: null }
+			},
 			pages: [],
 			photos: []
 		};
@@ -188,6 +200,15 @@
 
 	function coverDesign() {
 		return coverDesignFor(state.cover.design);
+	}
+
+	function coverUv() {
+		if (!state.cover.uv) state.cover.uv = { pattern: "none", monogram: "", file: null };
+		return state.cover.uv;
+	}
+
+	function uvPattern() {
+		return SB.uvPatternFor(coverUv().pattern);
 	}
 
 	// The frames the current design actually has. A design change can leave the
@@ -565,6 +586,18 @@
 		return n;
 	}
 
+	function uvSummary() {
+		var pattern = uvPattern();
+		if (pattern.key === "none") return "none — a plain printed case";
+		if (pattern.key === "custom") {
+			return coverUv().file
+				? "your own artwork — " + coverUv().file.name
+				: "your own artwork — no file attached yet";
+		}
+		var extra = pattern.monogram && coverUv().monogram ? " — " + coverUv().monogram : "";
+		return "spot UV, " + pattern.label.toLowerCase() + extra;
+	}
+
 	// "chosen" told a customer nothing once a cover could hold three frames.
 	function coverPhotoSummary() {
 		var slots = coverSlots();
@@ -607,6 +640,7 @@
 				state.product.size = size.key;
 				scheduleSave();
 				renderSizeOptions();
+				renderUvOptions();
 				renderPages();
 				renderSummary();
 			});
@@ -666,6 +700,172 @@
 		renderCoverDesignOptions();
 		renderPages();
 		renderTray();
+		renderSummary();
+	}
+
+	// Spot UV is a second pass laid over a cover that is otherwise printed
+	// normally, so it is chosen separately from the design and the finish and
+	// does not disturb either.
+	function renderUvOptions() {
+		var host = document.getElementById("uv-options");
+		if (!host) return;
+		host.innerHTML = "";
+		var size = sizeFor(state.product.size);
+
+		UV_PATTERNS.forEach(function (pattern) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-choice";
+			button.setAttribute("aria-pressed", String(uvPattern().key === pattern.key));
+
+			var thumb = document.createElement("span");
+			thumb.className = "ed-uv-thumb is-" + pattern.key;
+			if (pattern.key !== "none" && pattern.key !== "custom") {
+				thumb.innerHTML = '<svg viewBox="0 0 ' + size.w + " " + size.h +
+					'" preserveAspectRatio="none" aria-hidden="true">' +
+					SB.uvMaskShapes(pattern.key, size, coverUv().monogram || "AB") + "</svg>";
+			}
+
+			var text = document.createElement("span");
+			text.innerHTML = "<strong></strong><small></small>";
+			var strong = text.querySelector("strong");
+			strong.textContent = pattern.label;
+			if (pattern.coverage !== null && pattern.coverage > 0) {
+				var badge = document.createElement("span");
+				// Raised spot UV stops reading as an accent past roughly a
+				// third of the case, so the number is shown rather than
+				// buried in a note nobody opens.
+				badge.className = "ed-uv-coverage" + (pattern.coverage > SB.UV_ACCENT_COVERAGE ? " is-high" : "");
+				badge.textContent = "~" + pattern.coverage + "% covered";
+				strong.appendChild(badge);
+			}
+			text.querySelector("small").textContent = pattern.note;
+
+			button.appendChild(thumb);
+			button.appendChild(text);
+			button.addEventListener("click", function () { chooseUv(pattern.key); });
+			host.appendChild(button);
+		});
+
+		renderUvExtras();
+	}
+
+	// The monogram letters and the upload only mean anything for the pattern
+	// that uses them, so they appear with it rather than sitting there greyed
+	// out for the eight that do not.
+	function renderUvExtras() {
+		var host = document.getElementById("uv-extras");
+		if (!host) return;
+		host.innerHTML = "";
+		var pattern = uvPattern();
+
+		if (pattern.monogram) {
+			var field = document.createElement("div");
+			field.className = "ed-field";
+			field.innerHTML = '<label for="uv-monogram">Letters for the medallion</label>';
+			var input = document.createElement("input");
+			input.id = "uv-monogram";
+			input.type = "text";
+			input.maxLength = 4;
+			input.placeholder = "TN";
+			input.value = coverUv().monogram || "";
+			input.addEventListener("input", function () {
+				coverUv().monogram = input.value.toUpperCase().slice(0, 4);
+				scheduleSave();
+				renderPages();
+				// Redraw the thumbnails too, since one of them is these very
+				// letters.
+				renderUvThumbs();
+			});
+			field.appendChild(input);
+			host.appendChild(field);
+		}
+
+		if (pattern.upload) {
+			var file = coverUv().file;
+			var wrap = document.createElement("div");
+
+			var label = document.createElement("label");
+			label.className = "ed-btn secondary small";
+			label.setAttribute("for", "uv-input");
+			label.style.display = "inline-block";
+			label.textContent = file ? "Choose a different file" : "Choose your varnish file";
+			wrap.appendChild(label);
+
+			var status = document.createElement("p");
+			status.className = "ed-note";
+			status.style.margin = "12px 0 0";
+			if (file) {
+				status.classList.add("good");
+				status.textContent = file.name + " — " + formatBytes(file.bytes) + ", sent with the book.";
+			} else {
+				status.textContent = "PDF, SVG, AI or EPS. Vector, solid black where the varnish goes, and the same shape as the case. Anything soft-edged or greyscale cannot be made into a plate.";
+			}
+			wrap.appendChild(status);
+
+			if (file) {
+				var drop = smallButton("Remove it", "Take this varnish file off the order", function () {
+					coverUv().file = null;
+					photoBlobs.delete("uv");
+					deletePhotoRecord("uv").catch(storageFailed);
+					scheduleSave();
+					renderUvExtras();
+					renderPages();
+				});
+				drop.style.marginTop = "10px";
+				wrap.appendChild(drop);
+			}
+
+			host.appendChild(wrap);
+		}
+	}
+
+	function renderUvThumbs() {
+		var host = document.getElementById("uv-options");
+		if (!host) return;
+		var size = sizeFor(state.product.size);
+		var index = 0;
+		UV_PATTERNS.forEach(function (pattern) {
+			var thumb = host.children[index++].querySelector(".ed-uv-thumb");
+			if (!thumb || pattern.key === "none" || pattern.key === "custom") return;
+			thumb.innerHTML = '<svg viewBox="0 0 ' + size.w + " " + size.h +
+				'" preserveAspectRatio="none" aria-hidden="true">' +
+				SB.uvMaskShapes(pattern.key, size, coverUv().monogram || "AB") + "</svg>";
+		});
+	}
+
+	function chooseUv(key) {
+		coverUv().pattern = SB.uvPatternFor(key).key;
+		scheduleSave();
+		renderUvOptions();
+		renderPages();
+		renderSummary();
+	}
+
+	// The varnish file rides to the studio the same way a photograph does: it
+	// is declared in the design and uploaded into the order's own prefix, so
+	// it inherits the token, the retries and the size accounting rather than
+	// growing a second delivery path of its own.
+	function addUvFile(file) {
+		if (!file) return;
+		var ext = (/\.([A-Za-z0-9]+)$/.exec(file.name || "") || [])[1];
+		var type = UV_FILE_EXTENSIONS[String(ext || "").toLowerCase()] ||
+			(UV_FILE_TYPES.indexOf(file.type) !== -1 ? file.type : "");
+		if (!type) {
+			window.alert("A varnish mask has to be a PDF, SVG, AI or EPS. A photograph or a screenshot cannot be made into a plate.");
+			return;
+		}
+		if (file.size > MAX_UV_BYTES) {
+			window.alert("That file is larger than 30 MB. Send a flattened copy of it.");
+			return;
+		}
+		coverUv().file = { id: "uv", name: file.name, bytes: file.size, type: type };
+		photoBlobs.set("uv", file);
+		putPhoto({ id: "uv", name: file.name, type: type, bytes: file.size, w: 0, h: 0, blob: file, thumb: null })
+			.catch(storageFailed);
+		scheduleSave();
+		renderUvExtras();
+		renderPages();
 		renderSummary();
 	}
 
@@ -1475,6 +1675,12 @@
 			frame.appendChild(text);
 		}
 
+		// Varnish goes on last, over the picture and the type alike. Built by
+		// the shared renderer, so the arrange grid, the preview, the print
+		// sheet and the customer's read-only view all show the same sheen.
+		var varnish = SB.uvLayer(state);
+		if (varnish) frame.appendChild(varnish);
+
 		// The case is a fixed shape, so the frame has to be given the paper's
 		// proportions here rather than by ed-sheet as a page card is.
 		var size = sizeFor(state.product.size);
@@ -1614,6 +1820,7 @@
 			["Cover", SB.finishFor(state.product.finish).label + " — case bound"],
 			["Cover title", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
 			["Cover design", coverDesign().label],
+			["Varnish", uvSummary()],
 			["Cover photo", coverPhotoSummary()],
 			["Photos in the book", state.photos.length + " (" + used.size + " placed, " + formatBytes(totalBytes()) + ")"],
 			["Empty frames", String(emptySlotCount())]
@@ -2017,6 +2224,10 @@
 	// photos from a phone are on the bad one.
 	function uploadAll(orderId, token) {
 		var photos = state.photos.slice();
+		// The varnish mask is not a photograph and is not in the photo list,
+		// but it is a file this order needs, so it rides along on the same
+		// token, the same retries and the same size accounting.
+		if (coverUv().file) photos.push(coverUv().file);
 		var failures = [];
 		var done = 0;
 		setProgress(0, photos.length);
@@ -2094,6 +2305,11 @@
 					return slot && slot.photoId && !known.has(slot.photoId) ? blankSlot() : slot || blankSlot();
 				});
 				state.cover.texts = normalizeTexts(state.cover.texts);
+				if (!state.cover.uv) state.cover.uv = { pattern: "none", monogram: "", file: null };
+				// A varnish file whose blob did not survive must not stay in
+				// the design: the server would wait for an upload that can
+				// never arrive, exactly as it would for a lost photograph.
+				if (state.cover.uv.file && !photoBlobs.has("uv")) state.cover.uv.file = null;
 				state.pages.forEach(function (page) {
 					page.texts = normalizeTexts(page.texts);
 				});
@@ -2125,6 +2341,11 @@
 			if (!state.photos.length) return;
 			if (!window.confirm("Remove all " + state.photos.length + " photos and empty every page?")) return;
 			removeAllPhotos();
+		});
+
+		document.getElementById("uv-input").addEventListener("change", function (event) {
+			addUvFile(event.target.files && event.target.files[0]);
+			event.target.value = "";
 		});
 
 		document.getElementById("autofill").addEventListener("click", autofill);
@@ -2240,6 +2461,7 @@
 			renderSizeOptions();
 			renderFinishOptions();
 			renderCoverDesignOptions();
+			renderUvOptions();
 			renderPageOptions();
 			renderPhotos();
 			renderTray();

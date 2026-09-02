@@ -22,6 +22,7 @@ const pickDesign = (page, key) => page.evaluate(([k, order]) => {
 async function covers(browser, base, files) {
 	const { page, problems } = await openEditor(browser, base);
 	const SB = loadStudioBook();
+	const SBUV = SB.UV_PATTERNS;
 
 	suite("Covers: the six designs");
 	check("the picker offers six",
@@ -161,6 +162,61 @@ async function covers(browser, base, files) {
 		legacy.cls.includes("ed-cover-design-full-bleed") && legacy.frames === 1 &&
 		legacy.images === 1 && legacy.title === "Old book");
 	check("and its cover is checked for resolution now too", legacy.softCover === 1);
+
+	suite("Covers: spot UV varnish");
+	// The varnish is a second pass over a cover that is otherwise printed
+	// normally, so choosing one must not disturb the design or the photographs
+	// underneath it.
+	const beforeUv = await page.$eval(".ed-cover-frame", (e) => e.className);
+	check("the picker offers every pattern",
+		(await page.$$("#uv-options .ed-choice")).length === SBUV.length, `${(await page.$$("#uv-options .ed-choice")).length}`);
+	check("each drawn pattern has a thumbnail",
+		(await page.$$eval("#uv-options .ed-uv-thumb svg", (n) => n.length)) === SBUV.filter((p) => p.key !== "none" && p.key !== "custom").length);
+	check("high coverage is flagged on the one pattern that has it",
+		(await page.$$eval("#uv-options .ed-uv-coverage.is-high", (n) => n.length)) === 1);
+
+	const pickUv = (key) => page.evaluate(([k, keys]) => {
+		document.querySelectorAll("#uv-options .ed-choice")[keys.indexOf(k)].click();
+	}, [key, SBUV.map((p) => p.key)]);
+
+    for (const key of ["botanical", "diagonals", "border", "dots", "deco", "title"]) {
+		await pickUv(key);
+		await page.waitForTimeout(150);
+		const drawn = await page.evaluate(() => {
+			const layer = document.querySelector(".ed-cover-frame .ed-uv-layer");
+			return layer ? { cls: layer.className, shapes: layer.querySelectorAll("svg *").length } : null;
+		});
+		check(`varnish: ${key.padEnd(11)} draws over the cover`,
+			drawn && drawn.cls.includes(`is-${key}`) && drawn.shapes > 0, drawn ? `${drawn.shapes} shapes` : "nothing drawn");
+	}
+	check("and the cover design underneath is untouched",
+		(await page.$eval(".ed-cover-frame", (e) => e.className)) === beforeUv);
+
+	await pickUv("monogram");
+	await page.waitForTimeout(200);
+	check("the monogram asks for its letters", (await page.$("#uv-monogram")) !== null);
+	// The varnish picker lives on the size step while this is looking at the
+	// arrange step, so the field is in the document but not on screen. Drive
+	// it directly rather than switching panels back and forth.
+	await page.evaluate(() => {
+		const el = document.getElementById("uv-monogram");
+		el.value = "TN";
+		el.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	await page.waitForTimeout(250);
+	check("and sets them into the medallion",
+		(await page.$eval(".ed-cover-frame .ed-uv-layer text", (e) => e.textContent)) === "TN");
+
+	await pickUv("custom");
+	await page.waitForTimeout(200);
+	check("their own artwork offers an upload", (await page.$("#uv-input")) !== null);
+	check("and says what it needs until a file arrives",
+		/Vector, solid black/.test(await page.$eval("#uv-extras .ed-note", (e) => e.textContent)));
+
+	await pickUv("none");
+	await page.waitForTimeout(150);
+	check("no varnish draws nothing at all",
+		(await page.$(".ed-cover-frame .ed-uv-layer")) === null);
 
 	check("nothing was logged to the console", problems.length === 0, JSON.stringify(problems.slice(0, 3)));
 	check("nothing was left unhandled",

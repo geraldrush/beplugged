@@ -146,6 +146,221 @@
 
 	var MIN_PRINT_DPI = 150;
 
+	// --- spot UV ----------------------------------------------------------
+	//
+	// A clear gloss varnish laid over selected areas of a cover that is
+	// otherwise printed normally. It is not ink: the cover underneath is
+	// unchanged, and the varnish is a second pass on top.
+	//
+	// The trade wants that second pass as its own file, in vector, filled
+	// solid 100% K, where black means varnish and nothing else does — no
+	// greyscale, no glows, no drop shadows, because a halftone cannot be
+	// varnished. Minimum line weight is 0.5pt, and raised spot UV wants
+	// coverage under about 30% before it stops reading as an accent and
+	// starts reading as a laminate.
+	//
+	// So these patterns are generated as vector, in millimetres, at those
+	// rules. What the editor draws is a sheen standing in for the varnish;
+	// what the studio is handed is the mask below.
+	var UV_MIN_STROKE_MM = 0.18;   // 0.5pt
+	var UV_ACCENT_COVERAGE = 30;
+
+	var UV_PATTERNS = [
+		{
+			key: "none",
+			label: "No varnish",
+			note: "A plain printed case. Every book is this unless you choose otherwise.",
+			coverage: 0
+		},
+		{
+			key: "title",
+			label: "Title only",
+			note: "Gloss on the title alone. The cleanest of the eight and the one that reads as deliberate rather than decorative.",
+			coverage: 6
+		},
+		{
+			key: "photo-gloss",
+			label: "Gloss the picture",
+			note: "The photograph glossed and the rest of the case left matte. High coverage, so it is a flood gloss rather than a raised spot — say so when you order.",
+			coverage: 62
+		},
+		{
+			key: "diagonals",
+			label: "Fine diagonals",
+			note: "A close diagonal rule field across the whole case. Catches the light as the book turns and disappears when it is still.",
+			coverage: 14
+		},
+		{
+			key: "botanical",
+			label: "Botanical",
+			note: "A stem and leaves rising from the foot. Suits weddings, christenings and anything with flowers in it.",
+			coverage: 9
+		},
+		{
+			key: "deco",
+			label: "Deco fans",
+			note: "Fanned rules in opposite corners. Formal and symmetrical, and it leaves the middle of the case alone.",
+			coverage: 11
+		},
+		{
+			key: "dots",
+			label: "Scattered light",
+			note: "Circles of graded size, thrown across the case. Reads as bokeh under a lamp.",
+			coverage: 8
+		},
+		{
+			key: "monogram",
+			label: "Monogram",
+			note: "Initials inside a ruled medallion, centred. Give us the letters and we will set them.",
+			coverage: 5,
+			monogram: true
+		},
+		{
+			key: "border",
+			label: "Inset border",
+			note: "A single fine rule held well inside the trim. Quiet, and it flatters a busy photograph rather than competing with it.",
+			coverage: 4
+		},
+		{
+			key: "custom",
+			label: "Your own artwork",
+			note: "Send us your own mask. Vector, solid black where the varnish goes, the same shape as the case.",
+			coverage: null,
+			upload: true
+		}
+	];
+
+	function uvPatternFor(key) {
+		for (var i = 0; i < UV_PATTERNS.length; i++) {
+			if (UV_PATTERNS[i].key === key) return UV_PATTERNS[i];
+		}
+		return UV_PATTERNS[0];
+	}
+
+	function uvOf(book) {
+		var uv = (book && book.cover && book.cover.uv) || {};
+		return {
+			pattern: uvPatternFor(uv.pattern).key,
+			monogram: String(uv.monogram || "").slice(0, 4),
+			file: uv.file || null
+		};
+	}
+
+	// The mask itself, as SVG, in millimetres at the real size of the case.
+	// Everything is filled or stroked solid black, because that is what the
+	// varnish plate is made from; the editor tints it to look like gloss but
+	// the geometry handed over is exactly this.
+	function uvMaskShapes(key, size, monogram) {
+		var w = size.w;
+		var h = size.h;
+		var out = [];
+		var rect = function (x, y, rw, rh, r) {
+			out.push('<rect x="' + x + '" y="' + y + '" width="' + rw + '" height="' + rh + '"' +
+				(r ? ' rx="' + r + '"' : "") + ' fill="#000"/>');
+		};
+		var line = function (x1, y1, x2, y2, sw) {
+			out.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 +
+				'" stroke="#000" stroke-width="' + Math.max(UV_MIN_STROKE_MM, sw) + '" stroke-linecap="round"/>');
+		};
+		var circle = function (cx, cy, r, sw) {
+			out.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '"' +
+				(sw ? ' fill="none" stroke="#000" stroke-width="' + Math.max(UV_MIN_STROKE_MM, sw) + '"' : ' fill="#000"') + "/>");
+		};
+		var i;
+
+		if (key === "title") {
+			rect(w * 0.16, h * 0.80, w * 0.68, h * 0.075, h * 0.0375);
+		} else if (key === "photo-gloss") {
+			rect(w * 0.04, h * 0.04, w * 0.92, h * 0.72, 1);
+		} else if (key === "diagonals") {
+			// 6mm apart at 45 degrees, drawn well past both edges so the field
+			// runs off the case rather than stopping short of it.
+			for (i = -Math.ceil(h / 6); i < Math.ceil((w + h) / 6); i++) {
+				line(i * 6, 0, i * 6 + h, h, 0.5);
+			}
+		} else if (key === "botanical") {
+			var stemX = w * 0.5;
+			out.push('<path d="M' + stemX + ' ' + (h * 0.94) + ' C ' + (stemX - w * 0.06) + ' ' + (h * 0.72) +
+				', ' + (stemX + w * 0.06) + ' ' + (h * 0.52) + ', ' + stemX + ' ' + (h * 0.30) +
+				'" fill="none" stroke="#000" stroke-width="0.9" stroke-linecap="round"/>');
+			for (i = 0; i < 5; i++) {
+				var ly = h * (0.84 - i * 0.13);
+				var dir = i % 2 ? 1 : -1;
+				out.push('<path d="M' + stemX + ' ' + ly + ' q ' + (dir * w * 0.11) + ' ' + (-h * 0.045) +
+					' ' + (dir * w * 0.155) + ' ' + (-h * 0.005) + ' q ' + (-dir * w * 0.075) + ' ' + (h * 0.05) +
+					' ' + (-dir * w * 0.155) + ' ' + (h * 0.005) + 'Z" fill="#000"/>');
+			}
+		} else if (key === "deco") {
+			for (i = 0; i < 7; i++) {
+				var r1 = w * (0.10 + i * 0.045);
+				out.push('<path d="M 0 ' + r1 + ' A ' + r1 + ' ' + r1 + ' 0 0 0 ' + r1 + ' 0" fill="none" stroke="#000" stroke-width="0.8"/>');
+				out.push('<path d="M ' + w + " " + (h - r1) + ' A ' + r1 + ' ' + r1 + ' 0 0 0 ' + (w - r1) + ' ' + h + '" fill="none" stroke="#000" stroke-width="0.8"/>');
+			}
+		} else if (key === "dots") {
+			// Fixed, not random: the same book must produce the same plate
+			// every time it is opened, priced or reprinted.
+			var seeds = [
+				[0.14, 0.11, 2.6], [0.38, 0.07, 1.3], [0.68, 0.14, 3.2], [0.88, 0.09, 1.1],
+				[0.09, 0.34, 1.6], [0.31, 0.29, 3.6], [0.57, 0.36, 1.2], [0.83, 0.31, 2.3],
+				[0.19, 0.55, 3.1], [0.45, 0.51, 1.4], [0.72, 0.58, 2.7], [0.93, 0.53, 1.5],
+				[0.11, 0.75, 2.1], [0.36, 0.79, 1.2], [0.62, 0.73, 3.4], [0.86, 0.81, 1.8],
+				[0.25, 0.93, 1.5], [0.53, 0.90, 2.4], [0.78, 0.95, 1.1]
+			];
+			for (i = 0; i < seeds.length; i++) {
+				circle(w * seeds[i][0], h * seeds[i][1], seeds[i][2]);
+			}
+		} else if (key === "monogram") {
+			var cx = w / 2;
+			var cy = h * 0.44;
+			var rr = Math.min(w, h) * 0.17;
+			circle(cx, cy, rr, 0.9);
+			circle(cx, cy, rr * 0.86, 0.4);
+			var letters = String(monogram || "").toUpperCase().slice(0, 4);
+			if (letters) {
+				out.push('<text x="' + cx + '" y="' + (cy + rr * 0.34) + '" text-anchor="middle" ' +
+					'font-family="Georgia, serif" font-size="' + (rr * 0.95) + '" fill="#000">' +
+					letters.replace(/[&<>]/g, "") + "</text>");
+			}
+		} else if (key === "border") {
+			var inset = Math.min(w, h) * 0.075;
+			out.push('<rect x="' + inset + '" y="' + inset + '" width="' + (w - inset * 2) +
+				'" height="' + (h - inset * 2) + '" fill="none" stroke="#000" stroke-width="0.7"/>');
+		}
+
+		return out.join("");
+	}
+
+	// The sheen the editor and the preview draw. It is the mask, tinted and
+	// blended so it reads as varnish catching the light rather than as ink,
+	// because varnish is not ink and showing it as black would be a lie about
+	// what the customer is buying.
+	function uvLayer(book) {
+		var uv = uvOf(book);
+		if (uv.pattern === "none") return null;
+
+		var size = sizeFor(book.product && book.product.size);
+		var layer = document.createElement("div");
+		layer.className = "ed-uv-layer is-" + uv.pattern;
+
+		if (uv.pattern === "custom") {
+			// Their file is a PDF or an AI as often as not, and nothing here
+			// can draw those. Saying so is better than drawing something that
+			// is not what they sent.
+			layer.classList.add("is-supplied");
+			var note = document.createElement("span");
+			note.className = "ed-uv-supplied";
+			note.textContent = uv.file && uv.file.name ? "Your varnish artwork: " + uv.file.name : "Your varnish artwork";
+			layer.appendChild(note);
+			return layer;
+		}
+
+		layer.innerHTML =
+			'<svg viewBox="0 0 ' + size.w + " " + size.h + '" preserveAspectRatio="none" aria-hidden="true">' +
+			uvMaskShapes(uv.pattern, size, uv.monogram) +
+			"</svg>";
+		return layer;
+	}
+
 	// --- text on a page ---------------------------------------------------
 	//
 	// A caption prints in a bar under a page, which is a different thing from
@@ -517,6 +732,10 @@
 				print.appendChild(text);
 			}
 
+			// Above the picture and the type, because varnish goes on last.
+			var varnish = uvLayer(book);
+			if (varnish) print.appendChild(varnish);
+
 			pageEl.appendChild(print);
 
 			var spine = document.createElement("div");
@@ -611,6 +830,12 @@
 		textElement: textElement,
 		textLayer: textLayer,
 		fontFor: fontFor,
+		UV_PATTERNS: UV_PATTERNS,
+		UV_ACCENT_COVERAGE: UV_ACCENT_COVERAGE,
+		uvPatternFor: uvPatternFor,
+		uvOf: uvOf,
+		uvMaskShapes: uvMaskShapes,
+		uvLayer: uvLayer,
 		MIN_PRINT_DPI: MIN_PRINT_DPI,
 		sizeFor: sizeFor,
 		layoutFor: layoutFor,
