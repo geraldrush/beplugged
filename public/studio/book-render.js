@@ -57,6 +57,93 @@
 		return COVER_FINISHES[0];
 	}
 
+	// How the front of the case is arranged. The finish above is what the case
+	// is covered in; this is where the picture and the title sit on it, and the
+	// two are chosen separately.
+	//
+	// Each design carries the fraction of the cover each of its frames takes
+	// up. That is not decoration: it is what turns "is this photo big enough"
+	// into a real answer for a cover, and a collage frame at half the width
+	// needs a photo of a very different size to a full-bleed one.
+	//
+	// "text" says where the title goes, and pairs with a modifier class on
+	// .ed-preview-cover-text:
+	//   overlay - over the picture, in a gradient (a full-bleed cover)
+	//   band    - a light band below the picture
+	//   block   - a solid colour block below the picture
+	//   margin  - in the case margin, under an inset picture
+	//
+	// Kept in step with STUDIO_COVER_DESIGNS in src/index.js.
+	var COVER_DESIGNS = [
+		{
+			key: "full-bleed",
+			label: "Full bleed",
+			note: "One picture to every edge, the title over it. The usual choice for a single strong photograph.",
+			text: "overlay",
+			frames: [{ w: 1, h: 1 }]
+		},
+		{
+			key: "title-band",
+			label: "Title band",
+			note: "The picture stops short of the foot and the title gets a band of its own, so type never fights the photograph.",
+			text: "band",
+			frames: [{ w: 1, h: 0.78 }]
+		},
+		{
+			key: "inset-window",
+			label: "Inset window",
+			note: "The picture sits inside a wide margin with the title beneath it. Quiet, and the margin is part of the design.",
+			text: "margin",
+			frames: [{ w: 0.76, h: 0.62 }]
+		},
+		{
+			key: "split-block",
+			label: "Split block",
+			note: "Picture above, a solid block of colour below carrying the title. The strongest separation of the six.",
+			text: "block",
+			frames: [{ w: 1, h: 0.62 }]
+		},
+		{
+			key: "collage",
+			label: "Three photographs",
+			note: "Two above, one across the foot. Three is as many as a cover holds before they start competing.",
+			text: "band",
+			frames: [
+				{ w: 0.5, h: 0.39 },
+				{ w: 0.5, h: 0.39 },
+				{ w: 1, h: 0.39 }
+			]
+		},
+		{
+			key: "plate",
+			label: "Mounted plate",
+			note: "A small picture mounted centrally with the title under it. Reads as a plate set into the case, and suits the canvas finish.",
+			text: "margin",
+			frames: [{ w: 0.52, h: 0.42 }]
+		}
+	];
+
+	function coverDesignFor(key) {
+		for (var i = 0; i < COVER_DESIGNS.length; i++) {
+			if (COVER_DESIGNS[i].key === key) return COVER_DESIGNS[i];
+		}
+		return COVER_DESIGNS[0];
+	}
+
+	function coverDesign(book) {
+		return coverDesignFor(book && book.cover && book.cover.design);
+	}
+
+	// Every book sent before designs existed carries a single cover.slot, and
+	// two of them are already in the database. Read that as the first frame of
+	// a full-bleed cover rather than making those customers' books stop
+	// opening. The editor migrates its own drafts the same way.
+	function coverSlots(book) {
+		var cover = (book && book.cover) || {};
+		if (Array.isArray(cover.slots)) return cover.slots;
+		return cover.slot ? [cover.slot] : [];
+	}
+
 	var MIN_PRINT_DPI = 150;
 
 	function layoutFor(key) {
@@ -73,23 +160,92 @@
 		return SIZES[0];
 	}
 
+	function slotFit(slot) {
+		return slot && slot.fit === "contain" ? "contain" : "cover";
+	}
+
+	// Quarter turns only, normalised, so a design that arrives with anything
+	// else in it still draws something sensible.
+	function slotRotate(slot) {
+		var value = Number(slot && slot.rotate) || 0;
+		return (((Math.round(value / 90) * 90) % 360) + 360) % 360;
+	}
+
+	function slotZoom(slot) {
+		return Math.max(1, Number(slot && slot.zoom) || 1);
+	}
+
+	// A quarter turn has to be handed the frame's other dimension or it will
+	// not fill it: rotating a W by H box a quarter turn leaves it covering
+	// H by W. Container query units let the stylesheet say that without
+	// anything measuring a frame in script, which matters because the very
+	// same element is laid out at four different sizes — the arrange grid, the
+	// preview, the print sheet and the customer's read-only view.
+	//
+	// Panning stays on object-position, which applies to the picture inside the
+	// element and is therefore unaffected by the turn.
 	function applySlotImage(img, slot) {
 		var x = slot && typeof slot.x === "number" ? slot.x : 50;
 		var y = slot && typeof slot.y === "number" ? slot.y : 50;
+		var rotate = slotRotate(slot);
+		var turned = rotate === 90 || rotate === 270;
+
+		img.style.objectFit = slotFit(slot);
 		img.style.objectPosition = x + "% " + y + "%";
-		img.style.transformOrigin = x + "% " + y + "%";
-		img.style.transform = "scale(" + ((slot && slot.zoom) || 1) + ")";
+		img.classList.toggle("is-turned", turned);
+		img.style.transformOrigin = turned ? "center" : x + "% " + y + "%";
+		img.style.transform =
+			(turned ? "translate(-50%, -50%) " : "") +
+			"rotate(" + rotate + "deg) scale(" + slotZoom(slot) + ")";
 	}
 
-	// Effective print resolution of one slot: the frame is a physical size, the
-	// photo is a pixel count, and "cover" scales the photo until the smaller
-	// side fits. Zooming in throws pixels away, so it divides.
-	function slotDpi(photo, sizeKey, layout, zoom) {
+	// Effective print resolution of one frame. The frame is a physical size in
+	// millimetres, the photo is a pixel count, and how the two meet depends on
+	// the fit:
+	//
+	//   cover   crops. The photo is scaled until the tighter side fills the
+	//           frame, so the worse of the two ratios decides.
+	//   contain fits the whole photo in. The better one decides, and the
+	//           number is higher, because the picture prints smaller.
+	//
+	// A quarter turn presents the photo's height to the frame's width, so the
+	// two swap. Zooming in throws pixels away, so it divides.
+	//
+	// This is the one number in the editor a customer is actually trusting, so
+	// every control that changes how a photo meets its frame has to reach it.
+	function dpiFor(photo, frameWmm, frameHmm, slot) {
 		if (!photo || !photo.w || !photo.h) return null;
+		if (!(frameWmm > 0) || !(frameHmm > 0)) return null;
+
+		var turned = slotRotate(slot) % 180 !== 0;
+		var pw = turned ? photo.h : photo.w;
+		var ph = turned ? photo.w : photo.h;
+
+		var frameWin = frameWmm / 25.4;
+		var frameHin = frameHmm / 25.4;
+
+		var fitted = slotFit(slot) === "contain"
+			? Math.max(pw / frameWin, ph / frameHin)
+			: Math.min(pw / frameWin, ph / frameHin);
+
+		return fitted / slotZoom(slot);
+	}
+
+	// A page frame: every layout is a plain grid, so the frame is the page
+	// divided by the columns and rows.
+	function slotDpi(photo, sizeKey, layout, slot) {
 		var size = sizeFor(sizeKey);
-		var slotWin = (size.w / layout.cols) / 25.4;
-		var slotHin = (size.h / layout.rows) / 25.4;
-		return Math.min(photo.w / slotWin, photo.h / slotHin) / Math.max(1, zoom || 1);
+		return dpiFor(photo, size.w / layout.cols, size.h / layout.rows, slot);
+	}
+
+	// A cover frame, which is a fraction of the cover rather than a share of a
+	// grid. Without this a collage frame at half the width would be judged as
+	// though it printed across the whole cover, and the warning would go quiet
+	// exactly where it is needed most.
+	function coverSlotDpi(photo, sizeKey, design, index, slot) {
+		var size = sizeFor(sizeKey);
+		var frame = design.frames[index] || design.frames[0];
+		return dpiFor(photo, size.w * frame.w, size.h * frame.h, slot);
 	}
 
 	// Which pages are shown together. Always facing pages, on every screen: an
@@ -181,7 +337,8 @@
 		var isCover = pageIndex === null;
 		var page = isCover ? null : (book.pages || [])[pageIndex];
 		if (!isCover && !page) return document.createElement("div");
-		var layout = layoutFor(isCover ? "full" : page.layout);
+		var layout = isCover ? null : layoutFor(page.layout);
+		var design = isCover ? coverDesign(book) : null;
 		var cover = book.cover || {};
 
 		var wrap = document.createElement("div");
@@ -197,12 +354,18 @@
 
 		var sheet = document.createElement("div");
 		sheet.className = "ed-preview-sheet";
-		sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
-		sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
 
 		if (isCover) {
-			sheet.appendChild(slotElement(cover.slot, resolve));
+			// A cover's frames are not a uniform grid, so the arrangement is
+			// left to the stylesheet, keyed off the design.
+			sheet.classList.add("ed-cover-sheet");
+			var slots = coverSlots(book);
+			for (var frame = 0; frame < design.frames.length; frame++) {
+				sheet.appendChild(slotElement(slots[frame], resolve));
+			}
 		} else {
+			sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+			sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
 			(page.slots || []).forEach(function (slot) {
 				sheet.appendChild(slotElement(slot, resolve));
 			});
@@ -213,12 +376,18 @@
 			// shows as a border around the picture and down the spine. Flat
 			// rectangle in, bound book out.
 			var print = document.createElement("div");
-			print.className = "ed-cover-print";
+			print.className = "ed-cover-print ed-cover-design-" + design.key;
 			print.appendChild(sheet);
 
-			if (cover.title || cover.subtitle) {
+			// An overlay only exists to carry type, so it is drawn only when
+			// there is type to carry. Every other design reserves the space
+			// whether or not it has been filled in yet: that reserved space is
+			// the design, it is what the frame fractions above are measured
+			// against, and hiding it would make choosing a design do nothing
+			// until a title was typed.
+			if (design.text !== "overlay" || cover.title || cover.subtitle) {
 				var text = document.createElement("div");
-				text.className = "ed-preview-cover-text";
+				text.className = "ed-preview-cover-text is-" + design.text;
 				text.innerHTML = '<div class="t"></div><div class="s"></div>';
 				text.querySelector(".t").textContent = cover.title || "";
 				text.querySelector(".s").textContent = cover.subtitle || "";
@@ -254,27 +423,46 @@
 		return wrap;
 	}
 
-	// Every slot in the book whose photo is too small for the size it prints
-	// at, as {page, slot, name, dpi}. Page numbers are 1-based.
+	// Every frame in the book whose photo is too small for the size it prints
+	// at, as {page, slot, name, dpi}. Page numbers are 1-based; the cover is
+	// page 0, which callers label rather than number.
+	//
+	// The cover used to be skipped entirely, so the one picture everybody
+	// actually looks at was the only one nobody was warned about. That was
+	// survivable while a cover was always one full-bleed frame. It is not now
+	// that a collage frame prints at half the width and needs four times the
+	// pixels for the same result.
 	function lowResSlots(book, resolve) {
 		var out = [];
 		var sizeKey = book.product && book.product.size;
+
+		var note = function (pageNumber, slotIndex, slot, dpi, photo) {
+			if (dpi === null || dpi >= MIN_PRINT_DPI) return;
+			out.push({
+				page: pageNumber,
+				slot: slotIndex + 1,
+				name: photo ? photo.name : "",
+				dpi: Math.round(dpi)
+			});
+		};
+
+		var design = coverDesign(book);
+		coverSlots(book).forEach(function (slot, frameIndex) {
+			if (!slot || !slot.photoId) return;
+			if (frameIndex >= design.frames.length) return;
+			var photo = resolve(slot.photoId);
+			note(0, frameIndex, slot, coverSlotDpi(photo, sizeKey, design, frameIndex, slot), photo);
+		});
+
 		(book.pages || []).forEach(function (page, pageIndex) {
 			var layout = layoutFor(page.layout);
 			(page.slots || []).forEach(function (slot, slotIndex) {
 				if (!slot || !slot.photoId) return;
 				var photo = resolve(slot.photoId);
-				var dpi = slotDpi(photo, sizeKey, layout, slot.zoom);
-				if (dpi !== null && dpi < MIN_PRINT_DPI) {
-					out.push({
-						page: pageIndex + 1,
-						slot: slotIndex + 1,
-						name: photo ? photo.name : "",
-						dpi: Math.round(dpi)
-					});
-				}
+				note(pageIndex + 1, slotIndex, slot, slotDpi(photo, sizeKey, layout, slot), photo);
 			});
 		});
+
 		return out;
 	}
 
@@ -282,7 +470,14 @@
 		SIZES: SIZES,
 		LAYOUTS: LAYOUTS,
 		COVER_FINISHES: COVER_FINISHES,
+		COVER_DESIGNS: COVER_DESIGNS,
 		finishFor: finishFor,
+		coverDesignFor: coverDesignFor,
+		coverDesign: coverDesign,
+		coverSlots: coverSlots,
+		coverSlotDpi: coverSlotDpi,
+		slotRotate: slotRotate,
+		slotFit: slotFit,
 		MIN_PRINT_DPI: MIN_PRINT_DPI,
 		sizeFor: sizeFor,
 		layoutFor: layoutFor,

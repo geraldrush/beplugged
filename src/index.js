@@ -9757,6 +9757,22 @@ const STUDIO_COVER_FINISHES = {
 // choice existed.
 const STUDIO_DEFAULT_FINISH = "photo-wrap";
 
+// Where the picture and the title sit on the front of the case. The finish
+// above is what the case is covered in; this is the arrangement on it, and the
+// two are chosen separately. Kept in step with COVER_DESIGNS in
+// public/studio/book-render.js, including the frame counts, which are what
+// says how many pictures a cover is allowed to carry.
+const STUDIO_COVER_DESIGNS = {
+  "full-bleed": { label: "Full bleed", frames: 1 },
+  "title-band": { label: "Title band", frames: 1 },
+  "inset-window": { label: "Inset window", frames: 1 },
+  "split-block": { label: "Split block", frames: 1 },
+  collage: { label: "Three photographs", frames: 3 },
+  plate: { label: "Mounted plate", frames: 1 },
+};
+
+const STUDIO_DEFAULT_COVER_DESIGN = "full-bleed";
+
 const STUDIO_MAX_PAGES = 120;
 const STUDIO_MAX_PHOTOS = 300;
 // Per file. Comfortably above a phone photo and above most DSLR JPEGs, and
@@ -9879,12 +9895,33 @@ function normalizeStudioDesign(raw) {
     }
   }
 
-  // The cover was not checked the same way, and it is the one frame where the
-  // hole is certain to be seen: an id declared here but absent from the photo
-  // list is refused every upload, so the book arrives with a blank case.
-  const coverPhotoId = raw?.cover?.slot?.photoId;
-  if (coverPhotoId && !ids.has(String(coverPhotoId))) {
-    throw new RequestError("The cover refers to a photo that is not in the order");
+  const coverDesign = String(raw.cover?.design || STUDIO_DEFAULT_COVER_DESIGN);
+  if (!STUDIO_COVER_DESIGNS[coverDesign]) {
+    throw new RequestError("Choose a cover design");
+  }
+
+  // A cover holds one frame, or three for a collage. cover.slot is the single
+  // frame every book sent before designs existed carries, and two of those are
+  // in the database, so it is still read — here and in book-render, which is
+  // what keeps those customers' books opening.
+  const coverSlots = Array.isArray(raw.cover?.slots)
+    ? raw.cover.slots
+    : raw.cover?.slot
+      ? [raw.cover.slot]
+      : [];
+
+  if (coverSlots.length > STUDIO_COVER_DESIGNS[coverDesign].frames) {
+    throw new RequestError("That cover design does not have that many pictures on it");
+  }
+
+  // The cover is the one frame where a hole is certain to be seen: an id named
+  // here but absent from the photo list is refused every upload, so the book
+  // would arrive with a blank case.
+  for (const slot of coverSlots) {
+    if (!slot?.photoId) continue;
+    if (!ids.has(String(slot.photoId))) {
+      throw new RequestError("The cover refers to a photo that is not in the order");
+    }
   }
 
   // Nothing counts placed frames on purpose. A book sent with every photo
@@ -10376,12 +10413,18 @@ async function viewStudioPhoto(request, env, orderId, photoId) {
   });
 }
 
-// The finish lives in the design rather than its own column, so it is read
-// back out of there.
+// The finish and the cover design both live in the design rather than in
+// columns of their own, so they are read back out of there. The studio needs
+// both to know what it is making: one is the material, the other the layout.
 function studioCoverLabel(order) {
   try {
     const design = JSON.parse(order.design_json || "{}");
-    return STUDIO_COVER_FINISHES[design?.product?.finish] || STUDIO_COVER_FINISHES[STUDIO_DEFAULT_FINISH];
+    const finish =
+      STUDIO_COVER_FINISHES[design?.product?.finish] || STUDIO_COVER_FINISHES[STUDIO_DEFAULT_FINISH];
+    const arrangement =
+      STUDIO_COVER_DESIGNS[design?.cover?.design]?.label ||
+      STUDIO_COVER_DESIGNS[STUDIO_DEFAULT_COVER_DESIGN].label;
+    return `${finish} · ${arrangement}`;
   } catch {
     return STUDIO_COVER_FINISHES[STUDIO_DEFAULT_FINISH];
   }

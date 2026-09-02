@@ -24,6 +24,13 @@
 	var sizeFor = SB.sizeFor;
 	var layoutFor = SB.layoutFor;
 	var applySlotImage = SB.applySlotImage;
+	var COVER_DESIGNS = SB.COVER_DESIGNS;
+	var coverDesignFor = SB.coverDesignFor;
+
+	// How far a photo can be pushed into its frame before it is throwing away
+	// more than it is worth. Past this the resolution warning is shouting at
+	// something the customer did on purpose.
+	var MAX_ZOOM = 3;
 
 	var PAGE_COUNTS = [20, 24, 28, 32, 36, 40, 48, 60];
 
@@ -141,8 +148,12 @@
 	var saveTimer = null;
 	var sending = false;
 
+	// rotate and fit are written out even at their defaults. They cost a few
+	// bytes in a design that has 400 KB to play with, and having them present
+	// means every slot in a book has the same shape whichever version of the
+	// editor built it.
 	function blankSlot() {
-		return { photoId: null, zoom: 1, x: 50, y: 50 };
+		return { photoId: null, zoom: 1, x: 50, y: 50, rotate: 0, fit: "cover" };
 	}
 
 	function blankPage(layoutKey) {
@@ -156,7 +167,7 @@
 		var s = {
 			version: 1,
 			product: { size: "a4-portrait", pages: 24, finish: "photo-wrap" },
-			cover: { title: "", subtitle: "", slot: blankSlot() },
+			cover: { design: "full-bleed", title: "", subtitle: "", slots: [blankSlot()] },
 			pages: [],
 			photos: []
 		};
@@ -170,18 +181,43 @@
 		s.product.pages = s.pages.length;
 	}
 
+	function coverDesign() {
+		return coverDesignFor(state.cover.design);
+	}
+
+	// The frames the current design actually has. A design change can leave the
+	// stored array the wrong length either way, so everything reads through
+	// here rather than trusting state.cover.slots.length.
+	function coverSlots() {
+		var wanted = coverDesign().frames.length;
+		if (!Array.isArray(state.cover.slots)) state.cover.slots = [];
+		while (state.cover.slots.length < wanted) state.cover.slots.push(blankSlot());
+		return state.cover.slots.slice(0, wanted);
+	}
+
 	// Slots hold ids; the photo list holds what those ids mean. Sending one
 	// without the other is what the server rejects, so they are rebuilt
 	// together every time.
 	function usedPhotoIds() {
 		var used = new Set();
-		if (state.cover.slot.photoId) used.add(state.cover.slot.photoId);
+		coverSlots().forEach(function (slot) {
+			if (slot.photoId) used.add(slot.photoId);
+		});
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot) {
 				if (slot.photoId) used.add(slot.photoId);
 			});
 		});
 		return used;
+	}
+
+	// A frame with a photo just dropped into it. Every drop, tap and autofill
+	// goes through here so a new placement can never disagree with blankSlot
+	// about what the untouched defaults are.
+	function placed(photoId) {
+		var slot = blankSlot();
+		slot.photoId = photoId;
+		return slot;
 	}
 
 	function photoById(id) {
@@ -379,7 +415,9 @@
 	// hundred of each — the difference between a tap and a frozen phone.
 	function detachPhoto(id) {
 		state.photos = state.photos.filter(function (p) { return p.id !== id; });
-		if (state.cover.slot.photoId === id) state.cover.slot = blankSlot();
+		coverSlots().forEach(function (slot, i) {
+			if (slot.photoId === id) state.cover.slots[i] = blankSlot();
+		});
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot, i) {
 				if (slot.photoId === id) page.slots[i] = blankSlot();
@@ -416,15 +454,9 @@
 
 	// --- resolution -------------------------------------------------------
 
-	// Effective print resolution of one slot: the frame is a physical size, the
-	// photo is a pixel count, and "cover" scales the photo until the smaller
-	// side fits. Zooming in throws pixels away, so it divides.
-	// The arrange grid's own badge. Same arithmetic as everywhere else, because
-	// it is the module's.
-	function slotDpi(photo, layout, zoom) {
-		return SB.slotDpi(photo, state.product.size, layout, zoom);
-	}
-
+	// Every resolution answer in the editor comes from book-render, so the
+	// badge on a frame, the list in the review step and the note in the
+	// preview can never disagree with each other or with what is printed.
 	function lowResSlots() {
 		return SB.lowResSlots(state, previewResolve);
 	}
@@ -435,10 +467,20 @@
 
 	function emptySlotCount() {
 		var n = 0;
+		coverSlots().forEach(function (slot) { if (!slot.photoId) n++; });
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot) { if (!slot.photoId) n++; });
 		});
 		return n;
+	}
+
+	// "chosen" told a customer nothing once a cover could hold three frames.
+	function coverPhotoSummary() {
+		var slots = coverSlots();
+		var filled = slots.filter(function (slot) { return slot.photoId; }).length;
+		if (!filled) return slots.length === 1 ? "not chosen" : "none of " + slots.length + " chosen";
+		if (filled === slots.length) return slots.length === 1 ? "chosen" : "all " + slots.length + " chosen";
+		return filled + " of " + slots.length + " chosen";
 	}
 
 	function unusedPhotoCount() {
@@ -500,6 +542,40 @@
 			});
 			host.appendChild(button);
 		});
+	}
+
+	function renderCoverDesignOptions() {
+		var host = document.getElementById("cover-design-options");
+		if (!host) return;
+		host.innerHTML = "";
+		COVER_DESIGNS.forEach(function (design) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-choice";
+			button.setAttribute("aria-pressed", String(coverDesign().key === design.key));
+			button.innerHTML = '<span class="ed-cover-thumb"></span><span><strong></strong><small></small></span>';
+			button.querySelector(".ed-cover-thumb").className =
+				"ed-cover-thumb is-" + design.key;
+			button.querySelector("strong").textContent = design.label;
+			button.querySelector("small").textContent = design.note;
+			button.addEventListener("click", function () { changeCoverDesign(design.key); });
+			host.appendChild(button);
+		});
+	}
+
+	function changeCoverDesign(key) {
+		var design = coverDesignFor(key);
+		if (design.key === coverDesign().key) return;
+		var next = reflowSlots(coverSlots(), design.frames.length, "cover");
+		if (!next) return;
+		state.cover.design = design.key;
+		state.cover.slots = next;
+		panSlot = null;
+		scheduleSave();
+		renderCoverDesignOptions();
+		renderPages();
+		renderTray();
+		renderSummary();
 	}
 
 	function renderPageOptions() {
@@ -621,12 +697,21 @@
 		return '<svg width="24" height="18" viewBox="0 0 24 18" aria-hidden="true">' + cells + "</svg>";
 	}
 
-	function buildSlot(slot, pageIndex, slotIndex, layout) {
+	// One frame, whether it is on a page or on the cover. These were two
+	// functions that had drifted into near-copies of each other; unified
+	// because every control added below would otherwise have to be written and
+	// then maintained twice, and the cover half was already missing the
+	// adjust tools the page half had.
+	//
+	// pageIndex -1 means the cover. dpi is worked out by the caller, because a
+	// cover frame is a fraction of the case and a page frame is a share of a
+	// grid, and only the caller knows which.
+	function buildFrame(slot, pageIndex, slotIndex, dpi) {
 		var cell = document.createElement("div");
 		cell.className = "ed-slot";
-		var isPanning = panSlot && panSlot.page === pageIndex && panSlot.slot === slotIndex;
-
+		var isAdjusting = adjusting(pageIndex, slotIndex);
 		var photo = slot.photoId ? photoById(slot.photoId) : null;
+
 		if (photo) {
 			cell.classList.add("is-filled");
 			var url = thumbUrls.get(photo.id);
@@ -643,41 +728,24 @@
 				cell.appendChild(fallback);
 			}
 
-			var dpi = slotDpi(photo, layout, slot.zoom);
 			if (dpi !== null && dpi < MIN_PRINT_DPI) {
 				var warn = document.createElement("span");
 				warn.className = "ed-slot-warn";
 				warn.textContent = "small";
-				warn.title = "About " + Math.round(dpi) + " dots per inch at this size. It will look soft in print. Use it smaller, or send a bigger copy.";
+				warn.title = "About " + Math.round(dpi) + " dots per inch at this size. It will look soft in print. Use it smaller, turn off the crop, or send a bigger copy.";
 				cell.appendChild(warn);
 			}
 
 			var tools = document.createElement("div");
 			tools.className = "ed-slot-tools";
-			tools.appendChild(miniButton(isPanning ? "done" : "move", function (event) {
+			tools.appendChild(miniButton(isAdjusting ? "done" : "adjust", function (event) {
 				event.stopPropagation();
-				panSlot = isPanning ? null : { page: pageIndex, slot: slotIndex };
-				renderPages();
-			}));
-			tools.appendChild(miniButton("+", function (event) {
-				event.stopPropagation();
-				slot.zoom = Math.min(3, Math.round((slot.zoom + 0.15) * 100) / 100);
-				scheduleSave();
-				renderPages();
-			}));
-			tools.appendChild(miniButton("−", function (event) {
-				event.stopPropagation();
-				slot.zoom = Math.max(1, Math.round((slot.zoom - 0.15) * 100) / 100);
-				scheduleSave();
+				panSlot = isAdjusting ? null : { page: pageIndex, slot: slotIndex };
 				renderPages();
 			}));
 			tools.appendChild(miniButton("✕", function (event) {
 				event.stopPropagation();
-				var fresh = blankSlot();
-				slot.photoId = fresh.photoId;
-				slot.zoom = fresh.zoom;
-				slot.x = fresh.x;
-				slot.y = fresh.y;
+				emptySlot(slot);
 				panSlot = null;
 				scheduleSave();
 				renderPages();
@@ -686,8 +754,8 @@
 			}));
 			cell.appendChild(tools);
 
-			if (isPanning) {
-				cell.style.outline = "2px solid var(--brand)";
+			if (isAdjusting) {
+				cell.classList.add("is-adjusting");
 				// Only while repositioning. Setting this permanently would take
 				// the page scroll away from anyone on a phone, which is exactly
 				// the sort of thing this site has had to undo before.
@@ -697,17 +765,16 @@
 		} else {
 			var placeholder = document.createElement("span");
 			placeholder.className = "ed-slot-empty";
-			placeholder.textContent = selectedPhotoId ? "Tap to place" : "Drop a photo";
+			placeholder.textContent = pageIndex === -1
+				? (selectedPhotoId ? "Tap for the cover" : "Cover photo")
+				: (selectedPhotoId ? "Tap to place" : "Drop a photo");
 			cell.appendChild(placeholder);
 		}
 
 		cell.addEventListener("click", function () {
-			if (isPanning) return;
+			if (isAdjusting) return;
 			if (!selectedPhotoId) return;
-			slot.photoId = selectedPhotoId;
-			slot.zoom = 1;
-			slot.x = 50;
-			slot.y = 50;
+			fillSlot(slot, selectedPhotoId);
 			scheduleSave();
 			renderPages();
 			renderTray();
@@ -725,10 +792,7 @@
 			cell.classList.remove("is-drop");
 			var id = event.dataTransfer.getData("text/plain");
 			if (!id || !photoById(id)) return;
-			slot.photoId = id;
-			slot.zoom = 1;
-			slot.x = 50;
-			slot.y = 50;
+			fillSlot(slot, id);
 			scheduleSave();
 			renderPages();
 			renderTray();
@@ -736,6 +800,105 @@
 		});
 
 		return cell;
+	}
+
+	function adjusting(pageIndex, slotIndex) {
+		return Boolean(panSlot && panSlot.page === pageIndex && panSlot.slot === slotIndex);
+	}
+
+	// Resize, recentre, crop and turn, for the frame currently being adjusted.
+	// It sits under the whole card rather than inside the frame: a four-photo
+	// page gives a frame about a thumbnail's width, and a slider in there is a
+	// control nobody on a phone can actually hit.
+	function adjustBar(slot, cell) {
+		var bar = document.createElement("div");
+		bar.className = "ed-adjust";
+
+		var zoomWrap = document.createElement("label");
+		zoomWrap.className = "ed-adjust-zoom";
+		zoomWrap.innerHTML = "<span>Size</span>";
+
+		var zoom = document.createElement("input");
+		zoom.type = "range";
+		zoom.min = "1";
+		zoom.max = String(MAX_ZOOM);
+		zoom.step = "0.01";
+		zoom.value = String(slot.zoom || 1);
+		zoom.setAttribute("aria-label", "Size of the photo in its frame");
+
+		// Dragging the slider redraws the one image rather than the page. A
+		// full re-render on every input event would rebuild the slider under
+		// the finger holding it, which ends the drag on the first move.
+		zoom.addEventListener("input", function () {
+			slot.zoom = Math.round(Number(zoom.value) * 100) / 100;
+			var img = cell.querySelector("img");
+			if (img) applySlotImage(img, slot);
+			scheduleSave();
+		});
+		// The resolution badge and the review notes only settle once the drag
+		// stops, so they are brought up to date then.
+		zoom.addEventListener("change", function () { renderPages(); renderSummary(); });
+
+		zoomWrap.appendChild(zoom);
+		bar.appendChild(zoomWrap);
+
+		var buttons = document.createElement("div");
+		buttons.className = "ed-adjust-buttons";
+
+		buttons.appendChild(smallButton("Recentre", "Put the photo back in the middle at its original size", function () {
+			slot.zoom = 1;
+			slot.x = 50;
+			slot.y = 50;
+			scheduleSave();
+			renderPages();
+			renderSummary();
+		}));
+
+		var cropping = SB.slotFit(slot) === "cover";
+		buttons.appendChild(smallButton(cropping ? "Show all of it" : "Fill the frame",
+			cropping
+				? "Show the whole photo, with space at the sides rather than a crop"
+				: "Crop the photo so it fills the frame edge to edge",
+			function () {
+				slot.fit = cropping ? "contain" : "cover";
+				scheduleSave();
+				renderPages();
+				renderSummary();
+			}));
+
+		buttons.appendChild(smallButton("Turn", "Turn the photo a quarter turn", function () {
+			slot.rotate = (SB.slotRotate(slot) + 90) % 360;
+			scheduleSave();
+			renderPages();
+			renderSummary();
+		}));
+
+		buttons.appendChild(smallButton("Done", "Finish adjusting this photo", function () {
+			panSlot = null;
+			renderPages();
+		}));
+
+		bar.appendChild(buttons);
+
+		var hint = document.createElement("p");
+		hint.className = "ed-adjust-hint";
+		hint.textContent = "Drag the photo to move it inside its frame.";
+		bar.appendChild(hint);
+
+		return bar;
+	}
+
+	// Filling and emptying a frame mutate it in place, so nothing needs to know
+	// which array the frame came out of, and a new placement can never disagree
+	// with blankSlot about the untouched defaults.
+	function fillSlot(slot, photoId) {
+		var fresh = placed(photoId);
+		Object.keys(fresh).forEach(function (key) { slot[key] = fresh[key]; });
+	}
+
+	function emptySlot(slot) {
+		var fresh = blankSlot();
+		Object.keys(fresh).forEach(function (key) { slot[key] = fresh[key]; });
 	}
 
 	function miniButton(label, onClick) {
@@ -822,20 +985,24 @@
 
 		// Cover first. It is the page everyone judges the book by and the one
 		// customers forget to fill in, so it is not hidden behind a tab.
-		var coverLayout = layoutFor("full");
-		var coverSheet = sheetElement(coverLayout);
-		coverSheet.appendChild(buildCoverSlot());
-		var cover = pageCard("Cover", coverSheet);
-		host.appendChild(cover.card);
+		host.appendChild(buildCoverCard());
 
 		state.pages.forEach(function (page, pageIndex) {
 			var layout = layoutFor(page.layout);
 			var sheet = sheetElement(layout);
+			var adjustCell = null;
 			page.slots.forEach(function (slot, slotIndex) {
-				sheet.appendChild(buildSlot(slot, pageIndex, slotIndex, layout));
+				var photo = slot.photoId ? photoById(slot.photoId) : null;
+				var cell = buildFrame(slot, pageIndex, slotIndex,
+					photo ? SB.slotDpi(photo, state.product.size, layout, slot) : null);
+				if (adjusting(pageIndex, slotIndex)) adjustCell = cell;
+				sheet.appendChild(cell);
 			});
 
 			var built = pageCard("Page " + (pageIndex + 1), sheet);
+			if (adjustCell) {
+				built.card.appendChild(adjustBar(page.slots[panSlot.slot], adjustCell));
+			}
 
 			var tools = document.createElement("div");
 			tools.className = "ed-page-tools";
@@ -874,83 +1041,49 @@
 		});
 	}
 
-	function buildCoverSlot() {
-		var layout = layoutFor("full");
-		var slot = state.cover.slot;
-		var cell = document.createElement("div");
-		cell.className = "ed-slot";
-		var photo = slot.photoId ? photoById(slot.photoId) : null;
+	// The cover as the chosen design arranges it. The frame wrapper carries the
+	// same ed-cover-design-* class the shared renderer uses, so the geometry is
+	// one set of rules in the stylesheet rather than a second copy that drifts.
+	function buildCoverCard() {
+		var design = coverDesign();
+		var slots = coverSlots();
 
-		if (photo) {
-			cell.classList.add("is-filled");
-			var url = thumbUrls.get(photo.id);
-			if (url) {
-				var img = document.createElement("img");
-				img.src = url;
-				img.alt = "";
-				applySlotImage(img, slot);
-				cell.appendChild(img);
-			}
-			var tools = document.createElement("div");
-			tools.className = "ed-slot-tools";
-			tools.appendChild(miniButton("✕", function (event) {
-				event.stopPropagation();
-				state.cover.slot = blankSlot();
-				scheduleSave();
-				renderPages();
-				renderTray();
-			}));
-			cell.appendChild(tools);
+		var frame = document.createElement("div");
+		frame.className = "ed-cover-frame ed-cover-design-" + design.key;
 
-			var dpi = slotDpi(photo, layout, slot.zoom);
-			if (dpi !== null && dpi < MIN_PRINT_DPI) {
-				var warn = document.createElement("span");
-				warn.className = "ed-slot-warn";
-				warn.textContent = "small";
-				warn.title = "About " + Math.round(dpi) + " dots per inch on a cover this size.";
-				cell.appendChild(warn);
-			}
-		} else {
-			var placeholder = document.createElement("span");
-			placeholder.className = "ed-slot-empty";
-			placeholder.textContent = "Cover photo";
-			cell.appendChild(placeholder);
+		var sheet = document.createElement("div");
+		sheet.className = "ed-sheet ed-cover-sheet";
+		sheet.style.aspectRatio = "auto";
+
+		var adjustCell = null;
+		slots.forEach(function (slot, index) {
+			var photo = slot.photoId ? photoById(slot.photoId) : null;
+			var cell = buildFrame(slot, -1, index,
+				photo ? SB.coverSlotDpi(photo, state.product.size, design, index, slot) : null);
+			if (adjusting(-1, index)) adjustCell = cell;
+			sheet.appendChild(cell);
+		});
+		frame.appendChild(sheet);
+
+		if (design.text !== "overlay" || state.cover.title || state.cover.subtitle) {
+			var text = document.createElement("div");
+			text.className = "ed-preview-cover-text is-" + design.text;
+			text.innerHTML = '<div class="t"></div><div class="s"></div>';
+			text.querySelector(".t").textContent = state.cover.title || "";
+			text.querySelector(".s").textContent = state.cover.subtitle || "";
+			frame.appendChild(text);
 		}
 
-		// The cover text sits over the picture, roughly where it will print.
-		if (state.cover.title || state.cover.subtitle) {
-			var overlay = document.createElement("div");
-			overlay.style.cssText = "position:absolute;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(to top,rgba(13,24,38,0.72),rgba(13,24,38,0));color:#fff;z-index:1;pointer-events:none;";
-			overlay.innerHTML = '<div style="font-size:15px;font-weight:650;line-height:1.25;"></div><div style="font-size:11px;opacity:0.85;margin-top:2px;"></div>';
-			overlay.children[0].textContent = state.cover.title || "";
-			overlay.children[1].textContent = state.cover.subtitle || "";
-			cell.appendChild(overlay);
+		// The case is a fixed shape, so the frame has to be given the paper's
+		// proportions here rather than by ed-sheet as a page card is.
+		var size = sizeFor(state.product.size);
+		frame.style.aspectRatio = size.w + " / " + size.h;
+
+		var built = pageCard("Cover — " + design.label, frame);
+		if (adjustCell) {
+			built.card.appendChild(adjustBar(state.cover.slots[panSlot.slot], adjustCell));
 		}
-
-		cell.addEventListener("click", function () {
-			if (!selectedPhotoId) return;
-			state.cover.slot = { photoId: selectedPhotoId, zoom: 1, x: 50, y: 50 };
-			scheduleSave();
-			renderPages();
-			renderTray();
-		});
-		cell.addEventListener("dragover", function (event) {
-			event.preventDefault();
-			cell.classList.add("is-drop");
-		});
-		cell.addEventListener("dragleave", function () { cell.classList.remove("is-drop"); });
-		cell.addEventListener("drop", function (event) {
-			event.preventDefault();
-			cell.classList.remove("is-drop");
-			var id = event.dataTransfer.getData("text/plain");
-			if (!id || !photoById(id)) return;
-			state.cover.slot = { photoId: id, zoom: 1, x: 50, y: 50 };
-			scheduleSave();
-			renderPages();
-			renderTray();
-		});
-
-		return cell;
+		return built.card;
 	}
 
 	function smallButton(label, title, onClick) {
@@ -973,25 +1106,34 @@
 		renderPages();
 	}
 
-	// Changing layout keeps the photos already placed, in order, and drops any
-	// that no longer have a frame — announced rather than silent.
+	// Fitting a set of frames to a new count. Photos already placed are kept in
+	// order and anything left without a frame comes off, announced rather than
+	// silent. Returns null if the customer would rather not.
+	//
+	// Shared by page layouts and cover designs because it is the same question
+	// asked about two different things, and a second copy would be a second
+	// place for the confirmation to go missing.
+	function reflowSlots(slots, wanted, where) {
+		var filled = slots.filter(function (slot) { return slot.photoId; });
+		if (filled.length > wanted) {
+			var losing = filled.length - wanted;
+			if (!window.confirm(
+				"That " + where + " holds " + wanted + " photo" + (wanted === 1 ? "" : "s") +
+				", so " + losing + " would come off. Continue?"
+			)) {
+				return null;
+			}
+		}
+		var next = [];
+		for (var i = 0; i < wanted; i++) next.push(filled[i] || blankSlot());
+		return next;
+	}
+
 	function changeLayout(pageIndex, layoutKey) {
 		var page = state.pages[pageIndex];
 		var layout = layoutFor(layoutKey);
-		var wanted = layout.cols * layout.rows;
-		var filled = page.slots.filter(function (slot) { return slot.photoId; });
-
-		if (filled.length > wanted) {
-			var losing = filled.length - wanted;
-			if (!window.confirm("That layout holds " + wanted + " photo" + (wanted === 1 ? "" : "s") + ", so " + losing + " would come off this page. Continue?")) {
-				return;
-			}
-		}
-
-		var next = [];
-		for (var i = 0; i < wanted; i++) {
-			next.push(filled[i] ? filled[i] : blankSlot());
-		}
+		var next = reflowSlots(page.slots, layout.cols * layout.rows, "layout");
+		if (!next) return;
 		page.layout = layout.key;
 		page.slots = next;
 		panSlot = null;
@@ -1008,10 +1150,10 @@
 			window.alert("Every photo is already placed somewhere.");
 			return;
 		}
-		if (!state.cover.slot.photoId && queue.length) {
-			var first = queue.shift();
-			state.cover.slot = { photoId: first.id, zoom: 1, x: 50, y: 50 };
-		}
+		coverSlots().forEach(function (slot, i) {
+			if (slot.photoId || !queue.length) return;
+			state.cover.slots[i] = placed(queue.shift().id);
+		});
 		for (var p = 0; p < state.pages.length && queue.length; p++) {
 			var page = state.pages[p];
 			for (var s = 0; s < page.slots.length && queue.length; s++) {
@@ -1030,7 +1172,7 @@
 
 	function clearPages() {
 		if (!window.confirm("Take every photo off every page? The photos stay in your list.")) return;
-		state.cover.slot = blankSlot();
+		state.cover.slots = coverSlots().map(function () { return blankSlot(); });
 		state.pages.forEach(function (page) {
 			page.slots = page.slots.map(function () { return blankSlot(); });
 		});
@@ -1053,7 +1195,8 @@
 			["Pages", String(state.product.pages)],
 			["Cover", SB.finishFor(state.product.finish).label + " — case bound"],
 			["Cover title", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
-			["Cover photo", state.cover.slot.photoId ? "chosen" : "not chosen"],
+			["Cover design", coverDesign().label],
+			["Cover photo", coverPhotoSummary()],
 			["Photos in the book", state.photos.length + " (" + used.size + " placed, " + formatBytes(totalBytes()) + ")"],
 			["Empty frames", String(emptySlotCount())]
 		];
@@ -1085,7 +1228,7 @@
 
 		if (lowRes.length) {
 			var list = lowRes.slice(0, 6).map(function (item) {
-				return "Page " + item.page + ", frame " + item.slot + " — about " + item.dpi + " dpi" + (item.name ? " (" + item.name + ")" : "");
+				return frameLabel(item) + " — about " + item.dpi + " dpi" + (item.name ? " (" + item.name + ")" : "");
 			});
 			var extra = lowRes.length > 6 ? "<li>and " + (lowRes.length - 6) + " more</li>" : "";
 			host.appendChild(note(
@@ -1114,6 +1257,14 @@
 		if (!lowRes.length && !empties && !unused && !unreadable.length) {
 			host.appendChild(note("good", "The book is complete and every photo is big enough for the size it prints at."));
 		}
+	}
+
+	// lowResSlots reports the cover as page 0, because a cover is not page one.
+	function frameLabel(item) {
+		if (item.page === 0) {
+			return coverDesign().frames.length > 1 ? "Cover, photo " + item.slot : "Cover photo";
+		}
+		return "Page " + item.page + ", frame " + item.slot;
 	}
 
 	function note(tone, html, isHtml) {
@@ -1188,8 +1339,10 @@
 		// The review step lists every soft photo in the book, which is a list
 		// nobody maps back to a page. Here it can be said about the pages the
 		// reader is looking at, which is the moment it means something.
-		var soft = view.cover ? [] : lowResSlots().filter(function (item) {
-			return view.pages.indexOf(item.page - 1) !== -1;
+		var soft = lowResSlots().filter(function (item) {
+			return view.cover
+				? item.page === 0
+				: view.pages.indexOf(item.page - 1) !== -1;
 		});
 		var hint = document.getElementById("preview-hint");
 		hint.textContent = soft.length
@@ -1499,7 +1652,14 @@
 				// so it gets the house default like a new book would.
 				if (!state.product.finish) state.product.finish = "photo-wrap";
 				if (!state.cover) state.cover = { title: "", subtitle: "", slot: blankSlot() };
-				if (!state.cover.slot) state.cover.slot = blankSlot();
+				// A draft saved before cover designs existed holds one
+				// cover.slot. Read it as the first frame, exactly as
+				// book-render does for the orders already in the database.
+				if (!state.cover.design) state.cover.design = "full-bleed";
+				if (!Array.isArray(state.cover.slots)) {
+					state.cover.slots = state.cover.slot ? [state.cover.slot] : [blankSlot()];
+				}
+				delete state.cover.slot;
 				if (!Array.isArray(state.photos)) state.photos = [];
 				// A draft saved before contentTypeFor existed recorded every
 				// typeless HEIC as a JPEG. Work it out again from the name
@@ -1512,7 +1672,9 @@
 				// server would expect an upload that can never arrive.
 				state.photos = state.photos.filter(function (p) { return photoBlobs.has(p.id); });
 				var known = new Set(state.photos.map(function (p) { return p.id; }));
-				if (state.cover.slot.photoId && !known.has(state.cover.slot.photoId)) state.cover.slot = blankSlot();
+				state.cover.slots = coverSlots().map(function (slot) {
+					return slot && slot.photoId && !known.has(slot.photoId) ? blankSlot() : slot || blankSlot();
+				});
 				state.pages.forEach(function (page) {
 					page.slots = (page.slots || []).map(function (slot) {
 						return slot && slot.photoId && !known.has(slot.photoId) ? blankSlot() : slot || blankSlot();
@@ -1655,6 +1817,7 @@
 			document.getElementById("cover-subtitle").value = state.cover.subtitle || "";
 			renderSizeOptions();
 			renderFinishOptions();
+			renderCoverDesignOptions();
 			renderPageOptions();
 			renderPhotos();
 			renderTray();

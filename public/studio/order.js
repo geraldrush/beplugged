@@ -235,6 +235,14 @@
 		var swipeY = null;
 		var stage = document.querySelector(".ed-preview-stage");
 		stage.addEventListener("pointerdown", function (event) {
+			// The arrows sit inside the stage. A press on one that drifts
+			// sideways before release is a click on that arrow, and counting it
+			// as a swipe as well turned two pages. Same fix as the editor.
+			if (event.target.closest && event.target.closest(".ed-preview-arrow")) {
+				swipeX = null;
+				swipeY = null;
+				return;
+			}
 			swipeX = event.clientX;
 			swipeY = event.clientY;
 		});
