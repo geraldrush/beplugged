@@ -203,6 +203,10 @@
 	function printBook() {
 		var host = el("print-book");
 		host.innerHTML = "";
+		// Every sheet comes out at the trim size of the book, so the PDF the
+		// dialog saves is the file a printer can work from rather than a
+		// picture of one.
+		SB.applyPrintPageSize(book);
 		SB.allLeaves(book, resolve).forEach(function (leaf) {
 			host.appendChild(leaf);
 		});

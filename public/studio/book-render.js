@@ -330,6 +330,22 @@
 		return out.join("");
 	}
 
+	// The varnish, in words, for the label that sits outside the page edge.
+	// A printed proof deliberately shows no varnish — it is clear, and drawing
+	// it would only dull the photograph the proof exists to judge — so this is
+	// how the choice still reaches whoever is holding the sheet.
+	function uvLabel(book) {
+		var uv = uvOf(book);
+		if (uv.pattern === "none") return "";
+		if (uv.pattern === "custom") {
+			return " — spot UV: your own artwork" +
+				(uv.file && uv.file.name ? " (" + uv.file.name + ")" : "");
+		}
+		var pattern = uvPatternFor(uv.pattern);
+		return " — spot UV: " + pattern.label.toLowerCase() +
+			(uv.pattern === "monogram" && uv.monogram ? " (" + uv.monogram + ")" : "");
+	}
+
 	// The sheen the editor and the preview draw. It is the mask, tinted and
 	// blended so it reads as varnish catching the light rather than as ink,
 	// because varnish is not ink and showing it as black would be a lie about
@@ -623,6 +639,29 @@
 		spreadEl.style.height = Math.floor(Math.min(availableHeight, heightThatFitsWidth, 680)) + "px";
 	}
 
+	// Printing is not previewing. A preview is a picture of a book; what comes
+	// out of the print dialog is meant to be saved as a PDF and sent to a
+	// printer, so every sheet has to be the trim size of the book itself —
+	// 210 by 297 for an A4 portrait, and nothing else on the sheet.
+	//
+	// @page cannot read a custom property, so the rule is written out here
+	// against the chosen size and replaced whenever it changes. The custom
+	// properties carry the same numbers to the stylesheet, which can use them.
+	function applyPrintPageSize(book) {
+		var size = sizeFor(book && book.product && book.product.size);
+		var id = "ed-print-page-size";
+		var style = document.getElementById(id);
+		if (!style) {
+			style = document.createElement("style");
+			style.id = id;
+			document.head.appendChild(style);
+		}
+		style.textContent =
+			"@page { size: " + size.w + "mm " + size.h + "mm; margin: 0; }\n" +
+			":root { --sheet-w: " + size.w + "mm; --sheet-h: " + size.h + "mm; }";
+		return size;
+	}
+
 	// Every page of the book in order, cover first. Used for printing, where
 	// there are no spreads and no turning — just sheets.
 	function allLeaves(book, resolve) {
@@ -759,7 +798,7 @@
 
 		var label = document.createElement("div");
 		label.className = "ed-preview-number";
-		label.textContent = isCover ? "Front cover" : "Page " + (pageIndex + 1);
+		label.textContent = isCover ? "Front cover" + uvLabel(book) : "Page " + (pageIndex + 1);
 		wrap.appendChild(label);
 
 		return wrap;
@@ -836,6 +875,8 @@
 		uvOf: uvOf,
 		uvMaskShapes: uvMaskShapes,
 		uvLayer: uvLayer,
+		uvLabel: uvLabel,
+		applyPrintPageSize: applyPrintPageSize,
 		MIN_PRINT_DPI: MIN_PRINT_DPI,
 		sizeFor: sizeFor,
 		layoutFor: layoutFor,

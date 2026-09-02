@@ -218,6 +218,88 @@ async function covers(browser, base, files) {
 	check("no varnish draws nothing at all",
 		(await page.$(".ed-cover-frame .ed-uv-layer")) === null);
 
+	suite("Covers: the printed proof");
+	// On screen the cover is drawn as a bound book — a case, a weave, the page
+	// block at the fore-edge and the groove where the board hinges. A proof is
+	// the artwork instead: what goes on the press, with nothing over it.
+	await pickUv("botanical");
+	await page.waitForTimeout(200);
+	await page.evaluate(() => { window.print = () => { window.__printed = true; }; });
+	await page.click("#dock-preview");
+	await page.waitForTimeout(300);
+	await page.click("#preview-print");
+	await page.waitForTimeout(600);
+	await page.emulateMedia({ media: "print" });
+	await page.waitForTimeout(200);
+
+	const proof = await page.evaluate(() => {
+		const leaf = document.querySelector("#print-book .ed-preview-leaf");
+		const seen = (sel) => {
+			const el = leaf.querySelector(sel);
+			return el ? getComputedStyle(el).display !== "none" : false;
+		};
+		const caseEl = leaf.querySelector(".ed-cover-case");
+		const cs = getComputedStyle(caseEl);
+		return {
+			built: Boolean(leaf),
+			groove: seen(".ed-cover-spine"),
+			varnish: seen(".ed-uv-layer"),
+			photo: leaf.querySelectorAll("img").length,
+			title: (leaf.querySelector(".ed-preview-cover-text .t") || {}).textContent,
+			label: (leaf.querySelector(".ed-preview-number") || {}).textContent,
+			padding: cs.padding,
+			shadow: cs.boxShadow,
+			weave: getComputedStyle(caseEl, "::after").display,
+		};
+	});
+	check("the proof is built", proof.built);
+	check("the spine groove is gone", proof.groove === false);
+	check("so is the case weave and its shadow",
+		proof.weave === "none" && proof.shadow === "none", `weave ${proof.weave}, shadow ${proof.shadow}`);
+	check("the case no longer insets the artwork", proof.padding === "0px", proof.padding);
+	check("the photographs are there, clear", proof.photo === 3, `${proof.photo} of 3`);
+
+	// A press-ready sheet is the trim size of the book and holds nothing else:
+	// no label beside it, no border drawn on it, no padding around it. This is
+	// what makes the saved PDF a file a printer can work from.
+	const sheet = await page.evaluate(() => {
+		const leaf = document.querySelector("#print-book .ed-preview-leaf");
+		const pageEl = leaf.querySelector(".ed-preview-page");
+		const mm = (px) => Math.round((px / 96) * 25.4);
+		const r = pageEl.getBoundingClientRect();
+		const label = leaf.querySelector(".ed-preview-number");
+		const rule = [...document.getElementById("ed-print-page-size").sheet.cssRules]
+			.map((x) => x.cssText).join(" ");
+		return {
+			w: mm(r.width), h: mm(r.height),
+			border: getComputedStyle(pageEl).borderTopWidth,
+			leafPad: getComputedStyle(leaf).padding,
+			labelShown: label ? getComputedStyle(label).display !== "none" : false,
+			atPage: rule,
+		};
+	});
+	check("the sheet is the book's trim size", sheet.w === 210 && sheet.h === 297, `${sheet.w} x ${sheet.h} mm`);
+	check("@page is set to match", /size:\s*210mm 297mm/.test(sheet.atPage) && /margin:\s*0/.test(sheet.atPage), sheet.atPage.slice(0, 60));
+	check("nothing is drawn around the page", sheet.border === "0px" && sheet.leafPad === "0px",
+		`border ${sheet.border}, padding ${sheet.leafPad}`);
+	check("the page label does not print", sheet.labelShown === false);
+
+	// Varnish is clear, so a paper proof cannot show it and should not dull the
+	// photograph pretending to. The label carries the choice instead.
+	check("the varnish does not print over the photograph", proof.varnish === false);
+	check("but the leaf is labelled with it",
+		/spot UV: botanical/.test(proof.label || ""), JSON.stringify(proof.label));
+
+	await page.emulateMedia({ media: "screen" });
+	await page.waitForTimeout(150);
+	check("and on screen the book still looks like a book",
+		await page.evaluate(() => {
+			const el = document.querySelector("#print-book .ed-cover-spine");
+			return el ? getComputedStyle(el).display !== "none" : false;
+		}));
+	await page.keyboard.press("Escape");
+	await page.waitForTimeout(150);
+
 	check("nothing was logged to the console", problems.length === 0, JSON.stringify(problems.slice(0, 3)));
 	check("nothing was left unhandled",
 		(await page.evaluate("window.__unhandled")).length === 0);

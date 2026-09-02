@@ -947,15 +947,24 @@ a { color: var(--brand); }
 
 	.ed-print-book { display: block; }
 
+	/* What comes out of the print dialog is meant to be saved as a PDF and sent
+	   to a printer, so a sheet is the trim size of the book and holds nothing
+	   but the page. No padding around it, no border drawn on it, no label
+	   beside it: on a press-ready file every one of those is something that
+	   would be printed. --sheet-w and --sheet-h are written by
+	   applyPrintPageSize, alongside the matching @page rule. */
 	.ed-print-book .ed-preview-leaf {
-		height: auto;
+		width: var(--sheet-w, 210mm);
+		height: var(--sheet-h, 297mm);
+		margin: 0;
+		padding: 0;
 		/* One leaf per sheet. break-inside stops a page being split across
 		   two sheets, which is the whole point of printing it. */
 		break-after: page;
 		page-break-after: always;
 		break-inside: avoid;
 		page-break-inside: avoid;
-		padding: 6mm 0;
+		overflow: hidden;
 	}
 
 	.ed-print-book .ed-preview-leaf:last-child {
@@ -964,21 +973,46 @@ a { color: var(--brand); }
 	}
 
 	.ed-print-book .ed-preview-page {
-		height: auto;
-		width: 165mm;
-		margin: 0 auto;
+		width: var(--sheet-w, 210mm);
+		height: var(--sheet-h, 297mm);
+		margin: 0;
 		box-shadow: none;
-		border: 1px solid #d8dde5;
+		border: 0;
+		border-radius: 0;
 	}
 
-	.ed-print-book .ed-cover-case { border: 0; }
+	/* The label lives outside the page edge on screen, which is exactly why it
+	   cannot print: on a press-ready sheet there is no outside. */
+	.ed-print-book .ed-preview-number { display: none !important; }
 
-	.ed-print-book .ed-preview-number {
-		color: #6b7688;
-		height: auto;
-		line-height: 1.6;
-		padding-top: 4mm;
+	/* On screen the cover is drawn as a bound book — a case with a weave, the
+	   page block showing at the fore-edge, and the groove where the board
+	   hinges. All of that is there to help someone judge what they are buying.
+
+	   None of it belongs on a printed proof. A proof is the artwork: what goes
+	   on the press, at the size it goes on, with nothing over it. Printing the
+	   groove puts a hard dark band down the left of every cover, and printing
+	   the case insets the picture inside a border that does not exist in the
+	   file. So the whole mockup comes off and the artwork fills the sheet. */
+	.ed-print-book .ed-cover-case {
+		border: 0;
+		padding: 0;
+		background: none;
+		border-radius: 0;
+		box-shadow: none;
 	}
+
+	.ed-print-book .ed-cover-case::before,
+	.ed-print-book .ed-cover-case::after,
+	.ed-print-book .ed-cover-spine { display: none !important; }
+
+	.ed-print-book .ed-cover-print { box-shadow: none; }
+
+	/* The varnish is a second pass in clear gloss, so there is nothing about it
+	   for a paper proof to show. What it can do is dull the photograph the
+	   proof exists to judge, so it comes off too — and the leaf is labelled
+	   with the varnish instead, which is the part worth carrying. */
+	.ed-print-book .ed-uv-layer { display: none !important; }
 
 	/* Backgrounds and photos are the entire content — without this most
 	   browsers drop them and print empty outlines. */
