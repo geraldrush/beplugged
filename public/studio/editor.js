@@ -203,6 +203,34 @@
 		return "p" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 	}
 
+	// Kept in step with STUDIO_IMAGE_TYPES in src/index.js. Accepting a wider
+	// set here than the server will take only moves the rejection to the end of
+	// the upload, which is the worst moment to discover it: the customer has
+	// already waited out forty photos on a phone connection.
+	var SENDABLE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+
+	var EXTENSION_TYPES = {
+		jpg: "image/jpeg",
+		jpeg: "image/jpeg",
+		png: "image/png",
+		webp: "image/webp",
+		heic: "image/heic",
+		heif: "image/heif"
+	};
+
+	// What the file actually is. A HEIC straight off an iPhone routinely
+	// arrives with an empty type, and defaulting those to JPEG is how HEIC
+	// bytes reached the bucket under a .jpg key that nothing downstream could
+	// open. A browser derives File.type from the extension anyway, so where
+	// there is an extension it is the better answer, not the worse one.
+	function contentTypeFor(file) {
+		var match = /\.([A-Za-z0-9]+)$/.exec(file.name || "");
+		var byExtension = match ? EXTENSION_TYPES[match[1].toLowerCase()] : null;
+		if (byExtension) return byExtension;
+		var declared = String(file.type || "").toLowerCase();
+		return SENDABLE_TYPES.indexOf(declared) !== -1 ? declared : "";
+	}
+
 	// A 700px copy for the screen. Holding forty full-resolution images in the
 	// DOM is what makes an editor like this crawl on the phone it will
 	// actually be used on; the originals stay in IndexedDB until upload.
@@ -239,8 +267,9 @@
 		var running = totalBytes();
 
 		files.forEach(function (file) {
-			if (!/^image\//i.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
-				rejected.push(file.name + " is not an image");
+			var type = contentTypeFor(file);
+			if (!type) {
+				rejected.push(file.name + " is not a JPEG, PNG, WebP or HEIC");
 				return;
 			}
 			if (file.size > MAX_PHOTO_BYTES) {
@@ -256,20 +285,21 @@
 				return;
 			}
 			running += file.size;
-			accepted.push(file);
+			accepted.push({ file: file, type: type });
 		});
 
 		showPhotoStatus("Reading " + accepted.length + " photo" + (accepted.length === 1 ? "" : "s") + "…", "");
 
 		var chain = Promise.resolve();
-		accepted.forEach(function (file) {
+		accepted.forEach(function (entry) {
+			var file = entry.file;
 			chain = chain.then(function () {
 				return makeThumb(file).then(function (thumb) {
 					var id = newPhotoId();
 					var record = {
 						id: id,
 						name: file.name,
-						type: file.type || "image/jpeg",
+						type: entry.type,
 						bytes: file.size,
 						w: thumb ? thumb.w : 0,
 						h: thumb ? thumb.h : 0,
@@ -316,7 +346,11 @@
 		el.style.display = text ? "block" : "none";
 	}
 
-	function removePhoto(id) {
+	// Takes one photo out of the design and out of storage, and draws nothing.
+	// The caller decides when to repaint, which is what lets three hundred
+	// removals be three hundred mutations and one repaint rather than three
+	// hundred of each — the difference between a tap and a frozen phone.
+	function detachPhoto(id) {
 		state.photos = state.photos.filter(function (p) { return p.id !== id; });
 		if (state.cover.slot.photoId === id) state.cover.slot = blankSlot();
 		state.pages.forEach(function (page) {
@@ -329,12 +363,28 @@
 		if (url) URL.revokeObjectURL(url);
 		thumbUrls.delete(id);
 		photoBlobs.delete(id);
-		deletePhotoRecord(id);
+		// Nothing useful follows from a browser refusing the delete, and
+		// three hundred unhandled rejections at once help nobody.
+		return deletePhotoRecord(id).catch(function () {});
+	}
+
+	function afterPhotosChanged() {
 		scheduleSave();
 		renderPhotos();
 		renderTray();
 		renderPages();
 		renderSteps();
+	}
+
+	function removePhoto(id) {
+		detachPhoto(id);
+		afterPhotosChanged();
+	}
+
+	function removeAllPhotos() {
+		state.photos.slice().forEach(function (p) { detachPhoto(p.id); });
+		panSlot = null;
+		afterPhotosChanged();
 	}
 
 	// --- resolution -------------------------------------------------------
@@ -975,7 +1025,7 @@
 			["Size", size.label + " — " + size.w + " × " + size.h + " mm"],
 			["Pages", String(state.product.pages)],
 			["Cover", SB.finishFor(state.product.finish).label + " — case bound"],
-			["Cover", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
+			["Cover title", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
 			["Cover photo", state.cover.slot.photoId ? "chosen" : "not chosen"],
 			["Photos in the book", state.photos.length + " (" + used.size + " placed, " + formatBytes(totalBytes()) + ")"],
 			["Empty frames", String(emptySlotCount())]
@@ -1338,7 +1388,10 @@
 			{
 				method: "PUT",
 				headers: {
-					"Content-Type": blob.type || "image/jpeg",
+					// The type worked out when the photo was added, not the
+					// one the blob carries: a HEIC often carries none at all,
+					// and the server keys the stored object off this header.
+					"Content-Type": photo.type || blob.type || "image/jpeg",
 					"X-Studio-Token": token
 				},
 				body: blob
@@ -1415,12 +1468,18 @@
 
 			if (saved && saved.product && Array.isArray(saved.pages) && saved.pages.length) {
 				state = saved;
-				// A draft saved before the choice existed never picked either, so
-			// it gets the house default like a new book would.
-			if (!state.product.finish) state.product.finish = "photo-wrap";
-			if (!state.cover) state.cover = { title: "", subtitle: "", slot: blankSlot() };
+				// A draft saved before the choice existed never picked either,
+				// so it gets the house default like a new book would.
+				if (!state.product.finish) state.product.finish = "photo-wrap";
+				if (!state.cover) state.cover = { title: "", subtitle: "", slot: blankSlot() };
 				if (!state.cover.slot) state.cover.slot = blankSlot();
 				if (!Array.isArray(state.photos)) state.photos = [];
+				// A draft saved before contentTypeFor existed recorded every
+				// typeless HEIC as a JPEG. Work it out again from the name
+				// rather than uploading the old answer.
+				state.photos.forEach(function (p) {
+					p.type = contentTypeFor({ name: p.name, type: p.type }) || p.type || "image/jpeg";
+				});
 				// A photo whose blob did not survive (a cleared browser, a
 				// half-finished import) must not stay in the design: the
 				// server would expect an upload that can never arrive.
@@ -1450,7 +1509,7 @@
 		document.getElementById("clear-photos").addEventListener("click", function () {
 			if (!state.photos.length) return;
 			if (!window.confirm("Remove all " + state.photos.length + " photos and empty every page?")) return;
-			state.photos.slice().forEach(function (p) { removePhoto(p.id); });
+			removeAllPhotos();
 		});
 
 		document.getElementById("autofill").addEventListener("click", autofill);
@@ -1499,6 +1558,14 @@
 		var swipeY = null;
 		var stage = document.querySelector(".ed-preview-stage");
 		stage.addEventListener("pointerdown", function (event) {
+			// The arrows sit inside the stage. A press that starts on one and
+			// drifts sideways before release is a click on that arrow, and
+			// counting it as a swipe as well turned two pages at once.
+			if (event.target.closest && event.target.closest(".ed-preview-arrow")) {
+				swipeX = null;
+				swipeY = null;
+				return;
+			}
 			swipeX = event.clientX;
 			swipeY = event.clientY;
 		});
@@ -1523,9 +1590,9 @@
 			if (event.key === "ArrowRight") { event.preventDefault(); previewGo(1); }
 		});
 
-		// A phone turned sideways goes from one page at a time to a spread, so
-		// the views have to be rebuilt. Keep the reader on the page they were
-		// looking at rather than throwing them back to the cover.
+		// Which pages share a view no longer depends on the screen, so a turn
+		// sideways does not change the sequence. Only the spread's size has to
+		// be worked out again, which is what redrawing the current view does.
 		window.addEventListener("resize", function () {
 			if (!previewIsOpen()) return;
 			renderPreview();

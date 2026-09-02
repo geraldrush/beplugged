@@ -9869,7 +9869,6 @@ function normalizeStudioDesign(raw) {
 
   // A page pointing at a photo that was never declared would leave a hole on
   // the printed page that nobody notices until it is bound.
-  let filledSlots = 0;
   for (const page of pages) {
     const slots = Array.isArray(page?.slots) ? page.slots : [];
     for (const slot of slots) {
@@ -9877,19 +9876,26 @@ function normalizeStudioDesign(raw) {
       if (!ids.has(String(slot.photoId))) {
         throw new RequestError("A page refers to a photo that is not in the order");
       }
-      filledSlots += 1;
     }
   }
 
+  // The cover was not checked the same way, and it is the one frame where the
+  // hole is certain to be seen: an id declared here but absent from the photo
+  // list is refused every upload, so the book arrives with a blank case.
+  const coverPhotoId = raw?.cover?.slot?.photoId;
+  if (coverPhotoId && !ids.has(String(coverPhotoId))) {
+    throw new RequestError("The cover refers to a photo that is not in the order");
+  }
+
+  // Nothing counts placed frames on purpose. A book sent with every photo
+  // unplaced is a customer asking us to lay it out, which the editor offers
+  // in as many words, so it is an order rather than a mistake.
   return {
     design: raw,
     sizeKey,
-    finish,
     pageCount: pages.length,
-    photoIds: ids,
     photoCount: photos.length,
     photoBytes,
-    filledSlots,
   };
 }
 
