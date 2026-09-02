@@ -146,6 +146,125 @@
 
 	var MIN_PRINT_DPI = 150;
 
+	// --- text on a page ---------------------------------------------------
+	//
+	// A caption prints in a bar under a page, which is a different thing from
+	// type set on a photograph. These are the latter: free-floating boxes
+	// placed anywhere over the picture area, with their own ground, shape and
+	// colour.
+	//
+	// Position and width are percentages of the picture area and the size is in
+	// cqw, because the very same design is drawn at four sizes — the arrange
+	// grid, the preview, the print sheet and the customer's read-only view —
+	// and anything in pixels would only be right at one of them.
+	//
+	// Kept in step with the STUDIO_TEXT_* tables in src/index.js.
+	var TEXT_FONTS = [
+		{ key: "sans", label: "Sans", stack: "'Inter', system-ui, -apple-system, sans-serif" },
+		{ key: "serif", label: "Serif", stack: "Georgia, 'Times New Roman', serif" },
+		{ key: "mono", label: "Typewriter", stack: "'Courier New', Courier, monospace" }
+	];
+
+	var TEXT_SHAPES = [
+		{ key: "none", label: "No shape" },
+		{ key: "rectangle", label: "Rectangle" },
+		{ key: "rounded", label: "Rounded" },
+		{ key: "pill", label: "Pill" }
+	];
+
+	var TEXT_ALIGNS = ["left", "center", "right"];
+
+	var TEXT_MIN_SIZE = 2;
+	var TEXT_MAX_SIZE = 14;
+	var TEXT_MAX_LENGTH = 400;
+
+	function fontFor(key) {
+		for (var i = 0; i < TEXT_FONTS.length; i++) {
+			if (TEXT_FONTS[i].key === key) return TEXT_FONTS[i];
+		}
+		return TEXT_FONTS[0];
+	}
+
+	function shapeFor(key) {
+		for (var i = 0; i < TEXT_SHAPES.length; i++) {
+			if (TEXT_SHAPES[i].key === key) return TEXT_SHAPES[i];
+		}
+		return TEXT_SHAPES[0];
+	}
+
+	function clampNumber(value, low, high, fallback) {
+		var n = Number(value);
+		if (!isFinite(n)) return fallback;
+		return Math.min(high, Math.max(low, n));
+	}
+
+	// Hex only, and anything else becomes the fallback rather than being passed
+	// through. Assigning a bad value through the CSSOM is dropped rather than
+	// injected, so this is not the last line of defence, but a design document
+	// is opened later by the studio as well as by the person who wrote it and
+	// it should not be carrying anything but colours.
+	function colourOf(value, fallback) {
+		return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(value || ""))
+			? String(value)
+			: fallback;
+	}
+
+	// One text box, normalised. Every reader goes through this, so a design
+	// with something odd in it draws the same way everywhere rather than
+	// differently in each of the four places it is rendered.
+	function textBoxOf(raw) {
+		return {
+			id: String((raw && raw.id) || ""),
+			text: String((raw && raw.text) || "").slice(0, TEXT_MAX_LENGTH),
+			x: clampNumber(raw && raw.x, 0, 100, 50),
+			y: clampNumber(raw && raw.y, 0, 100, 50),
+			w: clampNumber(raw && raw.w, 8, 100, 46),
+			align: TEXT_ALIGNS.indexOf(raw && raw.align) !== -1 ? raw.align : "center",
+			font: fontFor(raw && raw.font).key,
+			size: clampNumber(raw && raw.size, TEXT_MIN_SIZE, TEXT_MAX_SIZE, 5),
+			weight: (raw && raw.weight) === 700 || (raw && raw.weight) === "700" ? 700 : 400,
+			italic: Boolean(raw && raw.italic),
+			color: colourOf(raw && raw.color, "#ffffff"),
+			background: colourOf(raw && raw.background, ""),
+			shape: shapeFor(raw && raw.shape).key,
+			pad: clampNumber(raw && raw.pad, 0, 12, 2)
+		};
+	}
+
+	function textElement(raw) {
+		var box = textBoxOf(raw);
+		var el = document.createElement("div");
+		el.className = "ed-text-box is-" + box.shape;
+		el.style.left = box.x + "%";
+		el.style.top = box.y + "%";
+		el.style.width = box.w + "%";
+		el.style.textAlign = box.align;
+		el.style.fontFamily = fontFor(box.font).stack;
+		el.style.fontSize = box.size + "cqw";
+		el.style.fontWeight = String(box.weight);
+		el.style.fontStyle = box.italic ? "italic" : "normal";
+		el.style.color = box.color;
+		el.style.padding = box.pad + "cqw";
+		// No ground at all is a real choice — type straight onto a light sky
+		// wants nothing behind it — so an unset background stays unset rather
+		// than defaulting to something.
+		el.style.background = box.background || "transparent";
+		el.textContent = box.text;
+		return el;
+	}
+
+	// The layer is its own element rather than the picture area itself so that
+	// it can be the container the cqw sizes resolve against without taking on
+	// any of the picture area's layout duties.
+	function textLayer(boxes) {
+		var list = Array.isArray(boxes) ? boxes : [];
+		if (!list.length) return null;
+		var layer = document.createElement("div");
+		layer.className = "ed-text-layer";
+		list.forEach(function (box) { layer.appendChild(textElement(box)); });
+		return layer;
+	}
+
 	function layoutFor(key) {
 		for (var i = 0; i < LAYOUTS.length; i++) {
 			if (LAYOUTS[i].key === key) return LAYOUTS[i];
@@ -363,12 +482,16 @@
 			for (var frame = 0; frame < design.frames.length; frame++) {
 				sheet.appendChild(slotElement(slots[frame], resolve));
 			}
+			var coverText = textLayer(cover.texts);
+			if (coverText) sheet.appendChild(coverText);
 		} else {
 			sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
 			sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
 			(page.slots || []).forEach(function (slot) {
 				sheet.appendChild(slotElement(slot, resolve));
 			});
+			var pageText = textLayer(page.texts);
+			if (pageText) sheet.appendChild(pageText);
 		}
 
 		if (isCover) {
@@ -478,6 +601,16 @@
 		coverSlotDpi: coverSlotDpi,
 		slotRotate: slotRotate,
 		slotFit: slotFit,
+		TEXT_FONTS: TEXT_FONTS,
+		TEXT_SHAPES: TEXT_SHAPES,
+		TEXT_ALIGNS: TEXT_ALIGNS,
+		TEXT_MIN_SIZE: TEXT_MIN_SIZE,
+		TEXT_MAX_SIZE: TEXT_MAX_SIZE,
+		TEXT_MAX_LENGTH: TEXT_MAX_LENGTH,
+		textBoxOf: textBoxOf,
+		textElement: textElement,
+		textLayer: textLayer,
+		fontFor: fontFor,
 		MIN_PRINT_DPI: MIN_PRINT_DPI,
 		sizeFor: sizeFor,
 		layoutFor: layoutFor,

@@ -1273,3 +1273,160 @@ a { color: var(--brand); }
 	color: var(--ink-400);
 }
 
+
+/* --- text set on a page ------------------------------------------------- */
+
+/* The layer exists so that something can be the container the cqw font sizes
+   resolve against without that job landing on the picture area, which has a
+   grid to run. It is exactly the picture area's size, so a size in cqw is a
+   size relative to the printed page — which is the only way one design can be
+   drawn at four different scales and look the same at each. */
+.ed-text-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+}
+
+@supports (container-type: size) {
+	.ed-text-layer { container-type: size; }
+}
+
+.ed-text-box {
+	position: absolute;
+	/* x and y place the middle of the box, not its corner: dragging by the
+	   middle is what a hand expects, and it keeps a centred box centred when
+	   its width changes. */
+	transform: translate(-50%, -50%);
+	line-height: 1.25;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	box-decoration-break: clone;
+}
+
+.ed-text-box.is-rectangle { border-radius: 0; }
+.ed-text-box.is-rounded { border-radius: 0.9cqw; }
+.ed-text-box.is-pill { border-radius: 999px; }
+
+/* --- editing one ------------------------------------------------------- */
+
+/* The layer stays transparent to the pointer even while editing, and only the
+   boxes themselves take events. Turning the layer on was the obvious way to
+   write this and it broke placing photos altogether: the layer covers the whole
+   picture area, so a page with no text on it at all still had an invisible
+   sheet over every frame, swallowing the taps and the drops meant for them. */
+.ed-text-layer.is-editable { pointer-events: none; }
+
+.ed-text-layer.is-editable .ed-text-box {
+	pointer-events: auto;
+	cursor: grab;
+	outline: 1px dashed rgba(120, 132, 148, 0.7);
+	outline-offset: 2px;
+	min-height: 1em;
+}
+
+.ed-text-layer.is-editable .ed-text-box.is-selected {
+	outline: 2px solid var(--brand);
+	cursor: grabbing;
+	touch-action: none;
+}
+
+.ed-text-box .ed-text-empty { opacity: 0.55; }
+
+/* The width handle. It sits on the right edge and is deliberately larger than
+   it looks, because the whole point of this editor is that it works on a
+   phone. */
+.ed-text-handle {
+	position: absolute;
+	right: -7px;
+	top: 50%;
+	width: 22px;
+	height: 22px;
+	margin-top: -11px;
+	border: 0;
+	padding: 0;
+	border-radius: 50%;
+	background: var(--brand);
+	box-shadow: 0 0 0 2px #fff;
+	cursor: ew-resize;
+	touch-action: none;
+}
+
+.ed-text-tools {
+	margin: 10px 0 0;
+	padding: 12px 14px;
+	border: 1px solid var(--brand);
+	border-radius: 8px;
+	background: var(--brand-tint);
+}
+
+.ed-text-tools textarea {
+	width: 100%;
+	min-height: 54px;
+	resize: vertical;
+	font: inherit;
+	font-size: 14px;
+	padding: 8px 10px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: #fff;
+	color: var(--ink-800, #1d2531);
+}
+
+.ed-text-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.ed-text-row > .ed-text-label {
+	flex: 0 0 auto;
+	font-size: 12.5px;
+	color: var(--ink-600, #4a5563);
+	min-width: 62px;
+}
+
+.ed-text-row input[type="color"] {
+	width: 40px;
+	height: 30px;
+	padding: 0;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: #fff;
+	cursor: pointer;
+}
+
+.ed-text-row input[type="range"] {
+	flex: 1 1 90px;
+	min-width: 80px;
+	height: 30px;
+	accent-color: var(--brand);
+}
+
+/* A set of small toggles — shape, font, alignment, bold, italic. Pressed state
+   is carried on aria-pressed so the control says what it is to a screen reader
+   rather than only looking different. */
+.ed-text-toggle {
+	border: 1px solid var(--line);
+	background: #fff;
+	color: var(--ink-700, #33404f);
+	border-radius: 6px;
+	padding: 6px 10px;
+	font-size: 12.5px;
+	min-height: 32px;
+	cursor: pointer;
+}
+
+.ed-text-toggle[aria-pressed="true"] {
+	border-color: var(--brand);
+	background: var(--brand);
+	color: #fff;
+}
+
+.ed-text-toggle.is-swatch {
+	width: 34px;
+	height: 30px;
+	padding: 0;
+}

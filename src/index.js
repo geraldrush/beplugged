@@ -9773,6 +9773,75 @@ const STUDIO_COVER_DESIGNS = {
 
 const STUDIO_DEFAULT_COVER_DESIGN = "full-bleed";
 
+// Type set on a page, as opposed to the caption that prints in a bar beneath
+// it. Kept in step with the TEXT_* tables in public/studio/book-render.js.
+//
+// All of this arrives from a public editor that anybody can post to, and it
+// ends up in a design document the studio opens later. The renderer coerces
+// everything it reads, so a bad value cannot become anything but a dull one —
+// but a stored order should hold a book, not somebody's attempt at one.
+const STUDIO_TEXT_FONTS = new Set(["sans", "serif", "mono"]);
+const STUDIO_TEXT_SHAPES = new Set(["none", "rectangle", "rounded", "pill"]);
+const STUDIO_TEXT_ALIGNS = new Set(["left", "center", "right"]);
+const STUDIO_TEXT_MAX_PER_PAGE = 6;
+const STUDIO_TEXT_MAX_LENGTH = 400;
+const STUDIO_TEXT_MIN_SIZE = 2;
+const STUDIO_TEXT_MAX_SIZE = 14;
+const STUDIO_COLOUR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+function validateStudioTexts(raw, where) {
+  if (raw === undefined || raw === null) return 0;
+  if (!Array.isArray(raw)) {
+    throw new RequestError(`The text on ${where} could not be read`);
+  }
+  if (raw.length > STUDIO_TEXT_MAX_PER_PAGE) {
+    throw new RequestError(`There is more text on ${where} than we can set on one page`);
+  }
+
+  for (const box of raw) {
+    if (!box || typeof box !== "object") {
+      throw new RequestError(`The text on ${where} could not be read`);
+    }
+    if (String(box.text || "").length > STUDIO_TEXT_MAX_LENGTH) {
+      throw new RequestError(
+        `A piece of text on ${where} is longer than we can set on a page. The caption underneath is the better place for it.`,
+      );
+    }
+
+    const inRange = (value, low, high) => {
+      const n = Number(value);
+      return value === undefined || value === null || (Number.isFinite(n) && n >= low && n <= high);
+    };
+    if (!inRange(box.x, 0, 100) || !inRange(box.y, 0, 100)) {
+      throw new RequestError(`A piece of text on ${where} sits off the page`);
+    }
+    if (!inRange(box.w, 8, 100)) {
+      throw new RequestError(`A piece of text on ${where} is an impossible width`);
+    }
+    if (!inRange(box.size, STUDIO_TEXT_MIN_SIZE, STUDIO_TEXT_MAX_SIZE)) {
+      throw new RequestError(`A piece of text on ${where} is an impossible size`);
+    }
+    if (box.align !== undefined && !STUDIO_TEXT_ALIGNS.has(String(box.align))) {
+      throw new RequestError(`A piece of text on ${where} is aligned in a way we cannot set`);
+    }
+    if (box.font !== undefined && !STUDIO_TEXT_FONTS.has(String(box.font))) {
+      throw new RequestError(`A piece of text on ${where} asks for a typeface we do not have`);
+    }
+    if (box.shape !== undefined && !STUDIO_TEXT_SHAPES.has(String(box.shape))) {
+      throw new RequestError(`A piece of text on ${where} asks for a shape we do not have`);
+    }
+    for (const key of ["color", "background"]) {
+      const value = box[key];
+      if (value === undefined || value === null || value === "") continue;
+      if (!STUDIO_COLOUR.test(String(value))) {
+        throw new RequestError(`A piece of text on ${where} has a colour we cannot read`);
+      }
+    }
+  }
+
+  return raw.length;
+}
+
 const STUDIO_MAX_PAGES = 120;
 const STUDIO_MAX_PHOTOS = 300;
 // Per file. Comfortably above a phone photo and above most DSLR JPEGs, and
@@ -9885,7 +9954,9 @@ function normalizeStudioDesign(raw) {
 
   // A page pointing at a photo that was never declared would leave a hole on
   // the printed page that nobody notices until it is bound.
+  let pageNumber = 0;
   for (const page of pages) {
+    pageNumber += 1;
     const slots = Array.isArray(page?.slots) ? page.slots : [];
     for (const slot of slots) {
       if (!slot?.photoId) continue;
@@ -9893,7 +9964,10 @@ function normalizeStudioDesign(raw) {
         throw new RequestError("A page refers to a photo that is not in the order");
       }
     }
+    validateStudioTexts(page?.texts, `page ${pageNumber}`);
   }
+
+  validateStudioTexts(raw.cover?.texts, "the cover");
 
   const coverDesign = String(raw.cover?.design || STUDIO_DEFAULT_COVER_DESIGN);
   if (!STUDIO_COVER_DESIGNS[coverDesign]) {

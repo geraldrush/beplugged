@@ -32,6 +32,10 @@
 	// something the customer did on purpose.
 	var MAX_ZOOM = 3;
 
+	// Enough to title a page, name a place and date it. Past this a page is
+	// being used as a letter, and the caption under it is the better tool.
+	var MAX_TEXTS_PER_PAGE = 6;
+
 	var PAGE_COUNTS = [20, 24, 28, 32, 36, 40, 48, 60];
 
 	// Roughly how many photos each fits, which is the question behind the
@@ -144,6 +148,7 @@
 	var thumbUrls = new Map();   // id -> object URL of the small copy
 	var selectedPhotoId = null;
 	var panSlot = null;          // {page: n, slot: n} currently being repositioned
+	var selectedText = null;     // {page: n, id: "..."} text box being edited
 	var step = "size";
 	var saveTimer = null;
 	var sending = false;
@@ -160,14 +165,14 @@
 		var layout = layoutFor(layoutKey || "full");
 		var slots = [];
 		for (var i = 0; i < layout.cols * layout.rows; i++) slots.push(blankSlot());
-		return { layout: layout.key, caption: "", slots: slots };
+		return { layout: layout.key, caption: "", slots: slots, texts: [] };
 	}
 
 	function blankState() {
 		var s = {
 			version: 1,
 			product: { size: "a4-portrait", pages: 24, finish: "photo-wrap" },
-			cover: { design: "full-bleed", title: "", subtitle: "", slots: [blankSlot()] },
+			cover: { design: "full-bleed", title: "", subtitle: "", slots: [blankSlot()], texts: [] },
 			pages: [],
 			photos: []
 		};
@@ -193,6 +198,92 @@
 		if (!Array.isArray(state.cover.slots)) state.cover.slots = [];
 		while (state.cover.slots.length < wanted) state.cover.slots.push(blankSlot());
 		return state.cover.slots.slice(0, wanted);
+	}
+
+	// Text boxes for a page, or for the cover at -1. Created on demand so a
+	// book built before this existed grows them as it is opened rather than
+	// needing a migration pass.
+	function textsFor(pageIndex) {
+		if (pageIndex === -1) {
+			if (!Array.isArray(state.cover.texts)) state.cover.texts = [];
+			return state.cover.texts;
+		}
+		var page = state.pages[pageIndex];
+		if (!page) return [];
+		if (!Array.isArray(page.texts)) page.texts = [];
+		return page.texts;
+	}
+
+	function textById(pageIndex, id) {
+		var list = textsFor(pageIndex);
+		for (var i = 0; i < list.length; i++) {
+			if (list[i].id === id) return list[i];
+		}
+		return null;
+	}
+
+	// A saved draft is read back through the same normaliser the renderer uses,
+	// so the style controls are always handed a complete box. Without this a
+	// draft missing a colour hands undefined to a colour input, which quietly
+	// resets itself to black the moment it is touched.
+	function normalizeTexts(list) {
+		return (Array.isArray(list) ? list : []).map(function (raw) {
+			var box = SB.textBoxOf(raw);
+			if (!box.id) box.id = newTextId();
+			return box;
+		}).slice(0, MAX_TEXTS_PER_PAGE);
+	}
+
+	function newTextId() {
+		return "t" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
+	}
+
+	function selectedTextBox() {
+		return selectedText ? textById(selectedText.page, selectedText.id) : null;
+	}
+
+	function addText(pageIndex) {
+		var list = textsFor(pageIndex);
+		if (list.length >= MAX_TEXTS_PER_PAGE) {
+			window.alert("That is as much text as one page can carry. The caption under the page is the better place for anything longer.");
+			return;
+		}
+		// Low and centred, which is where a caption on a photograph nearly
+		// always goes, and out of the way of faces, which are nearly always
+		// higher up.
+		var box = SB.textBoxOf({ id: newTextId(), text: "", x: 50, y: 80, w: 64 });
+		list.push(box);
+		selectedText = { page: pageIndex, id: box.id };
+		scheduleSave();
+		renderPages();
+	}
+
+	function removeText(pageIndex, id) {
+		var list = textsFor(pageIndex);
+		for (var i = 0; i < list.length; i++) {
+			if (list[i].id === id) { list.splice(i, 1); break; }
+		}
+		if (selectedText && selectedText.id === id) selectedText = null;
+		scheduleSave();
+		renderPages();
+	}
+
+	// Splitting and rejoining a colour, so that the background can be made
+	// translucent. Type over a photograph nearly always wants a ground that
+	// lets some of the picture through, and a colour picker alone cannot say
+	// that.
+	function splitColour(value) {
+		var v = String(value || "");
+		if (/^#[0-9a-fA-F]{8}$/.test(v)) {
+			return { rgb: v.slice(0, 7), alpha: parseInt(v.slice(7), 16) / 255 };
+		}
+		if (/^#[0-9a-fA-F]{6}$/.test(v)) return { rgb: v, alpha: 1 };
+		return { rgb: "#000000", alpha: 0 };
+	}
+
+	function joinColour(rgb, alpha) {
+		var a = Math.round(Math.max(0, Math.min(1, alpha)) * 255).toString(16);
+		return rgb + (a.length < 2 ? "0" + a : a);
 	}
 
 	// Slots hold ids; the photo list holds what those ids mean. Sending one
@@ -954,6 +1045,308 @@
 		cell.addEventListener("pointercancel", stop);
 	}
 
+	// --- text on a page, in the editor ------------------------------------
+
+	function buildTextLayer(pageIndex) {
+		var layer = document.createElement("div");
+		layer.className = "ed-text-layer is-editable";
+
+		textsFor(pageIndex).forEach(function (box) {
+			var el = SB.textElement(box);
+			el.setAttribute("data-text-id", box.id);
+
+			// An empty box would be an invisible one, and a box you cannot see
+			// is a box you cannot select to type into.
+			if (!String(box.text || "").trim()) {
+				var ghost = document.createElement("span");
+				ghost.className = "ed-text-empty";
+				ghost.textContent = "Your words here";
+				el.textContent = "";
+				el.appendChild(ghost);
+			}
+
+			if (selectedText && selectedText.page === pageIndex && selectedText.id === box.id) {
+				el.classList.add("is-selected");
+				var handle = document.createElement("button");
+				handle.type = "button";
+				handle.className = "ed-text-handle";
+				handle.setAttribute("aria-label", "Change how wide this text is");
+				el.appendChild(handle);
+				attachTextResize(handle, box, layer);
+			}
+
+			attachTextDrag(el, box, layer, pageIndex);
+			layer.appendChild(el);
+		});
+
+		return layer;
+	}
+
+	// Redraws one box in place. Typing re-renders nothing else, because
+	// rebuilding the page on every keystroke takes the cursor out of the
+	// textarea the customer is typing into.
+	function liveUpdateText(box) {
+		var el = document.querySelector('.ed-text-layer [data-text-id="' + box.id + '"]');
+		if (!el) return;
+		var fresh = SB.textElement(box);
+		el.className = fresh.className + " is-selected";
+		el.setAttribute("style", fresh.getAttribute("style"));
+		el.textContent = "";
+		if (String(box.text || "").trim()) {
+			el.textContent = box.text;
+		} else {
+			var ghost = document.createElement("span");
+			ghost.className = "ed-text-empty";
+			ghost.textContent = "Your words here";
+			el.appendChild(ghost);
+		}
+		var handle = document.createElement("button");
+		handle.type = "button";
+		handle.className = "ed-text-handle";
+		handle.setAttribute("aria-label", "Change how wide this text is");
+		el.appendChild(handle);
+		attachTextResize(handle, box, el.parentNode);
+	}
+
+	// Dragging moves the box; a press that does not move selects it. Doing the
+	// selection on pointerdown instead would re-render the page and destroy the
+	// element under the finger before the drag had started.
+	function attachTextDrag(el, box, layer, pageIndex) {
+		var dragging = false;
+		var moved = false;
+		var startX = 0;
+		var startY = 0;
+		var originX = 0;
+		var originY = 0;
+
+		el.addEventListener("pointerdown", function (event) {
+			// The width handle lives inside the box. A drag that begins on it
+			// is a resize, not a move — the same guard attachPan uses for the
+			// slot tools, and there for the same reason.
+			if (event.target.closest && event.target.closest(".ed-text-handle")) return;
+			event.stopPropagation();
+			dragging = true;
+			moved = false;
+			startX = event.clientX;
+			startY = event.clientY;
+			originX = box.x;
+			originY = box.y;
+			el.setPointerCapture(event.pointerId);
+		});
+
+		el.addEventListener("pointermove", function (event) {
+			if (!dragging) return;
+			var rect = layer.getBoundingClientRect();
+			var dx = ((event.clientX - startX) / Math.max(1, rect.width)) * 100;
+			var dy = ((event.clientY - startY) / Math.max(1, rect.height)) * 100;
+			if (Math.abs(event.clientX - startX) > 3 || Math.abs(event.clientY - startY) > 3) moved = true;
+			box.x = Math.round(Math.max(0, Math.min(100, originX + dx)));
+			box.y = Math.round(Math.max(0, Math.min(100, originY + dy)));
+			el.style.left = box.x + "%";
+			el.style.top = box.y + "%";
+		});
+
+		function stop(event) {
+			if (!dragging) return;
+			dragging = false;
+			try { el.releasePointerCapture(event.pointerId); } catch (e) { /* already gone */ }
+			if (moved) {
+				scheduleSave();
+				return;
+			}
+			var already = selectedText && selectedText.page === pageIndex && selectedText.id === box.id;
+			selectedText = already ? null : { page: pageIndex, id: box.id };
+			renderPages();
+		}
+
+		el.addEventListener("pointerup", stop);
+		el.addEventListener("pointercancel", stop);
+	}
+
+	function attachTextResize(handle, box, layer) {
+		var sizing = false;
+		var startX = 0;
+		var originW = 0;
+
+		handle.addEventListener("pointerdown", function (event) {
+			event.stopPropagation();
+			event.preventDefault();
+			sizing = true;
+			startX = event.clientX;
+			originW = box.w;
+			handle.setPointerCapture(event.pointerId);
+		});
+
+		handle.addEventListener("pointermove", function (event) {
+			if (!sizing) return;
+			var rect = layer.getBoundingClientRect();
+			// The box is centred on x, so it grows from both edges at once and
+			// the pointer covers half the change.
+			var dw = ((event.clientX - startX) / Math.max(1, rect.width)) * 200;
+			box.w = Math.round(Math.max(8, Math.min(100, originW + dw)));
+			var el = handle.parentNode;
+			if (el) el.style.width = box.w + "%";
+		});
+
+		function stop(event) {
+			if (!sizing) return;
+			sizing = false;
+			try { handle.releasePointerCapture(event.pointerId); } catch (e) { /* already gone */ }
+			scheduleSave();
+		}
+
+		handle.addEventListener("pointerup", stop);
+		handle.addEventListener("pointercancel", stop);
+		handle.addEventListener("click", function (event) { event.stopPropagation(); });
+	}
+
+	// Everything a text box can be: what it says, what colour it is, what it
+	// sits on, what shape that is, and how it is set. Under the card, for the
+	// same reason the adjust bar is — a text box on a four-photo page is too
+	// small to hold controls anyone can hit.
+	function textTools(box, pageIndex) {
+		var wrap = document.createElement("div");
+		wrap.className = "ed-text-tools";
+
+		var area = document.createElement("textarea");
+		area.value = box.text || "";
+		area.maxLength = SB.TEXT_MAX_LENGTH;
+		area.placeholder = "What should this say?";
+		area.setAttribute("aria-label", "The words in this text box");
+		area.addEventListener("input", function () {
+			box.text = area.value;
+			scheduleSave();
+			liveUpdateText(box);
+		});
+		wrap.appendChild(area);
+
+		var row = function (label) {
+			var r = document.createElement("div");
+			r.className = "ed-text-row";
+			if (label) {
+				var l = document.createElement("span");
+				l.className = "ed-text-label";
+				l.textContent = label;
+				r.appendChild(l);
+			}
+			wrap.appendChild(r);
+			return r;
+		};
+
+		var toggle = function (label, pressed, onClick, title) {
+			var b = document.createElement("button");
+			b.type = "button";
+			b.className = "ed-text-toggle";
+			b.textContent = label;
+			if (title) b.title = title;
+			b.setAttribute("aria-pressed", String(Boolean(pressed)));
+			b.addEventListener("click", function () {
+				onClick();
+				scheduleSave();
+				renderPages();
+			});
+			return b;
+		};
+
+		// --- font colour ---
+		var colourRow = row("Text");
+		var ink = document.createElement("input");
+		ink.type = "color";
+		ink.value = box.color || "#ffffff";
+		ink.setAttribute("aria-label", "Colour of the words");
+		ink.addEventListener("input", function () {
+			box.color = ink.value;
+			scheduleSave();
+			liveUpdateText(box);
+		});
+		colourRow.appendChild(ink);
+
+		// --- background colour, with the translucency type on a photo needs ---
+		var bg = splitColour(box.background);
+		var bgRow = row("Behind");
+		var bgInput = document.createElement("input");
+		bgInput.type = "color";
+		bgInput.value = bg.rgb;
+		bgInput.setAttribute("aria-label", "Colour behind the words");
+		var alpha = document.createElement("input");
+		alpha.type = "range";
+		alpha.min = "0";
+		alpha.max = "1";
+		alpha.step = "0.05";
+		alpha.value = String(bg.alpha);
+		alpha.setAttribute("aria-label", "How solid the colour behind the words is");
+
+		var applyBackground = function () {
+			box.background = Number(alpha.value) === 0 ? "" : joinColour(bgInput.value, Number(alpha.value));
+			scheduleSave();
+			liveUpdateText(box);
+		};
+		bgInput.addEventListener("input", function () {
+			// Picking a colour with the slider at nothing plainly means it
+			// should be visible, so it is brought up rather than staying blank.
+			if (Number(alpha.value) === 0) alpha.value = "0.6";
+			applyBackground();
+		});
+		alpha.addEventListener("input", applyBackground);
+		bgRow.appendChild(bgInput);
+		bgRow.appendChild(alpha);
+		bgRow.appendChild(toggle("None", !box.background, function () { box.background = ""; },
+			"No colour behind the words at all"));
+
+		// --- shape ---
+		var shapeRow = row("Shape");
+		SB.TEXT_SHAPES.forEach(function (shape) {
+			shapeRow.appendChild(toggle(shape.label, box.shape === shape.key, function () {
+				box.shape = shape.key;
+			}));
+		});
+
+		// --- typeface and weight ---
+		var fontRow = row("Style");
+		SB.TEXT_FONTS.forEach(function (font) {
+			var b = toggle(font.label, box.font === font.key, function () { box.font = font.key; });
+			b.style.fontFamily = font.stack;
+			fontRow.appendChild(b);
+		});
+		fontRow.appendChild(toggle("Bold", box.weight === 700, function () {
+			box.weight = box.weight === 700 ? 400 : 700;
+		}));
+		fontRow.appendChild(toggle("Italic", box.italic, function () { box.italic = !box.italic; }));
+
+		// --- alignment ---
+		var alignRow = row("Align");
+		[["Left", "left"], ["Centre", "center"], ["Right", "right"]].forEach(function (pair) {
+			alignRow.appendChild(toggle(pair[0], box.align === pair[1], function () { box.align = pair[1]; }));
+		});
+
+		// --- size ---
+		var sizeRow = row("Size");
+		var size = document.createElement("input");
+		size.type = "range";
+		size.min = String(SB.TEXT_MIN_SIZE);
+		size.max = String(SB.TEXT_MAX_SIZE);
+		size.step = "0.1";
+		size.value = String(box.size);
+		size.setAttribute("aria-label", "How big the words are");
+		size.addEventListener("input", function () {
+			box.size = Math.round(Number(size.value) * 10) / 10;
+			scheduleSave();
+			liveUpdateText(box);
+		});
+		sizeRow.appendChild(size);
+
+		var lastRow = row("");
+		lastRow.appendChild(smallButton("Remove this text", "Take this text off the page", function () {
+			removeText(pageIndex, box.id);
+		}));
+		lastRow.appendChild(smallButton("Done", "Finish editing this text", function () {
+			selectedText = null;
+			renderPages();
+		}));
+
+		return wrap;
+	}
+
 	function pageCard(title, body) {
 		var card = document.createElement("div");
 		card.className = "ed-page";
@@ -999,13 +1392,20 @@
 				sheet.appendChild(cell);
 			});
 
+			sheet.appendChild(buildTextLayer(pageIndex));
+
 			var built = pageCard("Page " + (pageIndex + 1), sheet);
 			if (adjustCell) {
 				built.card.appendChild(adjustBar(page.slots[panSlot.slot], adjustCell));
 			}
+			if (selectedText && selectedText.page === pageIndex) {
+				var chosen = selectedTextBox();
+				if (chosen) built.card.appendChild(textTools(chosen, pageIndex));
+			}
 
 			var tools = document.createElement("div");
 			tools.className = "ed-page-tools";
+			tools.appendChild(smallButton("Add text", "Put words on this page", function () { addText(pageIndex); }));
 			tools.appendChild(smallButton("↑", "Move this page earlier", function () { movePage(pageIndex, -1); }));
 			tools.appendChild(smallButton("↓", "Move this page later", function () { movePage(pageIndex, 1); }));
 			built.head.appendChild(tools);
@@ -1063,6 +1463,7 @@
 			if (adjusting(-1, index)) adjustCell = cell;
 			sheet.appendChild(cell);
 		});
+		sheet.appendChild(buildTextLayer(-1));
 		frame.appendChild(sheet);
 
 		if (design.text !== "overlay" || state.cover.title || state.cover.subtitle) {
@@ -1080,8 +1481,18 @@
 		frame.style.aspectRatio = size.w + " / " + size.h;
 
 		var built = pageCard("Cover — " + design.label, frame);
+
+		var tools = document.createElement("div");
+		tools.className = "ed-page-tools";
+		tools.appendChild(smallButton("Add text", "Put words on the cover", function () { addText(-1); }));
+		built.head.appendChild(tools);
+
 		if (adjustCell) {
 			built.card.appendChild(adjustBar(state.cover.slots[panSlot.slot], adjustCell));
+		}
+		if (selectedText && selectedText.page === -1) {
+			var chosen = selectedTextBox();
+			if (chosen) built.card.appendChild(textTools(chosen, -1));
 		}
 		return built.card;
 	}
@@ -1101,7 +1512,11 @@
 		if (target < 0 || target >= state.pages.length) return;
 		var moved = state.pages.splice(index, 1)[0];
 		state.pages.splice(target, 0, moved);
+		// The words travel with the page, because they live on it. The
+		// selection does not: it names a position, and the page that was at
+		// that position is no longer the one that is there.
 		panSlot = null;
+		selectedText = null;
 		scheduleSave();
 		renderPages();
 	}
@@ -1173,7 +1588,10 @@
 	function clearPages() {
 		if (!window.confirm("Take every photo off every page? The photos stay in your list.")) return;
 		state.cover.slots = coverSlots().map(function () { return blankSlot(); });
+		state.cover.texts = [];
+		selectedText = null;
 		state.pages.forEach(function (page) {
+			page.texts = [];
 			page.slots = page.slots.map(function () { return blankSlot(); });
 		});
 		panSlot = null;
@@ -1674,6 +2092,10 @@
 				var known = new Set(state.photos.map(function (p) { return p.id; }));
 				state.cover.slots = coverSlots().map(function (slot) {
 					return slot && slot.photoId && !known.has(slot.photoId) ? blankSlot() : slot || blankSlot();
+				});
+				state.cover.texts = normalizeTexts(state.cover.texts);
+				state.pages.forEach(function (page) {
+					page.texts = normalizeTexts(page.texts);
 				});
 				state.pages.forEach(function (page) {
 					page.slots = (page.slots || []).map(function (slot) {
