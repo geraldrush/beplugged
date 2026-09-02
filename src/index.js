@@ -1440,19 +1440,60 @@ function escapeHtmlWithBreaks(value) {
   return escapeHtml(value).replace(/\n/g, "<br>");
 }
 
-// Schema setup is idempotent but involves several DDL/PRAGMA round-trips, so we
-// run it at most once per isolate. The promise is cached; a failure clears it
-// so the next request retries.
+// Bump this whenever runSchemaSetup changes. It is the whole mechanism by
+// which the setup below stops running: the applied version is stamped in the
+// database, and a stamp that matches means there is nothing to do.
+const SCHEMA_VERSION = "2026-09-02";
+
+// Schema setup is idempotent, but "idempotent" is not "free": it is 68 DDL
+// statements, 29 PRAGMA table_info reads and 6 seed counts, every one of them
+// a separate round trip to D1, run in sequence. Caching it per isolate was
+// never enough, because an isolate is created far more often than the schema
+// changes — Cloudflare recycles them constantly, so in practice this ran over
+// and over, all day. It is what put ~17s in front of the first byte on a cold
+// start (see handleCatalogueListing) and it is most of what this database was
+// being asked to do.
+//
+// So the promise is still cached per isolate, but the work behind it now
+// begins with a single indexed read of the applied version. In the steady
+// state that read is the entire cost: one query per isolate instead of a
+// hundred. The full setup runs when the version moves, which is on deploy.
 let schemaReadyPromise = null;
 
 function ensureSchema(env) {
   if (!schemaReadyPromise) {
-    schemaReadyPromise = runSchemaSetup(env).catch((error) => {
+    schemaReadyPromise = syncSchema(env).catch((error) => {
       schemaReadyPromise = null;
       throw error;
     });
   }
   return schemaReadyPromise;
+}
+
+async function syncSchema(env) {
+  // A database that has never seen this table throws rather than returning
+  // nothing, and that is the first-run case: fall through and build it.
+  const stamped = await env.DB.prepare(
+    "SELECT value FROM schema_state WHERE key = 'version'",
+  )
+    .first()
+    .catch(() => null);
+
+  if (stamped && stamped.value === SCHEMA_VERSION) {
+    return;
+  }
+
+  await runSchemaSetup(env);
+
+  // Stamped last, so a setup that failed halfway is retried by the next
+  // isolate rather than being recorded as done.
+  await env.DB.prepare(
+    `INSERT INTO schema_state (key, value, applied_at)
+     VALUES ('version', ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, applied_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(SCHEMA_VERSION)
+    .run();
 }
 
 // Backwards-compatible aliases so existing call sites keep working; both now
@@ -1466,6 +1507,15 @@ function ensurePaymentsTable(env) {
 }
 
 async function runSchemaSetup(env) {
+  // Records which version of this function has been applied, so that the rest
+  // of it can be skipped. See syncSchema.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS schema_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ).run();
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY,
