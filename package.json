@@ -9,7 +9,10 @@
     "db:create": "wrangler d1 create invoicing",
     "db:init": "wrangler d1 execute invoicing --file src/schema.sql",
     "db:migrate": "wrangler d1 execute invoicing --file src/schema.sql --remote",
-    "academy:toolchain": "node scripts/build-academy-toolchain.mjs"
+    "academy:toolchain": "node scripts/build-academy-toolchain.mjs",
+    "test": "node test/run.mjs",
+    "test:unit": "node test/run.mjs unit",
+    "test:browser": "node test/run.mjs browser"
   },
   "repository": {
     "type": "git",
