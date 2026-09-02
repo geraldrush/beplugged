@@ -10769,6 +10769,12 @@ async function handleStudioOrdersAdmin(request, env, path, method) {
     return await streamStudioPhoto(env, id, seg[5]);
   }
 
+  // Everything in one file: the originals and the design that says where they
+  // go. One click instead of forty.
+  if (method === "GET" && id && seg[4] === "archive") {
+    return await streamStudioOrderArchive(env, id);
+  }
+
   if (method === "GET" && id) {
     const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
       .bind(id)
@@ -10858,6 +10864,229 @@ async function handleStudioOrdersAdmin(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+// --- handing a whole order over --------------------------------------------
+//
+// The studio needs every original from a book at once. One photo per click is
+// forty clicks for a wedding, so this returns the lot as a zip.
+//
+// It is built by hand and streamed, because it has to be. A forty-photo book
+// is comfortably larger than the 128 MB a Worker gets, so nothing may be held
+// in memory: each object is piped straight from R2 into the response as it
+// arrives. That rules out knowing a file's size or checksum before its header
+// is written, which is exactly what the zip data descriptor is for — the
+// header says "sizes follow the data", and they do.
+//
+// Stored, not deflated. These are JPEGs and PNGs; compressing them again costs
+// CPU to save nothing.
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32Update(crc, bytes) {
+  let c = crc ^ 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    c = CRC32_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function zipBytes(parts) {
+  const size = parts.reduce((n, p) => n + p.length, 0);
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+function u16(value) {
+  const b = new Uint8Array(2);
+  new DataView(b.buffer).setUint16(0, value, true);
+  return b;
+}
+
+function u32(value) {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, value >>> 0, true);
+  return b;
+}
+
+// A zip name must be unique and must not climb out of the archive when it is
+// unpacked, so it is built from an index and a scrubbed original.
+function zipEntryName(index, name, fallback) {
+  const safe = studioSafeName(name).replace(/[\\/]/g, " ").trim() || fallback;
+  return `${String(index).padStart(2, "0")}-${safe}`;
+}
+
+async function streamStudioOrderArchive(env, orderId) {
+  if (!env.STUDIO_MEDIA) {
+    return json({ error: "Photo storage is not configured." }, { status: 503 });
+  }
+
+  const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+    .bind(orderId)
+    .first();
+  if (!order) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+
+  const rows = await env.DB.prepare(
+    `SELECT photo_id, file_name, content_type, bytes, r2_key
+     FROM studio_order_photos WHERE order_id = ? ORDER BY created_at ASC`,
+  )
+    .bind(orderId)
+    .all();
+  const photos = rows.results || [];
+
+  // The design goes in with the pictures. Without it the studio has a folder
+  // of photographs and no idea which one belongs on which page.
+  const entries = [
+    {
+      name: "design.json",
+      body: new TextEncoder().encode(order.design_json || "{}"),
+    },
+    ...photos.map((row, index) => ({
+      name: zipEntryName(index + 1, row.file_name, `${row.photo_id}`),
+      key: row.r2_key,
+    })),
+  ];
+
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+
+  // Deliberately not awaited: the response has to start flowing while this is
+  // still reading out of R2, which is the whole point of streaming it.
+  (async () => {
+    const encoder = new TextEncoder();
+    const directory = [];
+    let offset = 0;
+
+    const put = async (bytes) => {
+      await writer.write(bytes);
+      offset += bytes.length;
+    };
+
+    try {
+      for (const entry of entries) {
+        const nameBytes = encoder.encode(entry.name);
+        const localOffset = offset;
+
+        await put(
+          zipBytes([
+            u32(0x04034b50),
+            u16(20),
+            u16(0x0808), // sizes follow the data; names are UTF-8
+            u16(0), // stored
+            u16(0),
+            u16(0),
+            u32(0),
+            u32(0),
+            u32(0),
+            u16(nameBytes.length),
+            u16(0),
+            nameBytes,
+          ]),
+        );
+
+        let crc = 0;
+        let size = 0;
+
+        if (entry.body) {
+          crc = crc32Update(0, entry.body);
+          size = entry.body.length;
+          await put(entry.body);
+        } else {
+          const object = await env.STUDIO_MEDIA.get(entry.key);
+          if (object) {
+            const reader = object.body.getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              crc = crc32Update(crc, value);
+              size += value.length;
+              await put(value);
+            }
+          }
+          // An object missing from the bucket becomes an empty entry rather
+          // than aborting the archive. The studio gets everything that does
+          // exist and can see at a glance which file did not.
+        }
+
+        await put(zipBytes([u32(0x08074b50), u32(crc), u32(size), u32(size)]));
+        directory.push({ nameBytes, crc, size, localOffset });
+      }
+
+      const centralStart = offset;
+      for (const item of directory) {
+        await put(
+          zipBytes([
+            u32(0x02014b50),
+            u16(20),
+            u16(20),
+            u16(0x0808),
+            u16(0),
+            u16(0),
+            u16(0),
+            u32(item.crc),
+            u32(item.size),
+            u32(item.size),
+            u16(item.nameBytes.length),
+            u16(0),
+            u16(0),
+            u16(0),
+            u16(0),
+            u32(0),
+            u32(item.localOffset),
+            item.nameBytes,
+          ]),
+        );
+      }
+
+      await put(
+        zipBytes([
+          u32(0x06054b50),
+          u16(0),
+          u16(0),
+          u16(directory.length),
+          u16(directory.length),
+          u32(offset - centralStart),
+          u32(centralStart),
+          u16(0),
+        ]),
+      );
+
+      await writer.close();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          message: "studio_archive_failed",
+          reference: order.reference,
+          error: String(error?.message || error),
+        }),
+      );
+      await writer.abort(error);
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${studioSafeName(order.reference) || "studio-order"}.zip"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 async function streamStudioPhoto(env, orderId, photoId) {
