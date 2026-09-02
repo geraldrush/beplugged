@@ -20,6 +20,9 @@
 	var SB = window.StudioBook;
 	var SIZES = SB.SIZES;
 	var LAYOUTS = SB.LAYOUTS;
+	var ENDPAPER_LAYOUTS = SB.ENDPAPER_LAYOUTS;
+	var ENDPAPER_PATTERNS = SB.ENDPAPER_PATTERNS;
+	var ENDPAPER_COLOURS = SB.ENDPAPER_COLOURS;
 	var MIN_PRINT_DPI = SB.MIN_PRINT_DPI;
 	var sizeFor = SB.sizeFor;
 	var layoutFor = SB.layoutFor;
@@ -185,6 +188,10 @@
 				slots: [blankSlot()], texts: [],
 				uv: { pattern: "none", monogram: "", file: null }
 			},
+			endpapers: {
+				front: SB.blankEndpaper(),
+				back: SB.blankEndpaper()
+			},
 			pages: [],
 			photos: []
 		};
@@ -221,10 +228,43 @@
 		return state.cover.slots.slice(0, wanted);
 	}
 
+	function endpaperSide(pageIndex) {
+		if (pageIndex === "front-endpaper") return "front";
+		if (pageIndex === "back-endpaper") return "back";
+		return null;
+	}
+
+	function endpaperFor(side) {
+		if (!state.endpapers) state.endpapers = {};
+		if (!state.endpapers[side] || typeof state.endpapers[side] !== "object") {
+			state.endpapers[side] = SB.blankEndpaper();
+		}
+		var sheet = state.endpapers[side];
+		var fallback = SB.blankEndpaper();
+		var layout = SB.endpaperLayoutFor(sheet.layout);
+		sheet.layout = layout.key;
+		sheet.pattern = SB.endpaperPatternFor(sheet.pattern || fallback.pattern).key;
+		sheet.background = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(sheet.background || ""))
+			? sheet.background
+			: fallback.background;
+		if (!Array.isArray(sheet.slots)) sheet.slots = [];
+		var wanted = layout.cols * layout.rows;
+		while (sheet.slots.length < wanted) sheet.slots.push(blankSlot());
+		while (sheet.slots.length > wanted) sheet.slots.pop();
+		if (!Array.isArray(sheet.texts)) sheet.texts = [];
+		return sheet;
+	}
+
+	function endpaperSlots(side) {
+		return endpaperFor(side).slots;
+	}
+
 	// Text boxes for a page, or for the cover at -1. Created on demand so a
 	// book built before this existed grows them as it is opened rather than
 	// needing a migration pass.
 	function textsFor(pageIndex) {
+		var side = endpaperSide(pageIndex);
+		if (side) return endpaperFor(side).texts;
 		if (pageIndex === -1) {
 			if (!Array.isArray(state.cover.texts)) state.cover.texts = [];
 			return state.cover.texts;
@@ -314,6 +354,11 @@
 		var used = new Set();
 		coverSlots().forEach(function (slot) {
 			if (slot.photoId) used.add(slot.photoId);
+		});
+		["front", "back"].forEach(function (side) {
+			endpaperSlots(side).forEach(function (slot) {
+				if (slot.photoId) used.add(slot.photoId);
+			});
 		});
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot) {
@@ -530,6 +575,11 @@
 		coverSlots().forEach(function (slot, i) {
 			if (slot.photoId === id) state.cover.slots[i] = blankSlot();
 		});
+		["front", "back"].forEach(function (side) {
+			endpaperSlots(side).forEach(function (slot, i) {
+				if (slot.photoId === id) state.endpapers[side].slots[i] = blankSlot();
+			});
+		});
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot, i) {
 				if (slot.photoId === id) page.slots[i] = blankSlot();
@@ -580,6 +630,9 @@
 	function emptySlotCount() {
 		var n = 0;
 		coverSlots().forEach(function (slot) { if (!slot.photoId) n++; });
+		["front", "back"].forEach(function (side) {
+			endpaperSlots(side).forEach(function (slot) { if (!slot.photoId) n++; });
+		});
 		state.pages.forEach(function (page) {
 			page.slots.forEach(function (slot) { if (!slot.photoId) n++; });
 		});
@@ -977,6 +1030,9 @@
 	// --- rendering: pages -------------------------------------------------
 
 	function layoutIcon(layout) {
+		if (!layout.cols || !layout.rows) {
+			return '<svg width="24" height="18" viewBox="0 0 24 18" aria-hidden="true"><rect x="3" y="3" width="18" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>';
+		}
 		var cells = "";
 		var w = 20 / layout.cols;
 		var h = 14 / layout.rows;
@@ -1579,6 +1635,7 @@
 		// Cover first. It is the page everyone judges the book by and the one
 		// customers forget to fill in, so it is not hidden behind a tab.
 		host.appendChild(buildCoverCard());
+		host.appendChild(buildEndpaperCard("front"));
 
 		state.pages.forEach(function (page, pageIndex) {
 			var layout = layoutFor(page.layout);
@@ -1639,6 +1696,115 @@
 
 			host.appendChild(built.card);
 		});
+
+		host.appendChild(buildEndpaperCard("back"));
+	}
+
+	function buildEndpaperCard(side) {
+		var sheetState = endpaperFor(side);
+		var layout = SB.endpaperLayoutFor(sheetState.layout);
+		var pageKey = side + "-endpaper";
+		var size = SB.endpaperSizeFor(state.product.size);
+
+		var sheet = document.createElement("div");
+		sheet.className =
+			"ed-sheet ed-endpaper-sheet ed-endpaper-pattern-" + sheetState.pattern +
+			(layout.key === "plain" ? " is-plain" : "");
+		sheet.style.aspectRatio = size.w + " / " + size.h;
+		sheet.style.setProperty("--endpaper-bg", sheetState.background);
+		sheet.style.backgroundColor = sheetState.background;
+
+		var adjustCell = null;
+		if (layout.cols && layout.rows) {
+			sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+			sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+			sheetState.slots.forEach(function (slot, slotIndex) {
+				var photo = slot.photoId ? photoById(slot.photoId) : null;
+				var cell = buildFrame(slot, pageKey, slotIndex,
+					photo ? SB.endpaperSlotDpi(photo, state.product.size, layout, slot) : null);
+				if (adjusting(pageKey, slotIndex)) adjustCell = cell;
+				sheet.appendChild(cell);
+			});
+		}
+
+		sheet.appendChild(buildTextLayer(pageKey));
+
+		var label = (side === "front" ? "Front end sheet" : "Back end sheet") +
+			" — " + SB.endpaperSizeLabel(state.product.size);
+		var built = pageCard(label, sheet);
+
+		var headTools = document.createElement("div");
+		headTools.className = "ed-page-tools";
+		headTools.appendChild(smallButton("Add text", "Put words on this end sheet", function () { addText(pageKey); }));
+		built.head.appendChild(headTools);
+
+		var controls = document.createElement("div");
+		controls.className = "ed-endpaper-controls";
+
+		var layoutRow = document.createElement("div");
+		layoutRow.className = "ed-endpaper-row";
+		ENDPAPER_LAYOUTS.forEach(function (option) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-layout";
+			button.title = option.label;
+			button.setAttribute("aria-label", option.label);
+			button.setAttribute("aria-pressed", String(sheetState.layout === option.key));
+			button.innerHTML = layoutIcon(option);
+			button.addEventListener("click", function () { changeEndpaperLayout(side, option.key); });
+			layoutRow.appendChild(button);
+		});
+		controls.appendChild(layoutRow);
+
+		var patternRow = document.createElement("div");
+		patternRow.className = "ed-endpaper-row";
+		ENDPAPER_PATTERNS.forEach(function (pattern) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-text-toggle";
+			button.textContent = pattern.label;
+			button.title = pattern.note;
+			button.setAttribute("aria-pressed", String(sheetState.pattern === pattern.key));
+			button.addEventListener("click", function () {
+				sheetState.pattern = pattern.key;
+				scheduleSave();
+				renderPages();
+				renderSummary();
+			});
+			patternRow.appendChild(button);
+		});
+		controls.appendChild(patternRow);
+
+		var colourRow = document.createElement("div");
+		colourRow.className = "ed-endpaper-row";
+		ENDPAPER_COLOURS.forEach(function (colour) {
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "ed-swatch";
+			button.style.background = colour.value;
+			button.title = colour.label;
+			button.setAttribute("aria-label", colour.label);
+			button.setAttribute("aria-pressed", String(sheetState.background.toLowerCase() === colour.value.toLowerCase()));
+			button.addEventListener("click", function () {
+				sheetState.background = colour.value;
+				scheduleSave();
+				renderPages();
+				renderSummary();
+			});
+			colourRow.appendChild(button);
+		});
+		controls.appendChild(colourRow);
+		built.card.appendChild(controls);
+
+		if (adjustCell) {
+			built.card.appendChild(adjustBar(sheetState.slots[panSlot.slot], adjustCell));
+		}
+		if (selectedText && selectedText.page === pageKey) {
+			var chosen = selectedTextBox();
+			if (chosen) built.card.appendChild(textTools(chosen, pageKey));
+		}
+
+		return built.card;
 	}
 
 	// The cover as the chosen design arranges it. The frame wrapper carries the
@@ -1764,6 +1930,20 @@
 		renderSummary();
 	}
 
+	function changeEndpaperLayout(side, layoutKey) {
+		var sheet = endpaperFor(side);
+		var layout = SB.endpaperLayoutFor(layoutKey);
+		var next = reflowSlots(sheet.slots, layout.cols * layout.rows, "end sheet");
+		if (!next) return;
+		sheet.layout = layout.key;
+		sheet.slots = next;
+		panSlot = null;
+		scheduleSave();
+		renderPages();
+		renderTray();
+		renderSummary();
+	}
+
 	function autofill() {
 		var used = usedPhotoIds();
 		var queue = state.photos.filter(function (p) { return !used.has(p.id); });
@@ -1774,6 +1954,12 @@
 		coverSlots().forEach(function (slot, i) {
 			if (slot.photoId || !queue.length) return;
 			state.cover.slots[i] = placed(queue.shift().id);
+		});
+		["front", "back"].forEach(function (side) {
+			endpaperSlots(side).forEach(function (slot, i) {
+				if (slot.photoId || !queue.length) return;
+				state.endpapers[side].slots[i] = placed(queue.shift().id);
+			});
 		});
 		for (var p = 0; p < state.pages.length && queue.length; p++) {
 			var page = state.pages[p];
@@ -1795,6 +1981,11 @@
 		if (!window.confirm("Take every photo off every page? The photos stay in your list.")) return;
 		state.cover.slots = coverSlots().map(function () { return blankSlot(); });
 		state.cover.texts = [];
+		["front", "back"].forEach(function (side) {
+			var sheet = endpaperFor(side);
+			sheet.slots = sheet.slots.map(function () { return blankSlot(); });
+			sheet.texts = [];
+		});
 		selectedText = null;
 		state.pages.forEach(function (page) {
 			page.texts = [];
@@ -1817,6 +2008,9 @@
 		var rows = [
 			["Size", size.label + " — " + size.w + " × " + size.h + " mm"],
 			["Pages", String(state.product.pages)],
+			["End sheets", "front and back — " + SB.endpaperSizeLabel(state.product.size) + " (" +
+				Math.round(SB.endpaperSizeFor(state.product.size).w) + " × " +
+				Math.round(SB.endpaperSizeFor(state.product.size).h) + " mm)"],
 			["Cover", SB.finishFor(state.product.finish).label + " — case bound"],
 			["Cover title", state.cover.title ? state.cover.title + (state.cover.subtitle ? " — " + state.cover.subtitle : "") : "no title yet"],
 			["Cover design", coverDesign().label],
@@ -1889,6 +2083,8 @@
 		if (item.page === 0) {
 			return coverDesign().frames.length > 1 ? "Cover, photo " + item.slot : "Cover photo";
 		}
+		if (item.section === "front-endpaper") return "Front end sheet, frame " + item.slot;
+		if (item.section === "back-endpaper") return "Back end sheet, frame " + item.slot;
 		return "Page " + item.page + ", frame " + item.slot;
 	}
 
@@ -1942,18 +2138,15 @@
 		stage.innerHTML = "";
 		if (view.cover) {
 			stage.appendChild(SB.leaf(state, null, previewResolve));
+		} else if (view.endpaper) {
+			stage.appendChild(SB.endpaperLeaf(state, view.endpaper, previewResolve));
 		} else {
 			view.pages.forEach(function (pageIndex) {
 				stage.appendChild(SB.leaf(state, pageIndex, previewResolve));
 			});
 		}
 
-		var label = view.cover
-			? "Cover"
-			: view.pages.length === 2
-				? "Pages " + (view.pages[0] + 1) + " and " + (view.pages[1] + 1)
-				: "Page " + (view.pages[0] + 1);
-		document.getElementById("preview-label").textContent = label;
+		document.getElementById("preview-label").textContent = SB.viewLabel(state, view);
 		document.getElementById("preview-count").textContent =
 			previewIndex + 1 + " of " + previewViews.length;
 		document.getElementById("preview-prev").disabled = previewIndex === 0;
@@ -1967,6 +2160,8 @@
 		var soft = lowResSlots().filter(function (item) {
 			return view.cover
 				? item.page === 0
+				: view.endpaper
+					? item.section === view.endpaper + "-endpaper"
 				: view.pages.indexOf(item.page - 1) !== -1;
 		});
 		var hint = document.getElementById("preview-hint");
@@ -2314,6 +2509,13 @@
 				// the design: the server would wait for an upload that can
 				// never arrive, exactly as it would for a lost photograph.
 				if (state.cover.uv.file && !photoBlobs.has("uv")) state.cover.uv.file = null;
+				["front", "back"].forEach(function (side) {
+					var sheet = endpaperFor(side);
+					sheet.texts = normalizeTexts(sheet.texts);
+					sheet.slots = sheet.slots.map(function (slot) {
+						return slot && slot.photoId && !known.has(slot.photoId) ? blankSlot() : slot || blankSlot();
+					});
+				});
 				state.pages.forEach(function (page) {
 					page.texts = normalizeTexts(page.texts);
 				});

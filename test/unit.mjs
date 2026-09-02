@@ -72,12 +72,39 @@ export default async function runUnit() {
 		return SB.lowResSlots(book, () => ({ w: 800, h: 600, name: "x" })).some((i) => i.page === 0);
 	})());
 
+	/* --- end sheets ------------------------------------------------------ */
+
+	suite("End sheets");
+	const endpaperSize = SB.endpaperSizeFor(A4);
+	check("an A4 portrait book prints A3 landscape end sheets",
+		endpaperSize.w === 420 && endpaperSize.h === 297 && SB.endpaperSizeLabel(A4) === "A3 landscape",
+		`${endpaperSize.w} x ${endpaperSize.h} ${SB.endpaperSizeLabel(A4)}`);
+	check("new end sheets default to a plain editable sheet",
+		SB.blankEndpaper().layout === "plain" && SB.blankEndpaper().pattern === "linen");
+	check("preview order includes front and back end sheets",
+		JSON.stringify(SB.buildViews({ product: { size: A4 }, pages: [{}, {}] })) ===
+			JSON.stringify([{ cover: true }, { endpaper: "front" }, { pages: [0, 1] }, { endpaper: "back" }]));
+	check("end sheet photos are checked at the double-width size", (() => {
+		const book = {
+			product: { size: A4 },
+			endpapers: { front: { layout: "full", slots: [{ photoId: "x" }] } },
+			cover: {},
+			pages: [],
+		};
+		return SB.lowResSlots(book, () => ({ w: 1200, h: 800, name: "x" }))
+			.some((i) => i.section === "front-endpaper");
+	})());
+
 	/* --- the two tables that must agree ---------------------------------- */
 
 	suite("Client and server agree");
 	const clientDesigns = JSON.stringify(SB.COVER_DESIGNS.map((d) => ({ k: d.key, f: d.frames.length })));
 	const serverDesigns = JSON.stringify(Object.entries(worker.STUDIO_COVER_DESIGNS).map(([k, d]) => ({ k, f: d.frames })));
 	check("cover designs and their frame counts", clientDesigns === serverDesigns, clientDesigns === serverDesigns ? undefined : `\n    client ${clientDesigns}\n    server ${serverDesigns}`);
+	check("end sheet layouts",
+		JSON.stringify(SB.ENDPAPER_LAYOUTS.map((l) => l.key)) === JSON.stringify(Object.keys(worker.STUDIO_ENDPAPER_LAYOUTS)));
+	check("end sheet paper patterns",
+		JSON.stringify(SB.ENDPAPER_PATTERNS.map((p) => p.key)) === JSON.stringify([...worker.STUDIO_ENDPAPER_PATTERNS]));
 	check("typefaces", JSON.stringify(SB.TEXT_FONTS.map((f) => f.key)) === JSON.stringify([...worker.STUDIO_TEXT_FONTS]));
 	check("text shapes", JSON.stringify(SB.TEXT_SHAPES.map((s) => s.key)) === JSON.stringify([...worker.STUDIO_TEXT_SHAPES]));
 	check("varnish patterns",
@@ -134,6 +161,33 @@ export default async function runUnit() {
 	// book out, which the review step offers in as many words.
 	check("a book with nothing placed is still an order",
 		reason({ product: { size: A4, finish: "photo-wrap" }, cover: {}, pages: [{ layout: "full", slots: [{ photoId: null }] }], photos }) === null);
+
+	suite("Server: end sheets");
+	const endpaperBook = (endpapers) => ({
+		product: { size: A4, finish: "photo-wrap" },
+		cover: { design: "full-bleed", slots: [{ photoId: "p1" }] },
+		endpapers,
+		pages: [{ layout: "full", slots: [{ photoId: "p1" }] }],
+		photos,
+	});
+	const endpaperReason = (endpapers) => {
+		try { normalizeStudioDesign(endpaperBook(endpapers)); return null; } catch (e) { return e.message; }
+	};
+	check("no end sheet data is accepted and defaults in the renderer", endpaperReason(undefined) === null);
+	check("plain coloured end sheets are accepted",
+		endpaperReason({ front: { layout: "plain", pattern: "linen", background: "#f3eadc", slots: [] } }) === null);
+	check("an end sheet can carry photos and text",
+		endpaperReason({ front: { layout: "two-across", pattern: "dots", background: "#dfe8dc", slots: [{ photoId: "p1" }, { photoId: "p2" }], texts: [{ id: "t1", text: "Inside cover", x: 50, y: 50, w: 40 }] } }) === null);
+	check("an unknown end sheet layout is refused",
+		/layout/.test(endpaperReason({ front: { layout: "accordion", pattern: "linen" } }) || ""));
+	check("an unknown paper pattern is refused",
+		/paper pattern/.test(endpaperReason({ front: { layout: "plain", pattern: "marble" } }) || ""));
+	check("a bad end sheet colour is refused",
+		/colour/.test(endpaperReason({ front: { layout: "plain", pattern: "linen", background: "url(x)" } }) || ""));
+	check("too many end sheet photos are refused",
+		/does not have that many/.test(endpaperReason({ front: { layout: "plain", pattern: "linen", slots: [{ photoId: "p1" }] } }) || ""));
+	check("an unknown end sheet photo is refused",
+		/end sheet refers to a photo/.test(endpaperReason({ back: { layout: "full", pattern: "linen", slots: [{ photoId: "ghost" }] } }) || ""));
 
 	suite("Server: text on a page");
 	const good = { id: "t1", text: "Cape Town", x: 50, y: 80, w: 60, align: "center",

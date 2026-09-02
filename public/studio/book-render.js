@@ -31,6 +31,95 @@
 		{ key: "four-grid", cols: 2, rows: 2, label: "Four" }
 	];
 
+	// Endpapers are not pages in the page count. They are the double-width
+	// sheets pasted into the case at the front and back of the book. An A4
+	// portrait book therefore prints each endpaper as 420 x 297mm — A3
+	// landscape — while other trims use the same "two pages opened flat" rule.
+	var ENDPAPER_LAYOUTS = [
+		{ key: "plain", cols: 0, rows: 0, label: "Plain" },
+		{ key: "full", cols: 1, rows: 1, label: "One photo" },
+		{ key: "two-across", cols: 2, rows: 1, label: "Two photos" },
+		{ key: "three-strip", cols: 3, rows: 1, label: "Three photos" },
+		{ key: "four-grid", cols: 2, rows: 2, label: "Four photos" }
+	];
+
+	var ENDPAPER_PATTERNS = [
+		{ key: "clean", label: "Clean", note: "Solid colour, quiet and formal." },
+		{ key: "linen", label: "Linen", note: "A fine woven texture, good for wedding books." },
+		{ key: "dots", label: "Dots", note: "Small even dots across the sheet." },
+		{ key: "diagonal", label: "Diagonal", note: "A light diagonal rule field." },
+		{ key: "frame", label: "Frame", note: "A fine border held inside the trim." }
+	];
+
+	var ENDPAPER_COLOURS = [
+		{ key: "warm", label: "Warm ivory", value: "#f3eadc" },
+		{ key: "white", label: "Soft white", value: "#f8f7f2" },
+		{ key: "blush", label: "Blush", value: "#f0d8d2" },
+		{ key: "sage", label: "Sage", value: "#dfe8dc" },
+		{ key: "mist", label: "Blue mist", value: "#dce7ef" },
+		{ key: "charcoal", label: "Charcoal", value: "#242a31" }
+	];
+
+	var DEFAULT_ENDPAPER_BACKGROUND = ENDPAPER_COLOURS[0].value;
+
+	function blankEndpaper() {
+		return {
+			layout: "plain",
+			pattern: "linen",
+			background: DEFAULT_ENDPAPER_BACKGROUND,
+			slots: [],
+			texts: []
+		};
+	}
+
+	function endpaperPatternFor(key) {
+		for (var i = 0; i < ENDPAPER_PATTERNS.length; i++) {
+			if (ENDPAPER_PATTERNS[i].key === key) return ENDPAPER_PATTERNS[i];
+		}
+		return ENDPAPER_PATTERNS[1];
+	}
+
+	function endpaperLayoutFor(key) {
+		for (var i = 0; i < ENDPAPER_LAYOUTS.length; i++) {
+			if (ENDPAPER_LAYOUTS[i].key === key) return ENDPAPER_LAYOUTS[i];
+		}
+		return ENDPAPER_LAYOUTS[0];
+	}
+
+	function endpaperSizeFor(sizeKey) {
+		var size = sizeFor(sizeKey);
+		return { w: size.w * 2, h: size.h };
+	}
+
+	// A sheet is only given a paper's name when it is that paper to the
+	// millimetre. Two A5 pages come to 296mm across, one short of A4, and a
+	// printer told "A4 landscape" would cut it to 297 and lose a millimetre of
+	// somebody's photograph. Everything unnamed says its own measurements,
+	// which is what the press needs anyway.
+	function endpaperSizeLabel(sizeKey) {
+		var size = endpaperSizeFor(sizeKey);
+		var w = Math.round(size.w);
+		var h = Math.round(size.h);
+		if (w === 420 && h === 297) return "A3 landscape";
+		return w + " × " + h + " mm";
+	}
+
+	function endpaperOf(book, side) {
+		var raw = (book && book.endpapers && book.endpapers[side]) || {};
+		var fallback = blankEndpaper();
+		var layout = endpaperLayoutFor(raw.layout);
+		var wanted = layout.cols * layout.rows;
+		var slots = wanted && Array.isArray(raw.slots) ? raw.slots.slice(0, wanted) : [];
+		while (slots.length < wanted) slots.push({});
+		return {
+			layout: layout.key,
+			pattern: endpaperPatternFor(raw.pattern || fallback.pattern).key,
+			background: colourOf(raw.background, fallback.background),
+			slots: slots,
+			texts: Array.isArray(raw.texts) ? raw.texts : []
+		};
+	}
+
 	// What the case is covered in. Case binding is the method either way — the
 	// pages are bound into a block and set into a rigid case — and this is what
 	// that case is wrapped in, which is the part the customer actually sees.
@@ -598,17 +687,35 @@
 		return dpiFor(photo, size.w * frame.w, size.h * frame.h, slot);
 	}
 
+	function endpaperSlotDpi(photo, sizeKey, layout, slot) {
+		var size = endpaperSizeFor(sizeKey);
+		if (!layout.cols || !layout.rows) return null;
+		return dpiFor(photo, size.w / layout.cols, size.h / layout.rows, slot);
+	}
+
 	// Which pages are shown together. Always facing pages, on every screen: an
 	// opened book is what a book looks like, and turning one page at a time on
 	// a phone hid the thing the customer is trying to judge. A phone gets the
 	// spread scaled to fit instead — see fitSpread.
 	function buildViews(book) {
 		var pages = (book && book.pages) || [];
-		var views = [{ cover: true }];
+		var views = [{ cover: true }, { endpaper: "front" }];
 		for (var i = 0; i < pages.length; i += 2) {
 			views.push({ pages: i + 1 < pages.length ? [i, i + 1] : [i] });
 		}
+		views.push({ endpaper: "back" });
 		return views;
+	}
+
+	function viewLabel(book, view) {
+		if (view.cover) return "Cover";
+		if (view.endpaper) {
+			return (view.endpaper === "front" ? "Front end sheet" : "Back end sheet") +
+				" — " + endpaperSizeLabel(book.product && book.product.size);
+		}
+		return view.pages.length === 2
+			? "Pages " + (view.pages[0] + 1) + " and " + (view.pages[1] + 1)
+			: "Page " + (view.pages[0] + 1);
 	}
 
 	// Sizes the spread to whichever runs out first, the width or the height.
@@ -617,7 +724,9 @@
 	// width has to be allowed to decide.
 	function fitSpread(stageEl, spreadEl, book, view) {
 		if (!stageEl || !spreadEl || !view) return;
-		var size = sizeFor(book.product && book.product.size);
+		var size = view.endpaper
+			? endpaperSizeFor(book.product && book.product.size)
+			: sizeFor(book.product && book.product.size);
 		var ratio = size.w / size.h;
 		var count = view.cover ? 1 : (view.pages || []).length || 1;
 		var labelHeight = 30;   // the page label, outside the page
@@ -649,6 +758,7 @@
 	// properties carry the same numbers to the stylesheet, which can use them.
 	function applyPrintPageSize(book) {
 		var size = sizeFor(book && book.product && book.product.size);
+		var endpaper = endpaperSizeFor(book && book.product && book.product.size);
 		var id = "ed-print-page-size";
 		var style = document.getElementById(id);
 		if (!style) {
@@ -658,17 +768,20 @@
 		}
 		style.textContent =
 			"@page { size: " + size.w + "mm " + size.h + "mm; margin: 0; }\n" +
-			":root { --sheet-w: " + size.w + "mm; --sheet-h: " + size.h + "mm; }";
+			"@page ed-endpaper { size: " + endpaper.w + "mm " + endpaper.h + "mm; margin: 0; }\n" +
+			":root { --sheet-w: " + size.w + "mm; --sheet-h: " + size.h + "mm; " +
+			"--endpaper-w: " + endpaper.w + "mm; --endpaper-h: " + endpaper.h + "mm; }";
 		return size;
 	}
 
-	// Every page of the book in order, cover first. Used for printing, where
-	// there are no spreads and no turning — just sheets.
+	// Every printable part of the book in order, cover first. Used for
+	// printing, where there are no spreads and no turning — just sheets.
 	function allLeaves(book, resolve) {
-		var leaves = [leaf(book, null, resolve)];
+		var leaves = [leaf(book, null, resolve), endpaperLeaf(book, "front", resolve)];
 		(book.pages || []).forEach(function (_, index) {
 			leaves.push(leaf(book, index, resolve));
 		});
+		leaves.push(endpaperLeaf(book, "back", resolve));
 		return leaves;
 	}
 
@@ -700,6 +813,47 @@
 		applySlotImage(img, slot);
 		cell.appendChild(img);
 		return cell;
+	}
+
+	function endpaperLeaf(book, side, resolve) {
+		var size = endpaperSizeFor(book.product && book.product.size);
+		var endpaper = endpaperOf(book, side);
+		var layout = endpaperLayoutFor(endpaper.layout);
+
+		var wrap = document.createElement("div");
+		wrap.className = "ed-preview-leaf is-endpaper";
+
+		var pageEl = document.createElement("div");
+		pageEl.className = "ed-preview-page ed-endpaper-page";
+		pageEl.style.aspectRatio = size.w + " / " + size.h;
+
+		var sheet = document.createElement("div");
+		sheet.className =
+			"ed-preview-sheet ed-endpaper-sheet ed-endpaper-pattern-" + endpaper.pattern +
+			(layout.key === "plain" ? " is-plain" : "");
+		sheet.style.setProperty("--endpaper-bg", endpaper.background);
+		sheet.style.backgroundColor = endpaper.background;
+
+		if (layout.cols && layout.rows) {
+			sheet.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+			sheet.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+			endpaper.slots.forEach(function (slot) {
+				sheet.appendChild(slotElement(slot, resolve));
+			});
+		}
+
+		var text = textLayer(endpaper.texts);
+		if (text) sheet.appendChild(text);
+		pageEl.appendChild(sheet);
+		wrap.appendChild(pageEl);
+
+		var label = document.createElement("div");
+		label.className = "ed-preview-number";
+		label.textContent =
+			(side === "front" ? "Front end sheet" : "Back end sheet") +
+			" — " + endpaperSizeLabel(book.product && book.product.size);
+		wrap.appendChild(label);
+		return wrap;
 	}
 
 	// One leaf: the page, plus its label outside the page edge. pageIndex null
@@ -817,10 +971,11 @@
 		var out = [];
 		var sizeKey = book.product && book.product.size;
 
-		var note = function (pageNumber, slotIndex, slot, dpi, photo) {
+		var note = function (pageNumber, slotIndex, slot, dpi, photo, section) {
 			if (dpi === null || dpi >= MIN_PRINT_DPI) return;
 			out.push({
 				page: pageNumber,
+				section: section || "",
 				slot: slotIndex + 1,
 				name: photo ? photo.name : "",
 				dpi: Math.round(dpi)
@@ -833,6 +988,23 @@
 			if (frameIndex >= design.frames.length) return;
 			var photo = resolve(slot.photoId);
 			note(0, frameIndex, slot, coverSlotDpi(photo, sizeKey, design, frameIndex, slot), photo);
+		});
+
+		["front", "back"].forEach(function (side) {
+			var endpaper = endpaperOf(book, side);
+			var layout = endpaperLayoutFor(endpaper.layout);
+			(endpaper.slots || []).forEach(function (slot, slotIndex) {
+				if (!slot || !slot.photoId) return;
+				var photo = resolve(slot.photoId);
+				note(
+					null,
+					slotIndex,
+					slot,
+					endpaperSlotDpi(photo, sizeKey, layout, slot),
+					photo,
+					side + "-endpaper"
+				);
+			});
 		});
 
 		(book.pages || []).forEach(function (page, pageIndex) {
@@ -850,8 +1022,19 @@
 	global.StudioBook = {
 		SIZES: SIZES,
 		LAYOUTS: LAYOUTS,
+		ENDPAPER_LAYOUTS: ENDPAPER_LAYOUTS,
+		ENDPAPER_PATTERNS: ENDPAPER_PATTERNS,
+		ENDPAPER_COLOURS: ENDPAPER_COLOURS,
 		COVER_FINISHES: COVER_FINISHES,
 		COVER_DESIGNS: COVER_DESIGNS,
+		blankEndpaper: blankEndpaper,
+		endpaperOf: endpaperOf,
+		endpaperLayoutFor: endpaperLayoutFor,
+		endpaperPatternFor: endpaperPatternFor,
+		endpaperSizeFor: endpaperSizeFor,
+		endpaperSizeLabel: endpaperSizeLabel,
+		endpaperLeaf: endpaperLeaf,
+		endpaperSlotDpi: endpaperSlotDpi,
 		finishFor: finishFor,
 		coverDesignFor: coverDesignFor,
 		coverDesign: coverDesign,
@@ -883,6 +1066,7 @@
 		applySlotImage: applySlotImage,
 		slotDpi: slotDpi,
 		buildViews: buildViews,
+		viewLabel: viewLabel,
 		fitSpread: fitSpread,
 		leaf: leaf,
 		allLeaves: allLeaves,

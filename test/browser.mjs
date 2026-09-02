@@ -8,11 +8,12 @@
  */
 import {
 	suite, check, photoFixtures, startStatic, launchBrowser,
-	openEditor, waitForSave, addPhotos, loadStudioBook,
+	openEditor, waitForSave, addPhotos, loadStudioBook, READY, preparePage,
 } from "./helpers.mjs";
 
 const DESIGNS = ["full-bleed", "title-band", "inset-window", "split-block", "collage", "plate"];
-const CARD = (n) => `.ed-page:nth-of-type(${n})`;          // 1 = cover, 2 = page 1
+const CARD = (n) => `.ed-page:nth-of-type(${n})`;          // 1 = cover, 2 = front end sheet, 3 = page 1
+const PAGE1 = CARD(3);
 const pickDesign = (page, key) => page.evaluate(([k, order]) => {
 	document.querySelectorAll("#cover-design-options .ed-choice")[order.indexOf(k)].click();
 }, [key, DESIGNS]);
@@ -31,6 +32,75 @@ async function covers(browser, base, files) {
 	check("each has a drawn thumbnail", DESIGNS.every((d) => thumbs.some((c) => c.includes(`is-${d}`))));
 
 	await addPhotos(page, files);
+
+	suite("End sheets: designing one");
+	const frontEndSheet = CARD(2);
+	const endSheetSeen = await page.evaluate((selector) => {
+		const card = document.querySelector(selector);
+		const sheet = card.querySelector(".ed-endpaper-sheet");
+		const r = sheet.getBoundingClientRect();
+		return {
+			label: card.querySelector(".ed-page-label").textContent,
+			ratio: Math.round((r.width / r.height) * 1000) / 1000,
+			layouts: card.querySelectorAll(".ed-layout").length,
+			patterns: card.querySelectorAll(".ed-text-toggle").length,
+			swatches: card.querySelectorAll(".ed-swatch").length,
+		};
+	}, frontEndSheet);
+	check("the front end sheet is A3 landscape for an A4 portrait book",
+		/Front end sheet/.test(endSheetSeen.label) &&
+		/A3 landscape/.test(endSheetSeen.label) &&
+		Math.abs(endSheetSeen.ratio - (420 / 297)) < 0.02,
+		`${endSheetSeen.label}, ratio ${endSheetSeen.ratio}`);
+	check("it offers layout, pattern and colour controls",
+		endSheetSeen.layouts === 5 && endSheetSeen.patterns === 5 && endSheetSeen.swatches === 6,
+		`${endSheetSeen.layouts}/${endSheetSeen.patterns}/${endSheetSeen.swatches}`);
+
+	await page.evaluate((selector) => {
+		const card = document.querySelector(selector);
+		[...card.querySelectorAll(".ed-layout")].find((b) => b.title === "One photo").click();
+	}, frontEndSheet);
+	await page.waitForTimeout(200);
+	await page.click("#tray-list .ed-thumb");
+	await page.click(`${frontEndSheet} .ed-slot`);
+	await page.waitForTimeout(250);
+	check("a photo can be placed on the end sheet",
+		(await page.$(`${frontEndSheet} .ed-slot.is-filled img`)) !== null);
+
+	await page.evaluate((selector) => {
+		const card = document.querySelector(selector);
+		[...card.querySelectorAll(".ed-text-toggle")].find((b) => b.textContent.trim() === "Dots").click();
+		[...card.querySelectorAll(".ed-swatch")].find((b) => b.title === "Sage").click();
+	}, frontEndSheet);
+	await page.waitForTimeout(250);
+	const endSheetStyled = await page.$eval(`${frontEndSheet} .ed-endpaper-sheet`, (e) => ({
+		cls: e.className,
+		bg: e.style.backgroundColor,
+	}));
+	check("pattern and paper colour apply to the end sheet",
+		endSheetStyled.cls.includes("ed-endpaper-pattern-dots") && /rgb\(223, 232, 220\)/.test(endSheetStyled.bg),
+		`${endSheetStyled.cls}, ${endSheetStyled.bg}`);
+
+	await page.click("#dock-preview");
+	await page.waitForTimeout(300);
+	await page.click("#preview-next");
+	await page.waitForTimeout(250);
+	const endPreview = await page.evaluate(() => ({
+		label: document.getElementById("preview-label").textContent,
+		endpaper: Boolean(document.querySelector("#preview-spread .ed-preview-leaf.is-endpaper")),
+		images: document.querySelectorAll("#preview-spread .ed-preview-leaf.is-endpaper img").length,
+	}));
+	check("the preview turns from cover to front end sheet",
+		endPreview.endpaper && /Front end sheet/.test(endPreview.label) && /A3 landscape/.test(endPreview.label) && endPreview.images === 1,
+		`${endPreview.label}, ${endPreview.images} image(s)`);
+	await page.keyboard.press("Escape");
+	await page.waitForTimeout(150);
+	await page.evaluate((selector) => {
+		const card = document.querySelector(selector);
+		[...card.querySelectorAll(".ed-slot-tools .ed-mini")]
+			.find((b) => b.textContent.trim() === "✕").click();
+	}, frontEndSheet);
+	await page.waitForTimeout(200);
 
 	for (const key of DESIGNS) {
 		await pickDesign(page, key);
@@ -284,6 +354,28 @@ async function covers(browser, base, files) {
 		`border ${sheet.border}, padding ${sheet.leafPad}`);
 	check("the page label does not print", sheet.labelShown === false);
 
+	const endPrint = await page.evaluate(() => {
+		const leaf = document.querySelector("#print-book .ed-preview-leaf.is-endpaper");
+		const pageEl = leaf.querySelector(".ed-preview-page");
+		const mm = (px) => Math.round((px / 96) * 25.4);
+		const r = pageEl.getBoundingClientRect();
+		const rule = [...document.getElementById("ed-print-page-size").sheet.cssRules]
+			.map((x) => x.cssText).join(" ");
+		return {
+			w: mm(r.width),
+			h: mm(r.height),
+			labelShown: getComputedStyle(leaf.querySelector(".ed-preview-number")).display !== "none",
+			rule,
+		};
+	});
+	check("the printed file includes A3 landscape end sheets",
+		endPrint.w === 420 && endPrint.h === 297,
+		`${endPrint.w} x ${endPrint.h} mm`);
+	check("the end sheet has its own named @page",
+		/@page ed-endpaper/.test(endPrint.rule) && /size:\s*420mm 297mm/.test(endPrint.rule),
+		endPrint.rule);
+	check("the end sheet label does not print", endPrint.labelShown === false);
+
 	// Varnish is clear, so a paper proof cannot show it and should not dull the
 	// photograph pretending to. The label carries the choice instead.
 	check("the varnish does not print over the photograph", proof.varnish === false);
@@ -314,7 +406,7 @@ async function text(browser, base, files) {
 	await page.click("#autofill");
 	await page.waitForTimeout(300);
 
-	const BOX = `${CARD(2)} .ed-text-box`;
+	const BOX = `${PAGE1} .ed-text-box`;
 	const style = () => page.$eval(BOX, (e) => ({
 		color: e.style.color, bg: e.style.background, cls: e.className, align: e.style.textAlign,
 		weight: e.style.fontWeight, italic: e.style.fontStyle, font: e.style.fontFamily,
@@ -330,31 +422,31 @@ async function text(browser, base, files) {
 		el.dispatchEvent(new Event("input", { bubbles: true }));
 	}, [card, label, selector, value]);
 	const press = (rowLabel, label) => page.evaluate(([rl, l]) => {
-		const row = [...document.querySelectorAll(".ed-page:nth-of-type(2) .ed-text-row")]
+		const row = [...document.querySelectorAll(".ed-page:nth-of-type(3) .ed-text-row")]
 			.find((r) => (r.querySelector(".ed-text-label") || {}).textContent === rl);
 		[...row.querySelectorAll(".ed-text-toggle")].find((b) => b.textContent.trim() === l).click();
 	}, [rowLabel, label]);
 
 	suite("Text: putting words on a page");
-	await page.click(`${CARD(2)} .ed-page-tools .ed-btn`);
+	await page.click(`${PAGE1} .ed-page-tools .ed-btn`);
 	await page.waitForTimeout(250);
 	check("a box appears", (await page.$(BOX)) !== null);
-	check("its controls open with it", (await page.$(`${CARD(2)} .ed-text-tools`)) !== null);
-	await page.fill(`${CARD(2)} .ed-text-tools textarea`, "Cape Town, day three");
+	check("its controls open with it", (await page.$(`${PAGE1} .ed-text-tools`)) !== null);
+	await page.fill(`${PAGE1} .ed-text-tools textarea`, "Cape Town, day three");
 	await page.waitForTimeout(200);
 	check("typing shows on the page", (await page.$eval(BOX, (e) => e.textContent)).includes("Cape Town"));
 
 	suite("Text: colour, ground, shape and style");
-	await setIn(CARD(2), "Text", "input[type=color]", "#ffcc00");
+	await setIn(PAGE1, "Text", "input[type=color]", "#ffcc00");
 	await page.waitForTimeout(150);
 	check("font colour", (await style()).color === "rgb(255, 204, 0)", (await style()).color);
 
-	await setIn(CARD(2), "Behind", "input[type=color]", "#102030");
+	await setIn(PAGE1, "Behind", "input[type=color]", "#102030");
 	await page.waitForTimeout(150);
 	// Type over a photograph nearly always wants the picture showing through,
 	// which is why the ground is a colour and a solidity rather than a colour.
 	check("background arrives translucent", /rgba\(16, 32, 48/.test((await style()).bg), (await style()).bg);
-	await setIn(CARD(2), "Behind", "input[type=range]", "1");
+	await setIn(PAGE1, "Behind", "input[type=range]", "1");
 	await page.waitForTimeout(150);
 	check("and its solidity is adjustable",
 		/rgb\(16, 32, 48\)|rgba\(16, 32, 48, 1\)/.test((await style()).bg), (await style()).bg);
@@ -369,7 +461,7 @@ async function text(browser, base, files) {
 	check("italic", (await style()).italic === "italic");
 	await press("Align", "Right"); await page.waitForTimeout(200);
 	check("alignment", (await style()).align === "right");
-	await setIn(CARD(2), "Size", "input[type=range]", "9");
+	await setIn(PAGE1, "Size", "input[type=range]", "9");
 	await page.waitForTimeout(150);
 	// Relative to the page, because the same design is drawn at four sizes.
 	check("size is relative to the page, not in pixels", (await style()).size === "9cqw");
@@ -400,6 +492,7 @@ async function text(browser, base, files) {
 	await waitForSave(page);
 	await page.click("#dock-preview");
 	await page.waitForTimeout(500);
+	await page.click("#preview-next");
 	await page.click("#preview-next");
 	await page.waitForTimeout(300);
 	const shown = await page.$eval("#preview-spread .ed-text-box", (e) => ({
@@ -446,7 +539,7 @@ async function storage(browser, base, files) {
 	// line was the smallest part of it: photos are added through a sequential
 	// chain, so the first refused write rejected the whole thing and every
 	// photo after it was silently never added.
-	const page = await browser.newPage();
+	const page = await preparePage(await browser.newPage());
 	await page.addInitScript(`
 		window.__unhandled = [];
 		addEventListener("unhandledrejection", function (e) {
@@ -460,7 +553,7 @@ async function storage(browser, base, files) {
 	`);
 	const errors = [];
 	page.on("pageerror", (e) => errors.push(e.message));
-	await page.goto(`${base}/studio/editor.html`);
+	await page.goto(`${base}/studio/editor.html`, READY);
 	await page.click('.ed-step[data-step="photos"]');
 	await page.setInputFiles("#photo-input", files);
 	await page.waitForTimeout(1500);

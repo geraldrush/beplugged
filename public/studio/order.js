@@ -100,14 +100,16 @@
 			"Sent by " + (order.customer_name || "you") +
 			(order.submitted_at ? " on " + String(order.submitted_at).slice(0, 10) : "") + ".";
 
-		var missing = Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
+		var released = Boolean(order.photos_released_at);
+		var missing = released ? 0 : Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
 		var rows = [
 			["Book", order.size_label + " · " + order.page_count + " pages"],
+			["End sheets", order.endpaper_label || "front and back — " + SB.endpaperSizeLabel(book.product && book.product.size)],
 			["Cover", (order.cover_label || "Photo wrap") + " · case bound"],
 			["Copies", String(order.copies || 1)],
 			["Occasion", order.occasion || "not given"],
 			["Needed by", order.needed_by || "not given"],
-			["Photos received", order.uploaded_count + " of " + order.photo_count],
+			["Photos received", released ? "Released after production" : order.uploaded_count + " of " + order.photo_count],
 			["Where it is", statusWords(order.status)]
 		];
 		el("book-summary").innerHTML = rows.map(function (row) {
@@ -118,7 +120,13 @@
 			return "<tr>" + th.outerHTML + td.outerHTML + "</tr>";
 		}).join("");
 
-		if (missing > 0) {
+		if (released) {
+			var releasedNote = document.createElement("div");
+			releasedNote.className = "ed-note";
+			releasedNote.textContent =
+				"The original uploads were released from storage after production. We still keep the order record and layout.";
+			el("book-summary").parentNode.appendChild(releasedNote);
+		} else if (missing > 0) {
 			var note = document.createElement("div");
 			note.className = "ed-note warn";
 			note.textContent =
@@ -155,18 +163,15 @@
 		stage.innerHTML = "";
 		if (view.cover) {
 			stage.appendChild(SB.leaf(book, null, resolve));
+		} else if (view.endpaper) {
+			stage.appendChild(SB.endpaperLeaf(book, view.endpaper, resolve));
 		} else {
 			view.pages.forEach(function (pageIndex) {
 				stage.appendChild(SB.leaf(book, pageIndex, resolve));
 			});
 		}
 
-		var label = view.cover
-			? "Cover"
-			: view.pages.length === 2
-				? "Pages " + (view.pages[0] + 1) + " and " + (view.pages[1] + 1)
-				: "Page " + (view.pages[0] + 1);
-		el("preview-label").textContent = label;
+		el("preview-label").textContent = SB.viewLabel(book, view);
 		el("preview-count").textContent = previewIndex + 1 + " of " + previewViews.length;
 		el("preview-prev").disabled = previewIndex === 0;
 		el("preview-next").disabled = previewIndex >= previewViews.length - 1;

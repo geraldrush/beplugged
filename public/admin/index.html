@@ -6292,6 +6292,14 @@
         "four-grid": { cols: 2, rows: 2 },
       };
 
+      const STUDIO_ENDPAPER_LAYOUTS = {
+        plain: { cols: 0, rows: 0 },
+        full: { cols: 1, rows: 1 },
+        "two-across": { cols: 2, rows: 1 },
+        "three-strip": { cols: 3, rows: 1 },
+        "four-grid": { cols: 2, rows: 2 },
+      };
+
       function studioBytes(n) {
         const value = Number(n) || 0;
         if (value >= 1024 * 1024 * 1024) return (value / (1024 * 1024 * 1024)).toFixed(1) + " GB";
@@ -6306,6 +6314,33 @@
         return `<span style="display:inline-block;padding:0.15rem 0.55rem;border-radius:999px;background:${colour};color:#fff;font-size:0.72rem;font-weight:600;white-space:nowrap;">${escapeHtml(STUDIO_STATUS_LABELS[key] || key)}</span>`;
       }
 
+      function studioPhotosReleased(order) {
+        return Boolean(order && order.photos_released_at);
+      }
+
+      function studioReleaseNote(order) {
+        if (!studioPhotosReleased(order)) return "";
+        const date = String(order.photos_released_at || "").slice(0, 10);
+        return "released" + (date ? " " + date : "");
+      }
+
+      function studioCanRelease(order) {
+        return String(order.status || "") === "completed" && Number(order.uploaded_count || 0) > 0;
+      }
+
+      function studioEndpaperSize(size) {
+        const paper = size || { w: 210, h: 297 };
+        return { w: paper.w * 2, h: paper.h };
+      }
+
+      function studioEndpaperLabel(size) {
+        const paper = studioEndpaperSize(size);
+        const w = Math.round(paper.w);
+        const h = Math.round(paper.h);
+        if (w === 420 && h === 297) return "A3 landscape";
+        return w + " × " + h + " mm";
+      }
+
       function renderStudioOrderRows(rows) {
         if (!rows.length) {
           return `<tr><td colspan="7" class="text-center" style="padding:1.5rem;color:var(--muted);">No studio orders yet. They arrive when someone finishes a book at <span class="ref">/studio/editor</span>.</td></tr>`;
@@ -6315,9 +6350,10 @@
             const size = STUDIO_SIZE_LABELS[r.product_size];
             const expected = Number(r.photo_count || 0);
             const got = Number(r.uploaded_count || 0);
+            const released = studioPhotosReleased(r);
             // A gap here is the thing to act on: the design arrived, some of
             // the photos did not, and only a person can sort that out.
-            const shortfall = expected - got;
+            const shortfall = released ? 0 : Math.max(0, expected - got);
             return `
           <tr>
             <td>
@@ -6338,20 +6374,86 @@
             </td>
             <td>${r.needed_by ? escapeHtml(r.needed_by) : `<span style="color:var(--muted);">not given</span>`}</td>
             <td>
-              ${got} of ${expected}
+              ${released ? "Released" : got + " of " + expected}
               <div style="font-size:0.78rem;color:${shortfall > 0 ? "#b7791f" : "var(--muted)"};">
-                ${shortfall > 0 ? shortfall + " missing" : studioBytes(r.uploaded_bytes)}
+                ${released ? escapeHtml(studioReleaseNote(r)) : shortfall > 0 ? shortfall + " missing" : studioBytes(r.uploaded_bytes)}
               </div>
             </td>
             <td>${studioStatusPill(r.status)}</td>
             <td>
               <div class="action-buttons">
                 <button class="btn btn-sm btn-secondary" data-studio-view="${escapeAttr(r.id)}">View book</button>
+                <button class="btn btn-sm btn-secondary" data-studio-archive="${escapeAttr(r.id)}" data-studio-ref="${escapeAttr(r.reference || "")}" ${got > 0 ? "" : "disabled"}>Download ZIP</button>
+                ${studioCanRelease(r) ? `<button class="btn btn-sm btn-danger" data-studio-release="${escapeAttr(r.id)}" data-studio-ref="${escapeAttr(r.reference || "")}">Release photos</button>` : ""}
               </div>${actionButtons("studioOrders", r.id)}
             </td>
           </tr>`;
           })
           .join("");
+      }
+
+      function studioArchiveFilename(disposition, reference) {
+        const fallback = (String(reference || "studio-order").replace(/[^\w .()-]/g, "").trim() || "studio-order") + ".zip";
+        const header = String(disposition || "");
+        const utf = /filename\*=UTF-8''([^;]+)/i.exec(header);
+        if (utf) {
+          try {
+            return decodeURIComponent(utf[1].replace(/^"|"$/g, "")) || fallback;
+          } catch (_) {
+            return fallback;
+          }
+        }
+        const basic = /filename="?([^";]+)"?/i.exec(header);
+        return basic ? basic[1] : fallback;
+      }
+
+      async function downloadStudioArchive(orderId, reference) {
+        showAlert("Preparing studio archive…", "info");
+        try {
+          const response = await fetch(
+            API_BASE + "/admin/studio-orders/" + encodeURIComponent(orderId) + "/archive",
+            { headers: { Authorization: authToken } },
+          );
+          if (response.status === 401) {
+            logout();
+            return;
+          }
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            showAlert("Error: " + (body.error || "The archive could not be downloaded."), "danger");
+            return;
+          }
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = studioArchiveFilename(response.headers.get("Content-Disposition"), reference);
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          showAlert("Studio archive downloaded", "success");
+        } catch (error) {
+          showAlert("Error: " + error.message, "danger");
+        }
+      }
+
+      async function releaseStudioPhotos(orderId, reference) {
+        const label = reference ? " for " + reference : "";
+        if (!confirm("Release the stored originals" + label + "? The order and design stay, but the photo files are deleted from R2.")) {
+          return;
+        }
+        const result = await apiCall(
+          "/admin/studio-orders/" + encodeURIComponent(orderId) + "/release-photos",
+          "POST",
+          {},
+        );
+        if (result && result.success) {
+          showAlert("Studio photos released", "success");
+          await loadModule("studioOrders");
+          return true;
+        }
+        return false;
       }
 
       // Opening the book is the whole point of this screen: the design says
@@ -6382,7 +6484,10 @@
         panel.style.cssText =
           "max-width:1080px;margin:0 auto;background:#fff;border-radius:10px;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,0.3);";
 
-        const missing = Number(order.photo_count || 0) - Number(order.uploaded_count || 0);
+        const released = studioPhotosReleased(order);
+        const missing = released
+          ? 0
+          : Math.max(0, Number(order.photo_count || 0) - Number(order.uploaded_count || 0));
 
         panel.innerHTML = `
           <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px;">
@@ -6396,12 +6501,15 @@
               <div style="color:var(--muted);font-size:0.88rem;margin-top:2px;">
                 ${escapeHtml(size.label)} · ${escapeHtml(STUDIO_FINISH_LABELS[(design.product || {}).finish] || "Photo wrap")} case bound · ${Number(order.page_count || 0)} pages ·
                 ${Number(order.copies || 1)} cop${Number(order.copies || 1) === 1 ? "y" : "ies"}
+                · end sheets ${escapeHtml(studioEndpaperLabel(size))}
                 ${order.needed_by ? " · needed by " + escapeHtml(order.needed_by) : ""}
                 ${order.occasion ? " · " + escapeHtml(order.occasion) : ""}
               </div>
             </div>
             <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
               ${studioStatusPill(order.status)}
+              <button class="btn btn-sm btn-secondary" data-studio-archive="${escapeAttr(order.id)}" data-studio-ref="${escapeAttr(order.reference || "")}" ${Number(order.uploaded_count || 0) > 0 ? "" : "disabled"}>Download ZIP</button>
+              ${studioCanRelease(order) ? `<button class="btn btn-sm btn-danger" data-studio-release="${escapeAttr(order.id)}" data-studio-ref="${escapeAttr(order.reference || "")}">Release photos</button>` : ""}
               <button class="btn btn-sm btn-secondary" data-studio-print="1">Print</button>
               <button class="btn btn-sm btn-secondary" data-studio-close="1">Close</button>
             </div>
@@ -6436,6 +6544,17 @@
         }
         document.addEventListener("keydown", onKey);
         overlay.addEventListener("click", (event) => {
+          const archive = event.target.closest("[data-studio-archive]");
+          if (archive) {
+            downloadStudioArchive(archive.dataset.studioArchive, archive.dataset.studioRef);
+            return;
+          }
+          const release = event.target.closest("[data-studio-release]");
+          if (release) {
+            releaseStudioPhotos(release.dataset.studioRelease, release.dataset.studioRef)
+              .then((ok) => { if (ok) close(); });
+            return;
+          }
           if (event.target.dataset.studioPrint) {
             // The images are already loaded into this overlay, so printing is
             // just a matter of putting it, and nothing else, on the paper.
@@ -6498,15 +6617,52 @@
           return cell;
         }
 
-        function sheet(layoutKey) {
-          const layout = STUDIO_LAYOUTS[layoutKey] || STUDIO_LAYOUTS.full;
+        function sheetElement(layout, paper, background) {
           const div = document.createElement("div");
           div.style.cssText =
-            "display:grid;gap:4px;padding:4px;background:#f7f9fc;border:1px solid #eef2f7;";
-          div.style.aspectRatio = size.w + " / " + size.h;
-          div.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
-          div.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+            "position:relative;display:grid;gap:4px;padding:4px;background:" + (background || "#f7f9fc") + ";border:1px solid #eef2f7;overflow:hidden;";
+          div.style.aspectRatio = paper.w + " / " + paper.h;
+          if (layout.cols && layout.rows) {
+            div.style.gridTemplateColumns = "repeat(" + layout.cols + ", 1fr)";
+            div.style.gridTemplateRows = "repeat(" + layout.rows + ", 1fr)";
+          } else {
+            div.style.display = "block";
+            div.style.minHeight = "70px";
+          }
           return { div, layout };
+        }
+
+        function sheet(layoutKey) {
+          return sheetElement(STUDIO_LAYOUTS[layoutKey] || STUDIO_LAYOUTS.full, size, "#f7f9fc");
+        }
+
+        function endpaperBackground(endpaper) {
+          const colour = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(endpaper.background || ""))
+            ? endpaper.background
+            : "#f3eadc";
+          const pattern = String(endpaper.pattern || "linen");
+          if (pattern === "dots") return "radial-gradient(rgba(45,51,61,0.18) 1px, transparent 1.4px) 0 0 / 10px 10px, " + colour;
+          if (pattern === "diagonal") return "repeating-linear-gradient(135deg, rgba(45,51,61,0.14) 0 1px, transparent 1px 9px), " + colour;
+          if (pattern === "linen") return "repeating-linear-gradient(90deg, rgba(255,255,255,0.26) 0 1px, transparent 1px 4px), repeating-linear-gradient(0deg, rgba(70,58,42,0.10) 0 1px, transparent 1px 4px), " + colour;
+          return colour;
+        }
+
+        function endpaperSheet(side) {
+          const source = ((design.endpapers || {})[side]) || {};
+          const layout = STUDIO_ENDPAPER_LAYOUTS[source.layout] || STUDIO_ENDPAPER_LAYOUTS.plain;
+          const paper = studioEndpaperSize(size);
+          const built = sheetElement(layout, paper, endpaperBackground(source));
+          if (layout.cols && layout.rows) {
+            (source.slots || []).forEach((slot) => {
+              built.div.appendChild(slotElement(slot, layout.cols, layout.rows));
+            });
+          }
+          if (String(source.pattern || "") === "frame") {
+            const frame = document.createElement("div");
+            frame.style.cssText = "position:absolute;inset:8%;border:1px solid rgba(45,51,61,0.26);pointer-events:none;";
+            built.div.appendChild(frame);
+          }
+          return built.div;
         }
 
         const book = panel.querySelector("#studio-book");
@@ -6539,6 +6695,8 @@
           ),
         );
 
+        book.appendChild(pageBlock("Front end sheet", endpaperSheet("front"), studioEndpaperLabel(size)));
+
         (Array.isArray(design.pages) ? design.pages : []).forEach((page, index) => {
           const built = sheet(page.layout);
           (page.slots || []).forEach((slot) => {
@@ -6547,9 +6705,13 @@
           book.appendChild(pageBlock("Page " + (index + 1), built.div, page.caption || ""));
         });
 
+        book.appendChild(pageBlock("Back end sheet", endpaperSheet("back"), studioEndpaperLabel(size)));
+
         const files = panel.querySelector("#studio-files");
         if (!photos.length) {
-          files.innerHTML = `<p style="color:var(--muted);">No files were uploaded for this order.</p>`;
+          files.innerHTML = released
+            ? `<p style="color:var(--muted);">The originals were ${escapeHtml(studioReleaseNote(order))}. The order record and design are still kept.</p>`
+            : `<p style="color:var(--muted);">No files were uploaded for this order.</p>`;
         } else {
           files.innerHTML =
             `<p style="color:var(--muted);margin:0 0 8px;">${photos.length} file${photos.length === 1 ? "" : "s"}, ${studioBytes(order.uploaded_bytes)} in total. Click one to open the full-resolution original.</p>` +
@@ -6574,6 +6736,16 @@
       }
 
       document.addEventListener("click", (event) => {
+        const archive = event.target.closest("[data-studio-archive]");
+        if (archive) {
+          downloadStudioArchive(archive.dataset.studioArchive, archive.dataset.studioRef);
+          return;
+        }
+        const release = event.target.closest("[data-studio-release]");
+        if (release) {
+          releaseStudioPhotos(release.dataset.studioRelease, release.dataset.studioRef);
+          return;
+        }
         const trigger = event.target.closest("[data-studio-view]");
         if (!trigger) return;
         viewStudioOrder(trigger.dataset.studioView);

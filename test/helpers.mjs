@@ -89,7 +89,7 @@ export async function loadWorkerValidation() {
 		slice(src, "const STUDIO_SIZES = {", "async function hashStudioToken", "the STUDIO_* tables"),
 		slice(src, "function studioSafeName(value) {", "// Validates the book", "studioSafeName"),
 		slice(src, "function normalizeStudioDesign(raw) {", "function normalizeStudioCustomer", "normalizeStudioDesign"),
-		"export { normalizeStudioDesign, RequestError, STUDIO_COVER_DESIGNS, STUDIO_TEXT_FONTS, STUDIO_TEXT_SHAPES, STUDIO_UV_PATTERNS, STUDIO_UV_FILE_TYPES };",
+		"export { normalizeStudioDesign, RequestError, STUDIO_COVER_DESIGNS, STUDIO_ENDPAPER_LAYOUTS, STUDIO_ENDPAPER_PATTERNS, STUDIO_TEXT_FONTS, STUDIO_TEXT_SHAPES, STUDIO_UV_PATTERNS, STUDIO_UV_FILE_TYPES };",
 	].join("\n");
 	return importSource(code, "worker-validation.mjs");
 }
@@ -179,7 +179,16 @@ export function startStatic(port = 8791) {
 export async function launchBrowser() {
 	const { chromium } = await import("playwright-core");
 	try {
-		return await chromium.launch();
+		// Every host but the loopback is pointed at a port nothing listens on, so
+		// the connection is refused at once. The editor's stylesheet asks Google
+		// for a webfont, and a stylesheet blocks the document: on a machine with
+		// no route out the whole suite fails on a navigation timeout and reports
+		// the network rather than the code. A refused connection is instant where
+		// a failed name lookup is not, which is why this maps rather than
+		// NOTFOUNDs.
+		return await chromium.launch({
+			args: ["--host-resolver-rules=MAP * 127.0.0.1:1, EXCLUDE 127.0.0.1"],
+		});
 	} catch (error) {
 		throw new Error(
 			"Chromium is not installed for playwright-core. Run:\n" +
@@ -189,9 +198,41 @@ export async function launchBrowser() {
 	}
 }
 
+/* Chromium here shares the machine with whatever else is running, and a cold
+   navigation has been timed at twenty-three seconds. The suites are checking
+   what the editor does, not how fast this box does it, so the clock is set
+   well past the point where slowness stops being interesting. */
+export const PATIENCE = 60000;
+
+/** Everything a page needs before the first navigation. */
+export async function preparePage(page) {
+	page.setDefaultTimeout(PATIENCE);
+	page.setDefaultNavigationTimeout(PATIENCE);
+	/* The editor's stylesheet asks Google for a webfont, and launchBrowser
+	   refuses every host but the loopback. Chromium reports that refusal on the
+	   console, but not until some point after the document is ready — so which
+	   suite it lands in is a race, and the two that lost it failed on the
+	   harness's own noise rather than on anything the editor did. Answering the
+	   request with an empty stylesheet settles it: the refusal never happens, so
+	   there is nothing to report late. Only the lettering depends on the
+	   webfont, and no suite here measures that. */
+	await page.route(
+		(url) => url.hostname !== "127.0.0.1",
+		(route) => route.fulfill({ status: 200, contentType: "text/css", body: "" }),
+	);
+	return page;
+}
+
+/* The editor's stylesheet pulls a webfont from Google. "load" therefore waits
+   on a request to the open internet, so on a machine with no route out every
+   suite fails on a timeout and reports the network instead of the code. The
+   readiness that actually matters is the editor having built itself, which is
+   what the wait below checks — so navigation only needs the document. */
+export const READY = { waitUntil: "domcontentloaded" };
+
 /** A page that records anything the browser complains about. */
 export async function openEditor(browser, base) {
-	const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
+	const page = await preparePage(await browser.newPage({ viewport: { width: 1400, height: 950 } }));
 	const problems = [];
 	page.on("pageerror", (e) => problems.push(`uncaught: ${e.message}`));
 	page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
@@ -201,7 +242,7 @@ export async function openEditor(browser, base) {
 			window.__unhandled.push(String((e.reason && e.reason.message) || e.reason));
 		});
 	`);
-	await page.goto(`${base}/studio/editor.html`);
+	await page.goto(`${base}/studio/editor.html`, READY);
 	await page.waitForFunction("document.querySelectorAll('#cover-design-options .ed-choice').length > 0");
 	return { page, problems };
 }

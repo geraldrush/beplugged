@@ -1443,7 +1443,7 @@ function escapeHtmlWithBreaks(value) {
 // Bump this whenever runSchemaSetup changes. It is the whole mechanism by
 // which the setup below stops running: the applied version is stamped in the
 // database, and a stamp that matches means there is nothing to do.
-const SCHEMA_VERSION = "2026-09-02";
+const SCHEMA_VERSION = "2026-09-02.2";
 
 // Schema setup is idempotent, but "idempotent" is not "free": it is 68 DDL
 // statements, 29 PRAGMA table_info reads and 6 seed counts, every one of them
@@ -2002,6 +2002,7 @@ async function runSchemaSetup(env) {
       photo_bytes INTEGER NOT NULL DEFAULT 0,
       uploaded_count INTEGER NOT NULL DEFAULT 0,
       uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+      photos_released_at DATETIME,
       media_prefix TEXT NOT NULL,
       upload_token_hash TEXT NOT NULL,
       submitted_at DATETIME,
@@ -2012,6 +2013,7 @@ async function runSchemaSetup(env) {
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_studio_orders_status ON studio_orders (status, created_at)",
   ).run();
+  await ensureColumn(env, "studio_orders", "photos_released_at", "photos_released_at DATETIME");
   // One row per uploaded file. The design references photos by id; this is
   // what turns an id back into an object in R2 that the studio can open.
   await env.DB.prepare(
@@ -2415,6 +2417,7 @@ async function ensureColumn(env, tableName, columnName, columnDefinition) {
     "invoices",
     "quotes",
     "payments",
+    "studio_orders",
     "quality_records",
     "security_records",
     "scope_agreements",
@@ -9773,6 +9776,24 @@ const STUDIO_COVER_DESIGNS = {
 
 const STUDIO_DEFAULT_COVER_DESIGN = "full-bleed";
 
+const STUDIO_LAYOUTS = {
+  full: { cols: 1, rows: 1 },
+  "two-across": { cols: 2, rows: 1 },
+  "two-stacked": { cols: 1, rows: 2 },
+  "three-strip": { cols: 3, rows: 1 },
+  "four-grid": { cols: 2, rows: 2 },
+};
+
+const STUDIO_ENDPAPER_LAYOUTS = {
+  plain: { cols: 0, rows: 0 },
+  full: { cols: 1, rows: 1 },
+  "two-across": { cols: 2, rows: 1 },
+  "three-strip": { cols: 3, rows: 1 },
+  "four-grid": { cols: 2, rows: 2 },
+};
+
+const STUDIO_ENDPAPER_PATTERNS = new Set(["clean", "linen", "dots", "diagonal", "frame"]);
+
 // Type set on a page, as opposed to the caption that prints in a bar beneath
 // it. Kept in step with the TEXT_* tables in public/studio/book-render.js.
 //
@@ -9867,6 +9888,56 @@ function validateStudioTexts(raw, where) {
   }
 
   return raw.length;
+}
+
+function validateStudioSlots(slots, ids, message) {
+  for (const slot of slots) {
+    if (!slot?.photoId) continue;
+    if (!ids.has(String(slot.photoId))) {
+      throw new RequestError(message);
+    }
+  }
+}
+
+function validateStudioEndpapers(raw, ids) {
+  if (raw === undefined || raw === null) return;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new RequestError("The end sheets could not be read");
+  }
+
+  for (const side of ["front", "back"]) {
+    const sheet = raw[side];
+    if (sheet === undefined || sheet === null) continue;
+    if (typeof sheet !== "object" || Array.isArray(sheet)) {
+      throw new RequestError(`The ${side} end sheet could not be read`);
+    }
+
+    const layout = String(sheet.layout || "plain");
+    const shape = STUDIO_ENDPAPER_LAYOUTS[layout];
+    if (!shape) {
+      throw new RequestError(`Choose a layout for the ${side} end sheet`);
+    }
+
+    const pattern = String(sheet.pattern || "linen");
+    if (!STUDIO_ENDPAPER_PATTERNS.has(pattern)) {
+      throw new RequestError(`Choose a paper pattern for the ${side} end sheet`);
+    }
+
+    const background = sheet.background;
+    if (background !== undefined && background !== null && background !== "") {
+      if (!STUDIO_COLOUR.test(String(background))) {
+        throw new RequestError(`The ${side} end sheet has a colour we cannot read`);
+      }
+    }
+
+    const slots = Array.isArray(sheet.slots) ? sheet.slots : [];
+    const capacity = shape.cols * shape.rows;
+    if (slots.length > capacity) {
+      throw new RequestError(`That ${side} end sheet layout does not have that many pictures on it`);
+    }
+    validateStudioSlots(slots, ids, `The ${side} end sheet refers to a photo that is not in the order`);
+    validateStudioTexts(sheet.texts, `the ${side} end sheet`);
+  }
 }
 
 const STUDIO_MAX_PAGES = 120;
@@ -9991,14 +10062,11 @@ function normalizeStudioDesign(raw) {
   for (const page of pages) {
     pageNumber += 1;
     const slots = Array.isArray(page?.slots) ? page.slots : [];
-    for (const slot of slots) {
-      if (!slot?.photoId) continue;
-      if (!ids.has(String(slot.photoId))) {
-        throw new RequestError("A page refers to a photo that is not in the order");
-      }
-    }
+    validateStudioSlots(slots, ids, "A page refers to a photo that is not in the order");
     validateStudioTexts(page?.texts, `page ${pageNumber}`);
   }
+
+  validateStudioEndpapers(raw.endpapers, ids);
 
   validateStudioTexts(raw.cover?.texts, "the cover");
 
@@ -10056,12 +10124,7 @@ function normalizeStudioDesign(raw) {
   // The cover is the one frame where a hole is certain to be seen: an id named
   // here but absent from the photo list is refused every upload, so the book
   // would arrive with a blank case.
-  for (const slot of coverSlots) {
-    if (!slot?.photoId) continue;
-    if (!ids.has(String(slot.photoId))) {
-      throw new RequestError("The cover refers to a photo that is not in the order");
-    }
-  }
+  validateStudioSlots(coverSlots, ids, "The cover refers to a photo that is not in the order");
 
   // Nothing counts placed frames on purpose. A book sent with every photo
   // unplaced is a customer asking us to lay it out, which the editor offers
@@ -10513,6 +10576,7 @@ async function lookupStudioOrder(request, env) {
     occasion: order.occasion,
     product_size: order.product_size,
     size_label: studioSizeLabel(order.product_size),
+    endpaper_label: studioEndpaperLabel(order.product_size),
     cover_label: studioCoverLabel(order),
     page_count: order.page_count,
     copies: order.copies,
@@ -10520,6 +10584,7 @@ async function lookupStudioOrder(request, env) {
     submitted_at: order.submitted_at,
     photo_count: order.photo_count,
     uploaded_count: order.uploaded_count,
+    photos_released_at: order.photos_released_at,
     design,
     uploaded_photo_ids: (photos.results || []).map((r) => r.photo_id),
     view_token: await studioViewToken(order),
@@ -10607,6 +10672,18 @@ function studioSizeLabel(key) {
   return STUDIO_SIZES[key]?.label || key || "-";
 }
 
+function studioEndpaperLabel(key) {
+  const size = STUDIO_SIZES[key] || STUDIO_SIZES["a4-portrait"];
+  const width = Math.round(Number(size.width_mm || 0) * 2);
+  const height = Math.round(Number(size.height_mm || 0));
+  // Named only when the sheet is that paper to the millimetre: two A5 pages
+  // come to 296mm across, and a printer told "A4 landscape" would cut to 297
+  // and lose a millimetre of a photograph.
+  const measured = `${width} × ${height} mm`;
+  const name = width === 420 && height === 297 ? "A3 landscape" : "";
+  return `Front and back · ${name ? `${name} (${measured})` : measured}`;
+}
+
 function formatStudioBytes(bytes) {
   const n = Number(bytes) || 0;
   if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -10642,6 +10719,7 @@ async function sendStudioOrderEmails(env, order) {
         ${row("Phone", order.customer_phone || "-")}
         ${row("Occasion", order.occasion || "-")}
         ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
+        ${row("End sheets", studioEndpaperLabel(order.product_size))}
         ${row("Cover", `${studioCoverLabel(order)} · case bound`)}
         ${row("Varnish", studioVarnishLabel(order))}
         ${row("Copies", order.copies)}
@@ -10701,6 +10779,7 @@ async function sendStudioOrderEmails(env, order) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eeeeee;border-radius:8px;overflow:hidden;margin:0 0 22px;">
         <tbody>
           ${row("Book", `${studioSizeLabel(order.product_size)} · ${order.page_count} pages`)}
+          ${row("End sheets", studioEndpaperLabel(order.product_size))}
           ${row("Copies", order.copies)}
           ${row("Photos received", order.uploaded_count)}
           ${row("Needed by", order.needed_by || "not given")}
@@ -10759,7 +10838,7 @@ async function handleStudioOrdersAdmin(request, env, path, method) {
       `SELECT id, reference, status, customer_name, customer_email, customer_phone,
               occasion, product_size, page_count, copies, needed_by, notes,
               photo_count, photo_bytes, uploaded_count, uploaded_bytes,
-              submitted_at, created_at, updated_at
+              photos_released_at, submitted_at, created_at, updated_at
        FROM studio_orders ORDER BY created_at DESC LIMIT 300`,
     ).all();
     return json(rows.results || []);
@@ -10773,6 +10852,10 @@ async function handleStudioOrdersAdmin(request, env, path, method) {
   // go. One click instead of forty.
   if (method === "GET" && id && seg[4] === "archive") {
     return await streamStudioOrderArchive(env, id);
+  }
+
+  if (method === "POST" && id && seg[4] === "release-photos") {
+    return await releaseStudioOrderPhotos(env, id);
   }
 
   if (method === "GET" && id) {
@@ -10864,6 +10947,87 @@ async function handleStudioOrdersAdmin(request, env, path, method) {
   }
 
   return json({ error: "Method not allowed" }, { status: 405 });
+}
+
+async function releaseStudioOrderPhotos(env, orderId) {
+  const order = await env.DB.prepare("SELECT * FROM studio_orders WHERE id = ?")
+    .bind(orderId)
+    .first();
+  if (!order) {
+    return json({ error: "Not found" }, { status: 404 });
+  }
+  if (order.status !== "completed") {
+    return json(
+      { error: "Only completed studio orders can release photos." },
+      { status: 409 },
+    );
+  }
+
+  const keys = await env.DB.prepare(
+    "SELECT r2_key FROM studio_order_photos WHERE order_id = ?",
+  )
+    .bind(orderId)
+    .all();
+  const rows = keys.results || [];
+
+  if (rows.length && !env.STUDIO_MEDIA) {
+    return json({ error: "Photo storage is not configured." }, { status: 503 });
+  }
+
+  const failures = [];
+  for (const row of rows) {
+    try {
+      await env.STUDIO_MEDIA.delete(row.r2_key);
+    } catch (error) {
+      failures.push(row.r2_key);
+      console.error(
+        JSON.stringify({
+          message: "studio_media_release_failed",
+          reference: order.reference,
+          key: row.r2_key,
+          error: String(error?.message || error),
+        }),
+      );
+    }
+  }
+
+  if (failures.length) {
+    return json(
+      {
+        error:
+          failures.length === 1
+            ? "One photo could not be released. Try again."
+            : `${failures.length} photos could not be released. Try again.`,
+      },
+      { status: 502 },
+    );
+  }
+
+  await env.DB.prepare("DELETE FROM studio_order_photos WHERE order_id = ?")
+    .bind(orderId)
+    .run();
+  await env.DB.prepare(
+    `UPDATE studio_orders
+     SET uploaded_count = 0,
+         uploaded_bytes = 0,
+         photos_released_at = COALESCE(photos_released_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  )
+    .bind(orderId)
+    .run();
+  await recordAudit(env, {
+    action: "released_photos",
+    entity_type: "studio_order",
+    entity_id: orderId,
+    entity_number: order.reference,
+    details: {
+      photos: rows.length,
+      bytes: Number(order.uploaded_bytes || 0),
+    },
+  });
+
+  return json({ success: true, released_count: rows.length });
 }
 
 // --- handing a whole order over --------------------------------------------

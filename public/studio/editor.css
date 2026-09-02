@@ -422,6 +422,38 @@ a { color: var(--brand); }
 .ed-layout[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-tint); }
 .ed-layout svg { display: block; }
 
+.ed-endpaper-controls {
+	display: grid;
+	gap: 8px;
+	margin-top: 8px;
+	padding: 10px;
+	border: 1px solid var(--line-soft);
+	border-radius: 8px;
+	background: var(--surface-alt);
+}
+
+.ed-endpaper-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.ed-swatch {
+	appearance: none;
+	width: 28px;
+	height: 28px;
+	border: 1px solid var(--line);
+	border-radius: 50%;
+	cursor: pointer;
+	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.ed-swatch[aria-pressed="true"] {
+	border-color: var(--brand);
+	outline: 2px solid var(--brand-tint);
+}
+
 /* --- forms and buttons -------------------------------------------------- */
 
 .ed-btn {
@@ -796,6 +828,55 @@ a { color: var(--brand); }
 	min-height: 0;
 }
 
+.ed-endpaper-sheet {
+	position: relative;
+	background-color: var(--endpaper-bg, #f3eadc);
+}
+
+.ed-endpaper-sheet.is-plain {
+	display: block;
+}
+
+.ed-endpaper-sheet::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+}
+
+.ed-endpaper-sheet > * {
+	position: relative;
+	z-index: 2;
+}
+
+.ed-endpaper-pattern-clean::before {
+	display: none;
+}
+
+.ed-endpaper-pattern-linen::before {
+	background-image:
+		repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0 1px, transparent 1px 4px),
+		repeating-linear-gradient(0deg, rgba(70, 58, 42, 0.10) 0 1px, transparent 1px 4px);
+	opacity: 0.75;
+}
+
+.ed-endpaper-pattern-dots::before {
+	background-image: radial-gradient(rgba(45, 51, 61, 0.20) 1px, transparent 1.4px);
+	background-size: 10px 10px;
+	opacity: 0.45;
+}
+
+.ed-endpaper-pattern-diagonal::before {
+	background-image: repeating-linear-gradient(135deg, rgba(45, 51, 61, 0.14) 0 1px, transparent 1px 9px);
+	opacity: 0.65;
+}
+
+.ed-endpaper-pattern-frame::before {
+	border: 1.3cqw solid rgba(45, 51, 61, 0.22);
+	inset: 6%;
+}
+
 .ed-preview-slot {
 	position: relative;
 	overflow: hidden;
@@ -967,6 +1048,12 @@ a { color: var(--brand); }
 		overflow: hidden;
 	}
 
+	.ed-print-book .ed-preview-leaf.is-endpaper {
+		page: ed-endpaper;
+		width: var(--endpaper-w, 420mm);
+		height: var(--endpaper-h, 297mm);
+	}
+
 	.ed-print-book .ed-preview-leaf:last-child {
 		break-after: auto;
 		page-break-after: auto;
@@ -979,6 +1066,11 @@ a { color: var(--brand); }
 		box-shadow: none;
 		border: 0;
 		border-radius: 0;
+	}
+
+	.ed-print-book .ed-preview-leaf.is-endpaper .ed-preview-page {
+		width: var(--endpaper-w, 420mm);
+		height: var(--endpaper-h, 297mm);
 	}
 
 	/* The label lives outside the page edge on screen, which is exactly why it
