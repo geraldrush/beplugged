@@ -63,6 +63,12 @@
 			};
 			request.onsuccess = function () { resolve(request.result); };
 			request.onerror = function () { reject(request.error); };
+			// Neither of the above fires while another tab holds the database
+			// open at an older version, and a promise that never settles stops
+			// restore, which stops the editor booting at all. Better to fail.
+			request.onblocked = function () {
+				reject(new Error("The book is open in another tab."));
+			};
 		});
 		return dbPromise;
 	}
@@ -104,6 +110,24 @@
 			idbRun("photos", "readwrite", function (s) { return s.clear(); }),
 			idbRun("meta", "readwrite", function (s) { return s.clear(); })
 		]);
+	}
+
+	// IndexedDB refuses writes for reasons the customer cannot act on and we
+	// cannot predict: private browsing, a full disk, a profile whose storage
+	// has gone bad. Chrome reports most of them as a bare "UnknownError:
+	// Internal error." with no stack worth reading.
+	//
+	// None of that is a reason to lose a photo. The file is already in memory
+	// and can still be placed, previewed and uploaded — what the customer
+	// actually loses is the ability to close the tab and come back, so that is
+	// what they are told, once, rather than nothing at all while the console
+	// fills up with unhandled rejections.
+	var storageBroken = false;
+
+	function storageFailed() {
+		if (storageBroken) return;
+		storageBroken = true;
+		setDockStatus("This browser will not save your book. It still works — finish and send it in this tab.");
 	}
 
 	// --- state ------------------------------------------------------------
@@ -185,10 +209,8 @@
 		saveTimer = setTimeout(function () {
 			saveTimer = null;
 			putMeta("design", JSON.parse(JSON.stringify(state))).then(function () {
-				setDockStatus("Saved in this browser.");
-			}).catch(function () {
-				setDockStatus("This browser would not save your book. Keep this tab open.");
-			});
+				if (!storageBroken) setDockStatus("Saved in this browser.");
+			}).catch(storageFailed);
 		}, 400);
 	}
 
@@ -316,7 +338,12 @@
 						w: record.w,
 						h: record.h
 					});
-					return putPhoto(record);
+					// Deliberately not rethrown: the photo is usable from
+					// memory either way, and letting this reject would abort
+					// the chain and silently drop every photo after it in the
+					// batch — which is what filled the console and left the
+					// customer looking at half an import.
+					return putPhoto(record).catch(storageFailed);
 				});
 			});
 		});
@@ -365,7 +392,7 @@
 		photoBlobs.delete(id);
 		// Nothing useful follows from a browser refusing the delete, and
 		// three hundred unhandled rejections at once help nobody.
-		return deletePhotoRecord(id).catch(function () {});
+		return deletePhotoRecord(id).catch(storageFailed);
 	}
 
 	function afterPhotosChanged() {
@@ -1503,7 +1530,11 @@
 
 	function wire() {
 		document.getElementById("photo-input").addEventListener("change", function (event) {
-			addFiles(event.target.files).then(function () { event.target.value = ""; });
+			// Catch before clear, so the picker is always reset and the same
+			// files can be chosen again after a failure.
+			addFiles(event.target.files)
+				.catch(storageFailed)
+				.then(function () { event.target.value = ""; });
 		});
 
 		document.getElementById("clear-photos").addEventListener("click", function () {
@@ -1602,7 +1633,11 @@
 
 		document.getElementById("start-new").addEventListener("click", function () {
 			if (!window.confirm("Start a new book? The one you just sent is safe with us, but this browser will forget it.")) return;
-			clearEverything().then(function () { window.location.reload(); });
+			// Reload either way. Failing to clear is a reason to start the
+			// page again, not a reason to sit on a dead button.
+			clearEverything()
+				.catch(function () {})
+				.then(function () { window.location.reload(); });
 		});
 
 		// Photos placed but not yet sent are the thing worth warning about.
@@ -1627,6 +1662,10 @@
 			renderSummary();
 			wire();
 			goTo("size");
+		}).catch(function () {
+			// restore() handles its own storage failures, so reaching here
+			// means the editor is half-built and nothing below will work.
+			setDockStatus("The editor did not start properly. Reload the page.");
 		});
 	}
 
