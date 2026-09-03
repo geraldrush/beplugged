@@ -50,3 +50,6 @@ public/academy/vendor/
 /backup-before-migrations-*.sql
 /catalogue-backup-*.json
 /img-originals-*/
+
+# Screenshots dropped in the repo root while testing on a phone
+iphone-*.png
