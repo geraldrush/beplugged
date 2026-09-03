@@ -1,0 +1,23 @@
+The subject line on this commit is wrong. It says "fix the app look on
+photobook A3 size"; nothing here touches layout or sizing. What it actually
+adds is the order archive — GET /api/admin/studio-orders/:id/archive, which
+hands the studio every original from a book as one zip.
+
+One photo per click is forty clicks for a wedding. This returns the lot,
+with design.json first, because otherwise the studio has a folder of
+photographs and no idea which one belongs on which page.
+
+Built by hand and streamed, because it has to be. A forty-photo book is
+comfortably larger than the 128 MB a Worker gets, so nothing may be held in
+memory: each object is piped straight from R2 into the response as it
+arrives. That rules out knowing a file's size or CRC before its header is
+written, which is what the zip data descriptor is for — the local header
+sets the 0x08 flag to say "sizes follow the data", and they do. Stored, not
+deflated; these are JPEGs and PNGs and compressing them again costs CPU to
+save nothing.
+
+An object missing from the bucket becomes an empty entry instead of aborting
+the archive, so the studio gets everything that does exist and can see at a
+glance which file did not.
+
+The admin button that calls this arrived later, in ce4a922.
