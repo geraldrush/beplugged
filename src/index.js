@@ -2668,6 +2668,73 @@ async function generateQrCodeDataUrl(text) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+// Turnstile is the only layer on this form that a bot cannot read and route
+// around. The honeypot catches scripts that fill in every field they find, and
+// CONTACT_LIMITER catches bursts from one address, but neither touches the
+// traffic this form actually gets: one submission a day, from a different
+// address each time, by something that renders the page well enough to skip an
+// off-screen input.
+//
+// Verified here rather than in the browser, because the browser is not what is
+// being defended — anything can POST to this endpoint directly. A token that is
+// missing, forged, replayed, or issued for another site fails here, before an
+// email is sent or a lead is written.
+async function verifyTurnstile(env, request, token) {
+  if (!env.TURNSTILE_SECRET_KEY) {
+    // Set as a secret on the Worker, so an absence means the setup is
+    // half-finished. Fail open rather than break a working form, but be loud,
+    // the same way a missing CONTACT_LIMITER is handled above.
+    console.error(JSON.stringify({ message: "turnstile_secret_missing" }));
+    return { ok: true };
+  }
+
+  if (!token) {
+    return { ok: false, error: "Please complete the human check and press Send again." };
+  }
+
+  const body = new FormData();
+  body.append("secret", env.TURNSTILE_SECRET_KEY);
+  body.append("response", token);
+  // Scopes the token to the address that solved it, so one solved challenge
+  // cannot be handed round a botnet.
+  const clientIp = request.headers.get("CF-Connecting-IP");
+  if (clientIp) {
+    body.append("remoteip", clientIp);
+  }
+
+  let outcome;
+  try {
+    const response = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      { method: "POST", body, signal: AbortSignal.timeout(5000) },
+    );
+    outcome = await response.json();
+  } catch (error) {
+    // Siteverify unreachable or too slow. Turning away every genuine enquiry
+    // until Cloudflare recovers costs more than the spam does, so this fails
+    // open and leaves a record of why.
+    console.error(
+      JSON.stringify({
+        message: "turnstile_unreachable",
+        error: String(error?.message || error),
+      }),
+    );
+    return { ok: true };
+  }
+
+  if (!outcome.success) {
+    console.error(
+      JSON.stringify({
+        message: "turnstile_rejected",
+        codes: outcome["error-codes"] || [],
+      }),
+    );
+    return { ok: false, error: "The human check did not pass. Please try again." };
+  }
+
+  return { ok: true };
+}
+
 async function parseContactPayload(request) {
   const contentType = request.headers.get("Content-Type") || "";
 
@@ -2696,6 +2763,10 @@ function normalizeContactPayload(raw) {
       maxLength: 4000,
     }),
     website: trimText(raw.website, "Website", { maxLength: 200 }),
+    // Not validated like the rest: it is an opaque string for siteverify to
+    // judge, and the name is fixed by Turnstile.
+    turnstileToken:
+      typeof raw["cf-turnstile-response"] === "string" ? raw["cf-turnstile-response"] : "",
   };
 }
 
@@ -2719,6 +2790,13 @@ async function handleWhatsAppEnquiry(request, env, method, ctx) {
   if (trimText(raw?.website, "Website", { maxLength: 200 })) {
     // Honeypot filled, so behave as though it worked.
     return json({ success: true, url: whatsappUrl(env, "", "") });
+  }
+
+  // The visitor has already been handed to WhatsApp by the time this runs, so
+  // a refusal here costs them nothing — it only stops the lead being written.
+  const human = await verifyTurnstile(env, request, raw?.["cf-turnstile-response"]);
+  if (!human.ok) {
+    return json({ error: human.error }, { status: 403 });
   }
 
   const name = trimText(raw?.name, "Name", { required: true, maxLength: 200 });
@@ -2866,6 +2944,11 @@ async function handleContactMessage(request, env, method) {
   const data = normalizeContactPayload(await parseContactPayload(request));
   if (data.website) {
     return json({ success: true });
+  }
+
+  const human = await verifyTurnstile(env, request, data.turnstileToken);
+  if (!human.ok) {
+    return json({ error: human.error }, { status: 403 });
   }
 
   const recipientEmail = env.BREVO_REPLY_TO || env.BREVO_SENDER_EMAIL;
