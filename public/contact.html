@@ -50,6 +50,10 @@
 		<script type="application/ld+json">
 		{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://beplugged.co.za/"}, {"@type": "ListItem", "position": 2, "name": "Contact Us"}]}
 		</script>
+        <!-- The human check on the contact form. Verified server side in
+             src/index.js, so this script only produces the token; removing
+             it does not remove the check, it fails it. -->
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
     <body>
 	
@@ -216,6 +220,14 @@
 											</div>
 											<div class="col-12" aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">
 												<input type="text" name="website" tabindex="-1" autocomplete="off">
+											</div>
+											<div class="col-12">
+												<div class="form-group">
+													<!-- Turnstile writes the token into a hidden input named
+													     cf-turnstile-response. It sits inside the form, so the
+													     FormData below carries it with nothing to wire up. -->
+													<div class="cf-turnstile" data-sitekey="0x4AAAAAAEl5Z4Opv-Z5LI1h" data-action="contact"></div>
+												</div>
 											</div>
 											<div class="col-12">
 												<div class="form-group login-btn">
@@ -530,6 +542,13 @@
 							.finally(function () {
 								submit.disabled = false;
 								submit.textContent = "Send";
+								// A token is spent by the attempt that used it, whether it
+								// passed or not, and form.reset() does not touch the widget.
+								// Without this a second message carries a used token and is
+								// refused, which reads as the form having broken.
+								if (window.turnstile) {
+									window.turnstile.reset();
+								}
 							});
 					});
 				})();

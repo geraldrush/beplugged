@@ -14,6 +14,11 @@
   var NUMBER = (SCRIPT && SCRIPT.getAttribute("data-number")) || "27659669657";
   var WA_BASE = "https://wa.me/" + NUMBER.replace(/[^0-9]/g, "");
 
+  // Public half of the Turnstile pair; the secret lives on the Worker. The
+  // enquiry below is posted as JSON built by hand, so unlike the contact form
+  // the token has to be put into the body explicitly.
+  var SITEKEY = "0x4AAAAAAEl5Z4Opv-Z5LI1h";
+
   /* The panel is the company's own enquiry form, not a WhatsApp skin. It uses
      the site's tokens from theme.css so it reads as part of the site rather
      than a third-party widget parked in the corner. The launcher stays green,
@@ -64,6 +69,8 @@
     '.wa-note{font-size:12.5px;color:' + INK_SOFT + ';margin:11px 0 0;line-height:1.55;}' +
     '.wa-status{font-size:13px;font-weight:600;margin:11px 0 0;line-height:1.45;}' +
     '.wa-hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;}' +
+    /* Reserved height, so the panel does not jump when the challenge draws. */
+    '.wa-turnstile{margin:0 0 13px;min-height:65px;}' +
     '@media (max-width:420px){.wa-launch span{display:none;}.wa-launch{padding:14px;}' +
     '.wa-panel{right:12px;left:12px;bottom:12px;width:auto;max-width:none;}}';
 
@@ -75,6 +82,77 @@
     Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
     if (html != null) n.innerHTML = html;
     return n;
+  }
+
+  /* Turnstile.
+   *
+   * The panel is on every page, so the challenge is loaded when the panel is
+   * opened rather than on page load: a visitor who never opens it never pays
+   * for the script. Rendering starts the moment the panel opens, which gives
+   * it the time the visitor spends typing to finish. */
+  var widgetId = null;
+  var token = "";
+  var waiting = [];
+  var started = false;
+
+  function loadApi(done) {
+    if (window.turnstile && window.turnstile.render) {
+      done();
+      return;
+    }
+    // contact.html already carries the tag in its head; every other page does
+    // not, so it is added here rather than to nine separate files.
+    var tag = document.querySelector('script[src*="turnstile/v0/api.js"]');
+    if (!tag) {
+      tag = document.createElement("script");
+      tag.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+      tag.async = true;
+      tag.defer = true;
+      document.head.appendChild(tag);
+    }
+    tag.addEventListener("load", function () { done(); });
+  }
+
+  function settle(value) {
+    token = value;
+    waiting.splice(0).forEach(function (resolve) { resolve(value); });
+  }
+
+  function startTurnstile() {
+    if (started) return;
+    started = true;
+    loadApi(function () {
+      widgetId = window.turnstile.render("#wa-turnstile", {
+        sitekey: SITEKEY,
+        action: "whatsapp-enquiry",
+        callback: settle,
+        // A token lasts five minutes. Someone who opens the panel and then
+        // reads the page for a while would otherwise send a stale one.
+        "expired-callback": function () { token = ""; },
+        "error-callback": function () { settle(""); },
+      });
+    });
+  }
+
+  function withToken() {
+    if (token) return Promise.resolve(token);
+    return new Promise(function (resolve) {
+      var settled = false;
+      var once = function (value) { if (!settled) { settled = true; resolve(value || ""); } };
+      waiting.push(once);
+      // Somebody who types fast can reach Send before the challenge finishes.
+      // Waiting for it beats posting a lead the Worker will refuse; giving up
+      // after eight seconds beats never recording the lead at all.
+      setTimeout(function () { once(""); }, 8000);
+    });
+  }
+
+  function resetTurnstile() {
+    // The token is spent by the request that carried it, pass or fail.
+    if (widgetId !== null && window.turnstile) {
+      token = "";
+      window.turnstile.reset(widgetId);
+    }
   }
 
   function build() {
@@ -99,6 +177,7 @@
         '<div class="wa-field"><label for="wa-message">How can we help?</label>' +
         '<textarea id="wa-message" placeholder="A sentence or two about the work is plenty."></textarea></div>' +
         '<div class="wa-hp" aria-hidden="true"><input type="text" id="wa-website" tabindex="-1" autocomplete="off"></div>' +
+        '<div class="wa-turnstile" id="wa-turnstile"></div>' +
         '<button type="button" class="wa-send" id="wa-send">Send enquiry</button>' +
         '<div class="wa-status" id="wa-status" role="status" aria-live="polite"></div>' +
         '<p class="wa-note">Sending opens WhatsApp with your message ready to go. Your details reach us either way.</p>' +
@@ -110,7 +189,10 @@
     function open(state) {
       panel.classList.toggle("open", state);
       launch.style.display = state ? "none" : "flex";
-      if (state) document.getElementById("wa-name").focus();
+      if (state) {
+        startTurnstile();
+        document.getElementById("wa-name").focus();
+      }
     }
 
     launch.addEventListener("click", function () { open(true); });
@@ -142,19 +224,23 @@
       var text = "Hi Beplugged, I'm " + name + ".\n\n" + message;
       window.open(WA_BASE + "?text=" + encodeURIComponent(text), "_blank", "noopener");
 
-      fetch("/api/whatsapp-enquiry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        keepalive: true,
-        body: JSON.stringify({
-          name: name,
-          email: email,
-          message: message,
-          website: document.getElementById("wa-website").value,
-        }),
+      var website = document.getElementById("wa-website").value;
+      withToken().then(function (proof) {
+        return fetch("/api/whatsapp-enquiry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            name: name,
+            email: email,
+            message: message,
+            website: website,
+            "cf-turnstile-response": proof,
+          }),
+        });
       }).catch(function () {
         /* The handoff has already happened; a failure here is logged server side. */
-      });
+      }).then(resetTurnstile);
 
       status.style.color = "#1da851";
       status.textContent = "Opening WhatsApp…";
